@@ -1,19 +1,97 @@
 ---
-title: "k-Means Clustering From Scratch: Finding Groups Nobody Told You About"
-subtitle: "Unsupervised learning — no labels, no teacher, just patterns"
+title: "How does k-means find groups nobody labelled?"
+subtitle: "Guess some centres, give every point to its nearest one, move each centre to the middle of its points, and repeat until nothing changes."
 engine: knitr
 ---
 
-## 1. The Problem: No Labels
+::: {.ink-figure data-figure="kmeans-figure" data-step="0" data-caption="Fig. 1 · all you are given: points, and no labels · made-up data"}
+:::
 
-Everything so far — SVM, KNN — assumed you had **labeled** data. You knew
-which group each point belonged to, and the goal was to learn the rule.
+SVM and KNN both started from **labelled** data. You knew which group each point belonged to, and the job was to learn the rule. Now take the labels away. You have a pile of customers, each with two measurements, and nobody has told you what kinds of customer there are. The question is whether natural groupings are hiding in the data.
 
-But what if you have **no labels**? Nobody told you the groups. You just have
-a pile of data and a question: **are there natural groupings hiding in here?**
+This is **unsupervised learning**. There is no response variable and no right answer to check against, so the algorithm has to discover the structure on its own. [Exam trap: clustering has no response variable. "Find groups", "segment customers", "no labels" means clustering. "Classify", "predict the category", "labelled data" means classification (SVM, KNN). Do not confuse the two.]{.side}
+
+## Assign, then move
+
+k-means is a short loop. Pick $k$ random starting centres, called centroids. Assign each point to the nearest centre. Move each centre to the average of the points assigned to it. Repeat the last two steps until nothing changes. That is the whole algorithm.
+
+::: {.ink-figure data-figure="kmeans-figure" data-step="1" data-caption="Fig. 2 · one half-step per press: assign, move, assign, move · made-up data"}
+:::
+
+The figure opens just after the first assignment, with every point stitched to the centre it was given to and drawn with that centre's mark. Press the button and the centres move; press again and some points switch sides. After a few rounds no point switches and the centres stop moving. The algorithm has **converged**, and each point belongs to the cluster whose centre is closest.
+
+The assignment rule is plain Euclidean distance:
+
+$$\text{cluster}(\mathbf{x}_i) = \arg\min_j \|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$$
+
+It is the same distance formula as KNN. The difference is what you measure to: KNN looks at the nearest **data points**, k-means looks at the nearest **cluster centres**. The rule also carves the whole plane into territories, one per centre, each holding every location that is closer to that centre than to any other (a Voronoi diagram).
+
+The update rule is where the name comes from. The centre of cluster $j$ is the **mean** of the points assigned to it:
+
+$$\boldsymbol{\mu}_j = \frac{1}{|C_j|} \sum_{\mathbf{x}_i \in C_j} \mathbf{x}_i$$
+
+## The total it lowers
+
+Both half-steps serve one number, the **total within-cluster sum of squares (WCSS)**:
+
+$$\min \sum_{j=1}^{k} \sum_{\mathbf{x}_i \in C_j} \|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$$
+
+| Symbol | What it is | Plain English |
+|:------:|:-----------|:-------------|
+| $k$ | Number of clusters | How many groups you want |
+| $C_j$ | Cluster $j$ | The set of points assigned to group $j$ |
+| $\mathbf{x}_i$ | A data point | One observation |
+| $\boldsymbol{\mu}_j$ | Center (centroid) of cluster $j$ | The average of all points in group $j$ |
+| $\|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$ | Squared distance | How far point $i$ is from its cluster center |
+
+In plain words: make each point as close as possible to the centre of its assigned cluster. Tight clusters mean a low WCSS, and a low WCSS is good. In Fig. 2 it is the readout at the top right, the squared lengths of all the threads added up, and you can watch it fall with every press.
+
+## A different start, a different answer
+
+The loop is a heuristic. It always stops, but where it stops depends on where it began. k-means starts from **random** centres, and different starting positions can lead to different results, sometimes bad ones.
+
+::: {.ink-figure data-figure="kmeans-figure" data-step="2" data-caption="Fig. 3 · the same points and the same k, from another start · made-up data"}
+:::
+
+This run has converged. No point wants to switch and no centre wants to move, yet the total is far above the best one found. The algorithm cannot see that; it only ever compares a point with the centres it currently has. Press "new start" to try other seeded starts, or drag a centre somewhere and press "run".
+
+The fix is to run k-means many times from different random starts and keep the result with the **lowest WCSS**. In R, `kmeans(data, centers = k, nstart = 20)` does the 20 runs for you. More starts make the best clustering more likely to turn up, with diminishing returns past about 20. [A single run is not guaranteed to find the best clustering. It can get stuck in a bad solution. Use `nstart`.]{.side}
+
+## How many groups?
+
+The hardest part of k-means is that you must choose $k$ in advance. The algorithm cannot decide for you, and there is no formula. What you have is the **elbow method**: run k-means for $k = 1, 2, 3, \dots$, record the total WCSS for each, plot $k$ against WCSS, and look for the elbow, the place where the curve bends and adding more clusters stops helping much.
+
+::: {.ink-figure data-figure="kmeans-figure" data-step="3" data-caption="Fig. 4 · the best of 20 starts for each k, computed in your browser · made-up data"}
+:::
+
+Here going from 2 clusters to 3 gives a big drop in WCSS and going from 3 to 4 gives almost nothing, so the elbow bends at 3. The elbow is a **judgment call**, not an exact calculation. Sometimes it is obvious and sometimes it is ambiguous. [The two k's are different things. In KNN, k is the number of neighbours. In k-means, k is the number of clusters.]{.side}
+
+## What to watch for
+
+Know the difference between supervised and unsupervised cold.
+
+| | Supervised (SVM, KNN) | Unsupervised (k-means) |
+|:--|:----------------------|:-----------------------|
+| **Labels?** | Yes — you know the groups | No — groups are unknown |
+| **Goal** | Learn the rule to predict labels | Discover hidden structure |
+| **Evaluation** | Accuracy, cross-validation | WCSS, silhouette, elbow method |
+| **k means...** | (KNN) number of neighbors | (k-means) number of clusters |
+| **Example** | "Is this email spam?" | "What types of customers do we have?" |
+
+Scaling is mandatory, for the same reason as in KNN and SVM. k-means uses distance, so an unscaled feature with a large range dominates. Cluster customers on income in dollars and age in years and income alone decides the groups. [Scale first. Every distance-based method on this site needs it: KNN, SVM and k-means.]{.side}
+
+k-means also assumes spherical clusters. Its boundaries are equidistant from the centres, which produces round, convex regions, so data with elongated, curved or irregular shapes will not cluster well. Two concentric rings are the standard failure: it cannot wrap one cluster around another. It is sensitive to outliers too, because a single extreme point can pull a centre away.
+
+The classic use is customer segmentation. You have customer data, no labels, and the business wants to know what types of customers it has. The workflow: collect the customer features (spend, visits, demographics), scale them, use the elbow method to choose $k$, run k-means with `nstart = 20`, interpret the clusters and give them business-meaningful names, then build a different strategy for each segment.
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+Three hidden clusters, shown the way you would actually meet them: without the labels.
 
 ```{r}
-#| label: fig-unlabeled
+#| label: plot-unlabeled
 #| fig-cap: "You see the data. Can you spot the groups? k-means can."
 
 library(ggplot2)
@@ -37,23 +115,10 @@ ggplot(df, aes(x1, x2)) +
        title = "All you see: unlabeled points")
 ```
 
-This is **unsupervised learning**. No response variable, no "right answer."
-The algorithm has to discover structure on its own.
-
-
-## 2. The k-Means Algorithm: 4 Steps on Repeat
-
-k-means is embarrassingly simple:
-
-1. **Pick** $k$ random starting centers (centroids)
-2. **Assign** each point to the nearest center
-3. **Move** each center to the average of its assigned points
-4. **Repeat** steps 2-3 until nothing changes
-
-That's the whole algorithm. Let's watch it happen.
+Six rounds of the algorithm written out by hand: assign every point to its nearest centre, then move each centre to the mean of its points.
 
 ```{r}
-#| label: fig-algorithm-steps
+#| label: plot-algorithm-steps
 #| fig-cap: "k-means in action: assign → move centers → assign → move → converge"
 
 set.seed(15)
@@ -98,31 +163,10 @@ for (iter in 1:6) {
 par(mfrow = c(1, 1))
 ```
 
-After a few iterations, the centers stop moving — the algorithm has
-**converged**. Each point belongs to the cluster whose center is closest.
-
-
-## 3. The Formula: What k-Means Minimizes
-
-k-means minimizes the **total within-cluster sum of squares (WCSS)**:
-
-$$\min \sum_{j=1}^{k} \sum_{\mathbf{x}_i \in C_j} \|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$$
-
-Let's unpack every piece:
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $k$ | Number of clusters | How many groups you want |
-| $C_j$ | Cluster $j$ | The set of points assigned to group $j$ |
-| $\mathbf{x}_i$ | A data point | One observation |
-| $\boldsymbol{\mu}_j$ | Center (centroid) of cluster $j$ | The average of all points in group $j$ |
-| $\|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$ | Squared distance | How far point $i$ is from its cluster center |
-
-**In plain English:** make each point as close as possible to the center of
-its assigned cluster. Tight clusters = low WCSS = good.
+The fitted result from `kmeans()`, with a line from every point to its centre. The squared lengths of those lines add up to the WCSS in the title.
 
 ```{r}
-#| label: fig-wcss-visual
+#| label: plot-wcss-visual
 #| fig-cap: "WCSS = sum of all these distances (squared). k-means tries to make this small."
 
 # Final k-means result
@@ -147,27 +191,10 @@ ggplot(df, aes(x1, x2, color = cluster)) +
   theme(legend.position = "none")
 ```
 
-### The Centroid Formula
-
-The center of cluster $j$ is simply the **mean** of all points assigned to it:
-
-$$\boldsymbol{\mu}_j = \frac{1}{|C_j|} \sum_{\mathbf{x}_i \in C_j} \mathbf{x}_i$$
-
-That's why it's called k-**means** — the centers are the means of their
-clusters.
-
-
-## 4. The Assignment Rule: Nearest Center
-
-Each point goes to the cluster whose center is closest (Euclidean distance):
-
-$$\text{cluster}(\mathbf{x}_i) = \arg\min_j \|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$$
-
-This is the same distance formula from KNN. The difference: KNN looks at
-nearest **data points**. k-means looks at nearest **cluster centers**.
+The territories. Every location on the plane belongs to its nearest centre.
 
 ```{r}
-#| label: fig-voronoi
+#| label: plot-voronoi
 #| fig-cap: "Each region contains all points closest to that center (Voronoi diagram)"
 
 # Show decision regions
@@ -194,20 +221,10 @@ ggplot() +
   theme(legend.position = "none")
 ```
 
-
-## 5. Choosing k: The Elbow Method
-
-The hardest part of k-means: **how many clusters?** There's no formula.
-You use the **elbow method**:
-
-1. Run k-means for $k = 1, 2, 3, \dots$
-2. Record the total WCSS for each $k$
-3. Plot $k$ vs WCSS
-4. Look for the **elbow** — where the curve bends and adding more clusters
-   stops helping much
+The elbow method: fit $k = 1$ to $10$, record the total WCSS for each, and look for the bend.
 
 ```{r}
-#| label: fig-elbow
+#| label: plot-elbow
 #| fig-cap: "The elbow method: WCSS drops sharply, then flattens — the bend is your k"
 
 k_range <- 1:10
@@ -233,21 +250,10 @@ ggplot(elbow_df, aes(k, wcss)) +
        title = "Elbow Method: Where does adding clusters stop helping?")
 ```
 
-**Why $k = 3$ here?** Going from 2 to 3 clusters gives a big drop in WCSS.
-Going from 3 to 4 gives almost nothing. The "elbow" bends at 3.
-
-**Important:** The elbow is a **judgment call**, not an exact calculation.
-Sometimes the elbow is obvious; sometimes it's ambiguous. In this guide,
-the setup will make it clear.
-
-
-## 6. The Random Initialization Problem
-
-k-means starts with **random** centers. Different starting positions can lead
-to **different results** — sometimes bad ones.
+The same data and the same $k = 3$ from three different random starts, one start each.
 
 ```{r}
-#| label: fig-bad-init
+#| label: plot-bad-init
 #| fig-cap: "Same data, same k=3, but different random starts → different results"
 
 par(mfrow = c(1, 3), mar = c(3, 3, 3, 1))
@@ -269,13 +275,10 @@ for (trial in c(1, 2, 3)) {
 par(mfrow = c(1, 1))
 ```
 
-**The fix:** Run k-means **many times** with different random starts and keep
-the result with the **lowest WCSS**.
-
-In R: `kmeans(data, centers = k, nstart = 20)` runs it 20 times automatically.
+The average WCSS found as `nstart` grows. More starts find the better answer more reliably.
 
 ```{r}
-#| label: fig-nstart
+#| label: plot-nstart
 #| fig-cap: "More random starts → more likely to find the best clustering"
 
 nstart_vals <- c(1, 5, 10, 25, 50)
@@ -295,14 +298,10 @@ ggplot(data.frame(nstart = nstart_vals, wcss = best_wcss), aes(nstart, wcss)) +
        title = "More starts = better solution (diminishing returns past ~20)")
 ```
 
-
-## 7. Why Scaling Is Mandatory (Again)
-
-Same story as KNN and SVM. k-means uses **distance**. Unscaled features with
-large ranges dominate.
+Income and age, clustered raw and then scaled. Without scaling, income decides everything.
 
 ```{r}
-#| label: fig-scaling-kmeans
+#| label: plot-scaling-kmeans
 #| fig-cap: "Without scaling, the high-range feature dominates cluster assignments"
 
 set.seed(42)
@@ -333,21 +332,10 @@ plot(customers$income, customers$age,
 par(mfrow = c(1, 1))
 ```
 
-
-## 8. Supervised vs Unsupervised: The Big Picture
-
-This is an **high-value distinction**. Know the difference cold.
-
-| | Supervised (SVM, KNN) | Unsupervised (k-means) |
-|:--|:----------------------|:-----------------------|
-| **Labels?** | Yes — you know the groups | No — groups are unknown |
-| **Goal** | Learn the rule to predict labels | Discover hidden structure |
-| **Evaluation** | Accuracy, cross-validation | WCSS, silhouette, elbow method |
-| **k means...** | (KNN) number of neighbors | (k-means) number of clusters |
-| **Example** | "Is this email spam?" | "What types of customers do we have?" |
+The same points with labels given (supervised) and with clusters discovered (unsupervised).
 
 ```{r}
-#| label: fig-supervised-vs-unsupervised
+#| label: plot-supervised-vs-unsupervised
 #| fig-cap: "Left: supervised (labels known, learn boundary). Right: unsupervised (no labels, find groups)."
 
 par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
@@ -376,17 +364,10 @@ legend("topleft", legend = paste("Cluster", 1:3), bty = "n",
 par(mfrow = c(1, 1))
 ```
 
-
-## 9. k-Means Limitations
-
-### It assumes spherical clusters
-
-k-means draws boundaries equidistant from centers — producing circular
-(spherical) regions. Data with elongated, curved, or irregular shapes won't
-cluster well.
+Two concentric rings, which k-means cannot separate.
 
 ```{r}
-#| label: fig-limitations
+#| label: plot-limitations
 #| fig-cap: "k-means struggles with non-spherical shapes"
 
 set.seed(42)
@@ -422,21 +403,10 @@ points(km_rings$centers[, 1], km_rings$centers[, 2],
 par(mfrow = c(1, 1))
 ```
 
-### Other limitations
-
-- **You must choose k in advance** — the algorithm can't decide for you
-- **Sensitive to outliers** — a single extreme point can pull a center away
-- **Random starts** — can get stuck in bad solutions (fix: use `nstart`)
-- **Only finds convex clusters** — can't wrap around shapes
-
-
-## 10. Practical Use: Customer Segmentation
-
-This is the classic practice scenario. You have customer data, no labels, and the
-business wants to know: **what types of customers do we have?**
+Customer segmentation from start to finish: scale, cluster, then name the segments.
 
 ```{r}
-#| label: fig-segmentation
+#| label: plot-segmentation
 #| fig-cap: "Customer segmentation: k-means discovers 3 natural groups from spending data"
 
 set.seed(42)
@@ -468,17 +438,7 @@ ggplot(customers2, aes(annual_spend, visit_frequency, color = segment)) +
        title = "k-means segmentation: 3 customer groups discovered")
 ```
 
-**The workflow:**
-
-1. Collect customer features (spend, visits, demographics, etc.)
-2. Scale the features
-3. Use elbow method to choose $k$
-4. Run k-means with `nstart = 20`
-5. Interpret the clusters → give them business-meaningful names
-6. Build different strategies per segment
-
-
-## 11. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 THE k-MEANS RECIPE
@@ -518,11 +478,7 @@ THE k-MEANS RECIPE
    "Classify" / "predict category" / "labeled data" → SVM, KNN
 ```
 
-
-## 12. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -535,4 +491,3 @@ Before moving on, try to answer these without scrolling up:
 7. Give a scenario where k-means would fail. Why does it fail?
 8. A question says "we have customer purchase data and want to identify
    different customer types." Which model? Why not SVM?
-:::

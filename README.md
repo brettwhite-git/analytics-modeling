@@ -59,9 +59,11 @@ https://<github-user>.github.io/analytics-modeling/
 
 ## Repository Layout
 
-- `_quarto.yml` - Quarto website configuration
+- `_quarto.yml` - Quarto configuration and the list of chapters
 - `*.qmd` - source pages
-- `styles.css` - site styling
+- `ink/template.html`, `ink/site.css`, `ink/ink.js` - the page shell, the styling and the page behaviour
+- `ink/ink-kit.js`, `ink/figures/` - the hand-drawn, computed figures
+- `ink/AUTHORING.md` - how to write a chapter and a figure
 - `.github/workflows/publish.yml` - GitHub Pages deployment workflow
 - `renv.lock` - reproducible R package environment
 

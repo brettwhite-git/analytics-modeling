@@ -1,20 +1,180 @@
 ---
-title: "Time Series From Scratch: Predicting What Comes Next"
-subtitle: "Exponential smoothing, ARIMA, and GARCH — three tools, one goal"
+title: "How do you forecast the next value of a series?"
+subtitle: "Average the past so that recent points count most, and choose how fast the old ones fade. Most of this chapter is that one choice."
 engine: knitr
 ---
 
-## 1. The Problem: What Will Tomorrow's Value Be?
+::: {.ink-figure data-figure="smoothing-figure" data-step="0" data-caption="Fig. 1 · sixty noisy observations of something that moves slowly · made-up data"}
+:::
 
-You have data ordered in time — daily sales, monthly temperatures, hourly
-stock prices. The past has a pattern. Can you **extend** that pattern into the
-future?
+You have data ordered in time: daily sales, monthly temperatures, hourly stock prices. The past has a pattern, and you want to extend it one step into the future. That is **forecasting**: using the history of a value to predict where it goes next.
 
-This is **forecasting**: using the history of a value to predict where it's
-going next.
+The trouble is that each observation is part pattern and part accident. Before you can say what tomorrow will be, you have to decide how much of today was real. Three kinds of pattern turn up, and different methods handle different combinations of them.
+
+| Pattern | What it looks like | Example |
+|:--------|:------------------|:--------|
+| **Level** | Flat, bouncing around a constant | Daily temperature in a stable climate |
+| **Trend** | Going steadily up or down | Company revenue growing year over year |
+| **Seasonality** | Repeating cycle at fixed intervals | Retail sales spiking every December |
+
+## A weighted average of now and before
+
+Start with the simplest case, a level and nothing else. Simple exponential smoothing keeps one running estimate of the level, $S_t$, and updates it each time a new observation $x_t$ arrives:
+
+$$S_t = \alpha \, x_t + (1 - \alpha) \, S_{t-1}$$
+
+The new estimate is a weighted average of what just happened and what you believed before. The forecast for the next period is simply the current estimate, $\hat{x}_{t+1} = S_t$.
+
+| Symbol | What it is | Plain English |
+|:------:|:-----------|:-------------|
+| $S_t$ | Smoothed value at time $t$ | Your best estimate of the current level |
+| $x_t$ | Actual observation at time $t$ | What really happened |
+| $S_{t-1}$ | Previous smoothed value | What you predicted last time |
+| $\alpha$ | Smoothing parameter (0 to 1) | How much to trust the new data against the old estimate |
+| $\hat{x}_{t+1}$ | Forecast for next period | Your prediction |
+
+::: {.ink-figure data-figure="smoothing-figure" data-step="1" data-caption="Fig. 2 · the smoothed estimate at α = 0.3, and the weight each past observation carries in it"}
+:::
+
+The name comes from what happens when you unroll the formula. $S_{t-1}$ contains $x_{t-1}$, which contains $x_{t-2}$, and so on, so every past observation is still in the estimate, with a weight that shrinks by a factor of $(1 - \alpha)$ for each step back:
+
+$$S_t = \alpha \, x_t + \alpha(1-\alpha) \, x_{t-1} + \alpha(1-\alpha)^2 \, x_{t-2} + \dots$$
+
+Recent data matters most and the distant past fades away. At $\alpha = 0.3$ the latest point carries a weight of 0.30, the one before it 0.21, and the last ten together carry 97% of the estimate. The weights decay exponentially, which is the "exponential" in exponential smoothing.
+
+## Alpha is how fast it reacts
+
+So $\alpha$ controls how much memory the model has. A high $\alpha$, near 1, mostly trusts the latest observation: the estimate is reactive and follows changes quickly, but it also follows every wiggle. A low $\alpha$, near 0, mostly trusts the history: the estimate is smooth and stable, but slow to react when the level really does move.
+
+::: {.ink-figure data-figure="smoothing-figure" data-step="2" data-steps="2:slide alpha and noise|3:add a jump in the level" data-caption="Fig. 3 · smoothed live in your browser, with the one-step-ahead error at every α · made-up data"}
+:::
+
+Which end you want depends on how noisy the data is. Push the noise slider up and the observations scatter far from the level that produced them. Trusting any single one of them is a mistake, so the error is lowest at a low $\alpha$: about 0.10 at the noisiest setting. Pull the noise down and each observation is nearly the level itself. Now the old estimate is the thing holding you back, and the best $\alpha$ climbs to about 0.90. [Exam trap: α is responsiveness, not smoothing strength. A larger α smooths *less*. Noisy data → choose a LOW α (trust the previous estimate, smooth more). Calm data → choose a HIGH α (trust the new observation, react faster).]{.side}
+
+The second button adds a sudden jump in the level. A low $\alpha$ takes many periods to believe it, and a high $\alpha$ is there almost at once; the figure counts the periods until the estimate has climbed to within 2 of the new level. With the jump in the data, the $\alpha$ with the lowest error rises from 0.28 to 0.44 at the same noise. That is the whole trade: react quickly and you chase noise, smooth heavily and you lag behind real change.
+
+You do not pick $\alpha$ by eye. You try different values and keep the one that minimises forecast error on held-out data, which is cross-validation (Module 3).
+
+## Trend and season
+
+Simple smoothing cannot handle a trend. Its forecast is one number, the current level, so on a rising series it always lags behind, and its forecast for every future period is flat.
+
+::: {.ink-figure data-figure="season-figure" data-step="0" data-caption="Fig. 4 · a rising series with a 12-period cycle: 48 points seen, 12 held out, and the flat forecast of simple smoothing · made-up data"}
+:::
+
+**Double exponential smoothing**, Holt's method, adds a second running estimate, the trend $T_t$: how much the level is changing per period.
+
+$$S_t = \alpha \, x_t + (1 - \alpha)(S_{t-1} + T_{t-1})$$
+$$T_t = \beta \, (S_t - S_{t-1}) + (1 - \beta) \, T_{t-1}$$
+
+The trend is smoothed in exactly the same way as the level, with its own parameter $\beta$ (0 to 1) that sets how quickly the trend estimate is updated. The forecast $h$ steps ahead walks along the slope: $\hat{x}_{t+h} = S_t + h \, T_t$.
+
+When the data also has a repeating cycle, such as holiday sales or summer peaks, you need a third component. **Triple exponential smoothing**, Holt-Winters, keeps a seasonal factor $C_t$ for each place in the cycle, where $L$ is the length of one full cycle (12 for monthly data, 7 for daily data with a weekly pattern):
+
+$$S_t = \alpha \, \frac{x_t}{C_{t-L}} + (1 - \alpha)(S_{t-1} + T_{t-1})$$
+$$T_t = \beta \, (S_t - S_{t-1}) + (1 - \beta) \, T_{t-1}$$
+$$C_t = \gamma \, \frac{x_t}{S_t} + (1 - \gamma) \, C_{t-L}$$
+$$\hat{x}_{t+h} = (S_t + h \, T_t) \cdot C_{t+h-L}$$
+
+Seasonality here is multiplicative. The factor $C_t$ says how far this point in the cycle typically sits from the level, as a ratio: 1.2 means 20% above it. The level update divides the season out of the new observation, and the forecast multiplies it back in. The parameter $\gamma$ sets how quickly the seasonal pattern is updated. [All three parameters mean the same thing: α is level responsiveness, β is trend responsiveness, γ is seasonal responsiveness. High is reactive, low is stable.]{.side}
+
+::: {.ink-figure data-figure="season-figure" data-step="2" data-steps="0:simple|1:Holt, level + trend|2:Holt-Winters, + season" data-caption="Fig. 5 · the same series forecast three ways and scored on the 12 held-out points · made-up data"}
+:::
+
+Step through the three methods and watch the forecast error on the held-out points: 12.3 for the flat forecast, 10.3 once Holt adds the slope, 3.4 when Holt-Winters carries the cycle forward. Which one to use follows from what the data contains, and as with $\alpha$ you choose $\beta$ and $\gamma$ by cross-validation: try different values and keep the ones with the lowest forecast error on held-out data. R's `HoltWinters()` does this automatically.
+
+| Trend? | Seasonality? | Method | Parameters |
+|:------:|:------------:|:-------|:-----------|
+| No | No | Simple exponential smoothing | $\alpha$ |
+| No | Yes | Seasonal exponential smoothing | |
+| Yes | No | Holt (double) | $\alpha$, $\beta$ |
+| Yes | Yes | Holt-Winters (triple) | $\alpha$, $\beta$, $\gamma$ |
+
+## ARIMA
+
+Exponential smoothing is intuitive but limited in the patterns it can express. **ARIMA** is more flexible. It combines three ideas into one framework, and its three numbers say how much of each to use.
+
+| Letter | Name | What it does |
+|:------:|:-----|:-------------|
+| **p** | AutoRegressive order | Use the last $p$ values to predict the next |
+| **d** | Differencing order | How many times to difference the data to remove trend |
+| **q** | Moving Average order | Use the last $q$ forecast errors to correct predictions |
+
+The autoregressive part says tomorrow's value depends on today's, and maybe yesterday's:
+
+$$x_t = c + \phi_1 x_{t-1} + \phi_2 x_{t-2} + \dots + \phi_p x_{t-p} + \epsilon_t$$
+
+It looks like regression, but instead of predicting from other variables you predict from the series' own past values. [Exam trap: ARIMA and exponential smoothing are time series forecasting models. That is its own category. They are not "response prediction" models like regression, even though the AR equation looks like one.]{.side}
+
+ARIMA needs **stationary** data: no trend, constant variance. If the data has a trend, **differencing** removes it by modelling the change from one period to the next instead of the value:
+
+$$x_t' = x_t - x_{t-1}$$
+
+With $d = 0$ the data is already stationary. With $d = 1$ you difference once, which removes a linear trend. With $d = 2$ you difference twice, which removes a quadratic trend and is rarely needed.
+
+The moving-average part says tomorrow's value depends on today's forecast error:
+
+$$x_t = c + \epsilon_t + \theta_1 \epsilon_{t-1} + \theta_2 \epsilon_{t-2} + \dots + \theta_q \epsilon_{t-q}$$
+
+This corrects systematic patterns in the errors. If you keep over-predicting, the MA term adjusts. Put together, ARIMA(1,1,1) means: difference once, then model with one AR term and one MA term. And simple exponential smoothing turns out to be a special case, ARIMA(0,1,1).
+
+| | Exponential Smoothing | ARIMA |
+|:--|:---------------------|:------|
+| **Simplicity** | Simpler, fewer parameters | More complex, flexible |
+| **Data needed** | Works with shorter series | Needs ~40+ observations |
+| **Noisy/volatile data** | More robust | Can struggle with outliers |
+| **Complex patterns** | Limited to level/trend/season | Can model many patterns |
+| **Interpretability** | Parameters have clear meaning | p, d, q less intuitive |
+| **Special case** | Simple ES | = ARIMA(0,1,1) |
+
+As a rule of thumb, short, noisy, volatile data calls for exponential smoothing, and long, stable data with many observations calls for ARIMA. When in doubt, try both and pick the one with the lower cross-validated error.
+
+## How much will it vary?
+
+Everything above forecasts the **value**: what will the temperature be tomorrow? GARCH answers a different question: how volatile will it be? Think of stock markets. Some weeks are calm and some are wild. The price itself may be unpredictable, but the amount of volatility has patterns, because calm periods and turbulent periods come in clusters.
+
+$$\sigma_t^2 = \omega + \alpha_1 \epsilon_{t-1}^2 + \beta_1 \sigma_{t-1}^2$$
+
+| Symbol | What it is | Plain English |
+|:------:|:-----------|:-------------|
+| $\sigma_t^2$ | Predicted variance at time $t$ | How much volatility we expect |
+| $\omega$ | Baseline variance | The minimum level of volatility |
+| $\epsilon_{t-1}^2$ | Previous squared error | How big yesterday's surprise was |
+| $\alpha_1$ | Shock sensitivity | How much a single surprise increases future volatility |
+| $\beta_1$ | Persistence | How long volatility stays elevated after a shock |
+| $\sigma_{t-1}^2$ | Previous variance | Yesterday's volatility forecast |
+
+The $\alpha_1$ term captures shocks: a big surprise today means more volatility tomorrow. The $\beta_1$ term captures persistence: volatility tends to stay high once it is high. [Exam trap: GARCH estimates the variance, not the value. If the question says volatility, risk, or how much values will fluctuate, the answer is GARCH. If it says forecast the value, it is exponential smoothing or ARIMA.]{.side}
+
+A common practice check asks whether you know the difference, so read the question for what is being forecast.
+
+| Question asks about... | Use |
+|:-----------------------|:----|
+| "Forecast the **value**" | Exponential smoothing or ARIMA |
+| "Forecast **volatility/risk/variance**" | GARCH |
+| "Predict how much values will **fluctuate**" | GARCH |
+| "Build **confidence intervals** that change over time" | GARCH |
+| "**Portfolio risk**" or "**Value at Risk**" | GARCH |
+
+That gives the whole decision in one table.
+
+| What are you forecasting? | What the data has | Method |
+|:--------------------------|:------------------|:-------|
+| The value itself | Level only | Simple ES |
+| The value itself | Level + trend | Double ES (Holt) |
+| The value itself | Level + trend + season | Triple ES (Holt-Winters) |
+| The value itself | Complex pattern, lots of data | ARIMA |
+| The volatility or variance | | GARCH |
+| Whether something has changed | | CUSUM (Module 6) |
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+Monthly airline passengers, a real series with both a trend and a season.
 
 ```{r}
-#| label: fig-time-series-intro
+#| label: plot-time-series-intro
 #| fig-cap: "Monthly airline passengers — a clear trend and seasonal pattern. What comes next?"
 
 library(ggplot2)
@@ -38,43 +198,10 @@ ggplot(df_ap, aes(time, passengers)) +
        title = "Can we forecast the future from the past?")
 ```
 
-Three patterns appear in time series data:
-
-| Pattern | What it looks like | Example |
-|:--------|:------------------|:--------|
-| **Level** | Flat, bouncing around a constant | Daily temperature in a stable climate |
-| **Trend** | Going steadily up or down | Company revenue growing year over year |
-| **Seasonality** | Repeating cycle at fixed intervals | Retail sales spiking every December |
-
-Different forecasting methods handle different combinations of these.
-
-
-## 2. Exponential Smoothing: The Weighted Average Approach
-
-### Simple Exponential Smoothing (Level Only)
-
-The simplest idea: your forecast is a **weighted average** of the current
-observation and your previous forecast.
-
-$$S_t = \alpha \cdot x_t + (1 - \alpha) \cdot S_{t-1}$$
-
-$$\text{Forecast: } \hat{x}_{t+1} = S_t$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $S_t$ | Smoothed value at time $t$ | Your best estimate of the current level |
-| $x_t$ | Actual observation at time $t$ | What really happened |
-| $S_{t-1}$ | Previous smoothed value | What you predicted last time |
-| $\alpha$ | Smoothing parameter (0 to 1) | How much to trust the new data vs the old estimate |
-| $\hat{x}_{t+1}$ | Forecast for next period | Your prediction |
-
-**The key insight:** $\alpha$ controls how much **memory** the model has.
-
-- **High $\alpha$ (near 1):** Mostly trusts the latest observation → reactive, follows changes quickly, but noisy
-- **Low $\alpha$ (near 0):** Mostly trusts the history → smooth, stable, but slow to react
+Simple exponential smoothing at three values of α, on a series whose level shifts halfway through.
 
 ```{r}
-#| label: fig-ses-alpha
+#| label: plot-ses-alpha
 #| fig-cap: "High alpha follows every wiggle. Low alpha smooths through the noise."
 
 set.seed(42)
@@ -110,15 +237,10 @@ legend("topleft", bty = "n",
   col = colors, lwd = 2, cex = 0.9)
 ```
 
-### Why "Exponential"?
-
-Unrolling the formula shows that older observations get **exponentially
-decreasing** weights:
-
-$$S_t = \alpha \cdot x_t + \alpha(1-\alpha) \cdot x_{t-1} + \alpha(1-\alpha)^2 \cdot x_{t-2} + \dots$$
+The weights α(1 − α)^j that the formula puts on past observations.
 
 ```{r}
-#| label: fig-exponential-weights
+#| label: plot-exponential-weights
 #| fig-cap: "Past observations receive exponentially decaying weights"
 
 alpha <- 0.3
@@ -132,29 +254,10 @@ barplot(weights, names.arg = lags,
   main = paste0("Exponential decay of weights (α = ", alpha, ")"))
 ```
 
-Recent data matters most. Distant past fades away. That's the "exponential"
-in exponential smoothing.
-
-
-## 3. Double Exponential Smoothing (Holt's Method): Level + Trend
-
-Simple ES can't handle a trend — it always lags behind. Holt's method adds
-a **trend component**.
-
-$$S_t = \alpha \cdot x_t + (1 - \alpha)(S_{t-1} + T_{t-1})$$
-$$T_t = \beta(S_t - S_{t-1}) + (1 - \beta) \cdot T_{t-1}$$
-$$\text{Forecast: } \hat{x}_{t+h} = S_t + h \cdot T_t$$
-
-Two new pieces:
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $T_t$ | Trend estimate at time $t$ | How much the level is changing per period |
-| $\beta$ | Trend smoothing parameter (0 to 1) | How quickly to update the trend estimate |
-| $h$ | Forecast horizon | How many steps ahead to predict |
+Trending data: simple smoothing lags behind, and Holt's method, written out by hand, tracks it.
 
 ```{r}
-#| label: fig-holt
+#| label: plot-holt
 #| fig-cap: "Simple ES lags behind the trend. Holt's method tracks it."
 
 set.seed(42)
@@ -189,27 +292,10 @@ legend("topleft", bty = "n",
   col = c("coral", "steelblue"), lwd = 2, cex = 0.9)
 ```
 
-
-## 4. Triple Exponential Smoothing (Holt-Winters): Level + Trend + Seasonality
-
-When data has a **repeating cycle** (holiday sales, summer peaks), you need a
-third component.
-
-$$S_t = \alpha \cdot \frac{x_t}{C_{t-L}} + (1 - \alpha)(S_{t-1} + T_{t-1})$$
-$$T_t = \beta(S_t - S_{t-1}) + (1 - \beta) \cdot T_{t-1}$$
-$$C_t = \gamma \cdot \frac{x_t}{S_t} + (1 - \gamma) \cdot C_{t-L}$$
-$$\text{Forecast: } \hat{x}_{t+h} = (S_t + h \cdot T_t) \cdot C_{t+h-L}$$
-
-New pieces:
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $C_t$ | Seasonal factor at time $t$ | How much this point in the cycle typically deviates |
-| $\gamma$ | Seasonal smoothing parameter | How quickly to update the seasonal pattern |
-| $L$ | Season length | Length of one full cycle (12 for monthly, 7 for daily-weekly) |
+Holt-Winters fitted to the airline data and forecast 24 months ahead.
 
 ```{r}
-#| label: fig-holt-winters
+#| label: plot-holt-winters
 #| fig-cap: "Holt-Winters captures trend AND seasonality"
 
 # Use AirPassengers — has both trend and seasonality
@@ -228,27 +314,10 @@ legend("topleft", bty = "n",
   col = c("steelblue", "black", "coral"), lwd = 2, cex = 0.9)
 ```
 
-### Which Exponential Smoothing to Use?
-
-```
-Does the data have a trend?
-  |
-  +-- No ──── Does it have seasonality?
-  |             |
-  |             +-- No ──── Simple ES (one parameter: α)
-  |             +-- Yes ─── Seasonal ES
-  |
-  +-- Yes ─── Does it have seasonality?
-                |
-                +-- No ──── Holt (two parameters: α, β)
-                +-- Yes ─── Holt-Winters (three parameters: α, β, γ)
-```
-
-
-## 5. All Parameters at a Glance
+One panel for each parameter: a low and a high α, β and γ.
 
 ```{r}
-#| label: fig-parameter-summary
+#| label: plot-parameter-summary
 #| fig-cap: "What each smoothing parameter controls"
 
 par(mfrow = c(1, 3), mar = c(4, 4, 3, 1))
@@ -304,35 +373,10 @@ legend("topleft", bty = "n", cex = 0.8,
 par(mfrow = c(1, 1))
 ```
 
-**How to choose α, β, γ?** Cross-validation (Module 3) — try different values,
-pick the ones that minimize forecast error on held-out data. R's `HoltWinters()`
-does this automatically.
-
-
-## 6. ARIMA: A Different Approach
-
-Exponential smoothing is intuitive but limited in the patterns it can express.
-**ARIMA** is more flexible — it combines three ideas into one framework.
-
-### ARIMA(p, d, q) — What the Letters Mean
-
-| Letter | Name | What it does |
-|:------:|:-----|:-------------|
-| **p** | AutoRegressive order | Use the last $p$ values to predict the next |
-| **d** | Differencing order | How many times to difference the data to remove trend |
-| **q** | Moving Average order | Use the last $q$ forecast errors to correct predictions |
-
-### AR: Autoregressive (the "p" part)
-
-Tomorrow's value depends on today's value (and maybe yesterday's):
-
-$$x_t = c + \phi_1 x_{t-1} + \phi_2 x_{t-2} + \dots + \phi_p x_{t-p} + \epsilon_t$$
-
-Like regression, but instead of predicting from other variables, you predict
-from **your own past values**.
+An AR(1) series, and each value plotted against the one before it.
 
 ```{r}
-#| label: fig-ar-example
+#| label: plot-ar-example
 #| fig-cap: "AR(1): each value depends on the previous one, plus noise"
 
 set.seed(42)
@@ -365,15 +409,10 @@ legend("topleft", bty = "n", cex = 0.8,
 par(mfrow = c(1, 1))
 ```
 
-### I: Integrated / Differencing (the "d" part)
-
-ARIMA requires **stationary** data (no trend, constant variance). If your data
-has a trend, **differencing** removes it:
-
-$$x_t' = x_t - x_{t-1}$$
+A trending series before and after differencing once.
 
 ```{r}
-#| label: fig-differencing
+#| label: plot-differencing
 #| fig-cap: "Differencing removes trend, making the data stationary"
 
 # Trending data
@@ -394,25 +433,10 @@ abline(h = 0, lty = 2, col = "gray50")
 par(mfrow = c(1, 1))
 ```
 
-- **d = 0**: Data is already stationary (no trend)
-- **d = 1**: Difference once (removes linear trend)
-- **d = 2**: Difference twice (removes quadratic trend) — rarely needed
-
-### MA: Moving Average (the "q" part)
-
-Tomorrow's value depends on today's **forecast error**:
-
-$$x_t = c + \epsilon_t + \theta_1 \epsilon_{t-1} + \theta_2 \epsilon_{t-2} + \dots + \theta_q \epsilon_{t-q}$$
-
-This corrects systematic patterns in the errors. If you keep over-predicting,
-the MA term adjusts.
-
-### Putting It Together
-
-ARIMA(1,1,1) means: difference once, then model with 1 AR term and 1 MA term.
+A seasonal ARIMA fitted to the airline data, with a 95% interval around the forecast.
 
 ```{r}
-#| label: fig-arima-fit
+#| label: plot-arima-fit
 #| fig-cap: "ARIMA automatically selects p, d, q and forecasts ahead"
 
 # Fit ARIMA to airline passengers
@@ -441,52 +465,10 @@ legend("topleft", bty = "n",
   lwd = c(2, 2, 8), cex = 0.9)
 ```
 
-
-## 7. ARIMA vs Exponential Smoothing: When to Use Which
-
-| | Exponential Smoothing | ARIMA |
-|:--|:---------------------|:------|
-| **Simplicity** | Simpler, fewer parameters | More complex, flexible |
-| **Data needed** | Works with shorter series | Needs ~40+ observations |
-| **Noisy/volatile data** | More robust | Can struggle with outliers |
-| **Complex patterns** | Limited to level/trend/season | Can model many patterns |
-| **Interpretability** | Parameters have clear meaning | p, d, q less intuitive |
-| **Special case** | Simple ES | = ARIMA(0,1,1) |
-
-::: {.callout-tip}
-### Practical Rule of Thumb
-
-- Short, noisy, volatile data → **exponential smoothing**
-- Long, stable data with many observations → **ARIMA**
-- When in doubt → try both, pick the one with lower cross-validated error
-:::
-
-
-## 8. GARCH: Forecasting How MUCH Things Will Vary
-
-Everything above forecasts the **value** — what will the temperature be
-tomorrow? GARCH answers a different question: **how volatile will it be?**
-
-Think of stock markets: some weeks are calm, some are wild. The actual price
-might be unpredictable, but the **amount of volatility** has patterns.
-
-$$\sigma_t^2 = \omega + \alpha_1 \epsilon_{t-1}^2 + \beta_1 \sigma_{t-1}^2$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $\sigma_t^2$ | Predicted variance at time $t$ | How much volatility we expect |
-| $\omega$ | Baseline variance | The minimum level of volatility |
-| $\epsilon_{t-1}^2$ | Previous squared error | How big yesterday's surprise was |
-| $\alpha_1$ | Shock sensitivity | How much a single surprise increases future volatility |
-| $\beta_1$ | Persistence | How long volatility stays elevated after a shock |
-| $\sigma_{t-1}^2$ | Previous variance | Yesterday's volatility forecast |
-
-**Key insight:** $\alpha$ captures **shocks** (a big surprise today → more
-volatility tomorrow). $\beta$ captures **persistence** (volatility tends to
-stay high once it's high).
+Simulated returns whose volatility clusters, and the variance that GARCH estimates.
 
 ```{r}
-#| label: fig-garch-concept
+#| label: plot-garch-concept
 #| fig-cap: "Volatility clusters: calm periods and turbulent periods alternate"
 
 set.seed(42)
@@ -520,38 +502,7 @@ plot(1:n4, sqrt(vol), type = "l", col = "coral", lwd = 1.5,
 par(mfrow = c(1, 1))
 ```
 
-### When to Use GARCH
-
-A common practice check asks whether you know the difference:
-
-| Question asks about... | Use |
-|:-----------------------|:----|
-| "Forecast the **value**" | Exponential smoothing or ARIMA |
-| "Forecast **volatility/risk/variance**" | GARCH |
-| "Predict how much values will **fluctuate**" | GARCH |
-| "Build **confidence intervals** that change over time" | GARCH |
-| "**Portfolio risk**" or "**Value at Risk**" | GARCH |
-
-
-## 9. The Complete Decision Tree
-
-```
-What are you forecasting?
-  |
-  +-- The VALUE itself ──── Is there a trend? Seasonality?
-  |                           |
-  |                           +-- Level only ────────── Simple ES
-  |                           +-- Level + trend ─────── Double ES (Holt)
-  |                           +-- Level + trend + season ── Triple ES (Holt-Winters)
-  |                           +-- Complex pattern, lots of data ── ARIMA
-  |
-  +-- The VOLATILITY/VARIANCE ── GARCH
-  |
-  +-- Has something CHANGED? ── CUSUM (Module 6)
-```
-
-
-## 10. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 TIME SERIES FORECASTING RECIPE
@@ -593,11 +544,7 @@ PRACTICAL DECISION:
   "Detect a change" → CUSUM
 ```
 
-
-## 11. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -615,4 +562,3 @@ Before moving on, try to answer these without scrolling up:
 8. What is ARIMA(0,1,1) equivalent to?
 9. Data has 20 observations, lots of noise, and a seasonal pattern.
    Exponential smoothing or ARIMA? Why?
-:::

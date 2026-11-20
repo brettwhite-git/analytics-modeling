@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$pagetitle$ · Analytics modeling</title>
+$if(subtitle)$
+<meta name="description" content="$subtitle$">
+$endif$
+<script>
+  // the theme is set before first paint: a saved choice wins, otherwise the system setting
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('ink-theme'); } catch (e) {}
+    var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">
+<!-- htmldependencies:E3FAD763 -->
+$for(header-includes)$
+$header-includes$
+$endfor$
+$if(math)$
+$math$
+$endif$
+$for(css)$
+<link rel="stylesheet" href="$css$">
+$endfor$
+</head>
+
+<body>
+<a class="skip" href="#sheet">Skip to the chapter</a>
+
+<nav class="toc" id="contents" aria-label="Chapters">
+  <a class="toc__brand" href="index.html">Analytics modeling</a>
+  <ol class="toc__parts">
+$for(ink-parts)$
+    <li class="toc__part">
+      <span class="toc__label">$ink-parts.title$</span>
+      <ol>
+$for(ink-parts.chapters)$
+        <li><a href="$ink-parts.chapters.href$">$ink-parts.chapters.title$</a></li>
+$endfor$
+      </ol>
+    </li>
+$endfor$
+  </ol>
+</nav>
+
+<div class="page">
+  <header class="bar">
+    <button class="bar__menu" type="button" aria-controls="contents" aria-expanded="false">Contents</button>
+    <a class="bar__step" data-ink="prev" href="index.html" aria-label="Previous chapter">&#8249;</a>
+    <a class="bar__step" data-ink="next" href="index.html" aria-label="Next chapter">&#8250;</a>
+    <p class="bar__crumb"><span data-ink="part">Analytics modeling</span><span class="bar__here" data-ink="here"></span></p>
+    <button class="bar__theme" type="button" aria-label="Switch between light and dark" aria-pressed="false"><span aria-hidden="true"></span></button>
+  </header>
+
+  <main class="sheet" id="sheet">
+    <header class="head">
+      <p class="eyebrow" data-ink="eyebrow">Analytics modeling</p>
+      <h1>$title$</h1>
+$if(subtitle)$
+      <p class="head__sub">$subtitle$</p>
+$endif$
+    </header>
+
+$body$
+
+    <footer class="foot">
+      <a class="foot__next" data-ink="next-link" href="index.html"><span>Next</span><b></b></a>
+      <p>Independent educational resource. Content is CC BY-NC 4.0; code is MIT licensed. <a href="https://github.com/brettwhite-git/analytics-modeling">Source</a></p>
+    </footer>
+  </main>
+</div>
+
+<script src="ink/vendor/rough.js"></script>
+<script src="ink/ink-kit.js"></script>
+<script src="ink/ink-plot.js"></script>
+<script src="ink/ink.js"></script>
+$for(include-after)$
+$include-after$
+$endfor$
+</body>
+</html>

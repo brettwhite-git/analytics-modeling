@@ -1,19 +1,84 @@
 ---
-title: "Cross-Validation From Scratch: Why Testing on Training Data Is Cheating"
-subtitle: "The one technique every model depends on"
+title: "How do you know a model will work on data it has not seen?"
+subtitle: "A score measured on the points a model was fitted to tells you almost nothing. The fix is to be strict about which rows are allowed to do which job."
 engine: knitr
 ---
 
-## 1. The Problem: How Good Is Your Model, Really?
+::: {.ink-figure data-figure="cv-figure" data-step="0" data-caption="Fig. 1 · scored on the same points it was fitted to, the wiggly curve wins · made-up data"}
+:::
 
-You build a model. It predicts your training data perfectly. Is it good?
+You build a model and it predicts your training data almost perfectly. That does not make it good. It may have memorised the data, like a student who has memorised the answers to last year's paper and cannot solve a new problem.
 
-**No.** It might have just **memorized** the data. A model that memorizes is
-useless on new data — like a student who memorizes answers but can't solve
-new problems.
+In the figure, each cell in the strip is one observation, and both curves were fitted to all forty. The wiggly one has the lower error on those forty points, 0.40 against 0.62. On new points from the same source it is the worse of the two, 1.02 against 0.73. Nothing in the training score warns you. To tell the two models apart you need data the model has never seen.
+
+## Hold some data back
+
+The simplest fix is to split the data in two before you fit anything. The **training set**, about 70 to 80 percent of the rows, is used to build the model. The **test set**, the remaining 20 to 30 percent, is used to evaluate it. The model never sees the test rows during fitting, so its performance on them tells you how it will do on new data.
+
+Scored this way, an overfit model gives itself away: excellent on the training rows, poor on the held-out rows. A sound model performs about the same on both. That gap is the signal to look for. High training accuracy with low held-out accuracy means overfitting, and when the two numbers are close the model generalises. The held-out number is the one that matters. [Exam trap: "our model is 98% accurate" means nothing until you ask on what data. A model that memorises gets 100% on its own training set.]{.side}
+
+A single split has a catch. Which rows land in the held-out part is random, and a different random split gives a different score. Run the same model on twenty different splits and you get twenty different answers, so one split leaves your evaluation partly down to luck. The cure is to make many splits and average them, which is what cross-validation does.
+
+## Three sets, three jobs
+
+Usually you are not scoring one model. You are choosing: which $k$ in KNN, which C in an SVM, which degree of polynomial. Choosing is a second job, and it needs its own data. So the rows are given three roles. The **training set** fits every candidate. The **validation set** compares the fitted candidates so you can pick one. The **test set** estimates how good the chosen model is, once, at the very end.
+
+::: {.ink-figure data-figure="cv-figure" data-step="1" data-caption="Fig. 2 · one data set, three jobs · made-up data"}
+:::
+
+You cannot reuse the validation score of the winner as your estimate of its quality. Each candidate's validation error is partly real quality and partly luck in which rows happened to be in the validation set. When you pick the lowest of several scores, you tend to pick a model whose luck was good, so the winning score is optimistically biased: it looks better than the model really is. In the figure, the winner's validation error on this data set is 0.38 and its test error is 1.00. Repeating the whole recipe on 300 fresh data sets, the winner's validation error averages 0.71 and its test error 1.61.
+
+The test set exists to remove that bias, and it only works if it played no part in any choice. Try twenty values of $k$ on the test set and keep the best, and you have fitted to the test set. It is no longer a fair evaluation. [Exam trap: the test set is used once, at the very end, on the one model you have already chosen. Tuning on it turns it into a validation set and leaves you with no honest estimate.]{.side}
+
+## Folds inside the training set
+
+A fixed validation set brings back the problem of the single split: its score depends on which rows it happens to hold. **k-fold cross-validation** replaces the fixed validation set with a rotation. Set the test set aside first. Divide the training data into $k$ equal groups, called folds. Hold out fold 1, fit on the other folds, and score the model on fold 1. Then hold out fold 2, fit on the rest, and score on fold 2. Repeat until every fold has had its turn, and average the $k$ scores. Every training row is held out exactly once.
+
+::: {.ink-figure data-figure="cv-figure" data-step="2" data-steps="2:step through the folds|3:change k" data-caption="Fig. 3 · folds inside the training cells, refitted live in your browser · made-up data"}
+:::
+
+The cross-validation estimate is the average error across the folds:
+
+$$\text{CV}(k) = \frac{1}{k} \sum_{i=1}^{k} \text{Error}_i$$
+
+| Symbol | What it is | Plain English |
+|:------:|:-----------|:-------------|
+| $k$ | Number of folds | How many splits you make |
+| $\text{Error}_i$ | Error on fold $i$ when it is the one held out | How badly the model did on that fold |
+| $\text{CV}(k)$ | Cross-validation score | The averaged, reliable performance estimate |
+
+For classification, the error is usually the misclassification rate, the percentage wrong. For regression it is usually RMSE or MSE; the figure uses mean squared error.
+
+Notice where the folds are. Cross-validation is a method, something you do, and it is done within the training data. The folds take over the job of the validation set, and the data is still split into just two parts: training, where cross-validation happens, and test, which is held out. [Exam trap: cross-validation is a METHOD, not a data partition. It is never a third box beside training and test. The split is training (cross-validation happens in here, via folds) plus test (held out).]{.side}
+
+That gives the full workflow. Set aside about 20 percent as the test set and lock it away. Use k-fold cross-validation on the remaining 80 percent to choose the parameters. Refit the final model on all of that 80 percent with the best parameters. Then evaluate once on the test set, and report that number. If you tune on the test data you are indirectly fitting to it, so it must stay unseen until the end.
+
+## What it is for, and how many folds
+
+Cross-validation answers two questions. The first is how good a model is: what accuracy will this SVM get on new data? Run it through the folds and report the average. The second, and the main use in this guide, is which parameter value is best: what $k$ in KNN, what C in an SVM, how many components in PCA, which variables in a regression. You cross-validate each candidate value and keep the one with the best average score.
+
+You also have to choose the number of folds. [This $k$ is the number of folds. It is a different $k$ from the number of neighbours in KNN.]{.side}
+
+| Folds | Name | Train size | Test size | Pros | Cons |
+|:-----:|:-----|:-----------|:----------|:-----|:-----|
+| 5 | 5-fold | 80% | 20% | Fast, good balance | Moderate variance |
+| 10 | 10-fold | 90% | 10% | Better estimate | Slower |
+| $n$ | Leave-one-out (LOO) | $n-1$ | 1 | Uses max training data | Very slow, high variance |
+
+In this table "train size" and "test size" are the two parts of each round: the folds fitted on, and the one fold held out. More folds give a more stable estimate, with diminishing returns past 10.
+
+Leave-one-out is the limit, where the number of folds equals the number of data points. Each round fits on $n-1$ points and scores on the one left out; you repeat $n$ times and average the $n$ errors. It uses the most training data per round, but it runs $n$ times, which is slow on large data, and its estimate has high variance. Use it for small data sets where every point matters.
+
+Small folds are a risk in general. With $n = 20$ and $k = 10$, each held-out fold has only 2 points, which is not enough for a reliable error estimate, so use fewer folds on small data sets. The rule of thumb for this guide is 5-fold or 10-fold. They are the standard choices and almost always sufficient.
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+Twenty noisy points from a simple curve, with a degree-15 polynomial and a degree-3 polynomial fitted to all of them.
 
 ```{r}
-#| label: fig-overfitting-demo
+#| label: plot-overfitting-demo
 #| fig-cap: "The wiggly model fits training data perfectly but is clearly wrong"
 
 library(ggplot2)
@@ -51,25 +116,10 @@ ggplot(df, aes(x, y)) +
   labs(x = "x", y = "y", title = "Training accuracy is misleading")
 ```
 
-The red line hits every point — **100% training accuracy**. But it's wildly
-wrong between the points. The blue line misses some points but captures the
-real pattern.
-
-**How do we tell the difference?** We need data the model has **never seen**.
-
-
-## 2. The Simplest Fix: Train/Test Split
-
-Split your data into two pieces:
-
-- **Training set** (~70-80%): build the model
-- **Test set** (~20-30%): evaluate the model
-
-The model never sees the test data during training. Its performance on the
-test set tells you how it will do on genuinely new data.
+A random 70/30 split of forty points into training and test.
 
 ```{r}
-#| label: fig-train-test-split
+#| label: plot-train-test-split
 #| fig-cap: "Split data into training (build the model) and test (evaluate it)"
 
 set.seed(7)
@@ -96,8 +146,10 @@ ggplot(df_all, aes(x, y, color = set, shape = set)) +
                    length(test_idx), " test"))
 ```
 
+Both models fitted on the training points only, then scored on both sets. The overfit model is the one whose two bars disagree.
+
 ```{r}
-#| label: fig-train-test-eval
+#| label: plot-train-test-eval
 #| fig-cap: "Overfit model: great on train, terrible on test. Good model: consistent on both."
 
 df_train <- df_all[df_all$set == "Train", ]
@@ -128,16 +180,10 @@ ggplot(results, aes(x = Model, y = RMSE, fill = Set)) +
   coord_flip()
 ```
 
-The overfit model looks amazing on training data but falls apart on test data.
-The good model performs **consistently** on both.
-
-### The Problem with a Single Split
-
-But there's a catch: **which 30% you hold out matters**. A different random
-split gives a different score. Your evaluation depends on luck.
+The same degree-3 model scored on twenty different random splits. The score moves with the split.
 
 ```{r}
-#| label: fig-split-variance
+#| label: plot-split-variance
 #| fig-cap: "Different random splits give different test scores — which one is 'right'?"
 
 set.seed(1)
@@ -160,24 +206,10 @@ ggplot(data.frame(trial = 1:20, rmse = scores), aes(trial, rmse)) +
        title = "Same model, 20 different splits → 20 different scores")
 ```
 
-**Solution:** Don't do one split. Do **many** splits and **average**. That's
-cross-validation.
-
-
-## 3. Cross-Validation: The Core Idea
-
-### k-Fold Cross-Validation
-
-1. Divide data into $k$ equal **folds** (groups)
-2. Use fold 1 as test, train on folds 2-5 → get score 1
-3. Use fold 2 as test, train on folds 1,3-5 → get score 2
-4. ... repeat for all folds
-5. **Average** all $k$ scores
-
-Every point gets to be in the test set **exactly once**.
+Five rounds of 5-fold cross-validation as a grid. The block marked TEST in each row is the held-out fold of that round, not the test set.
 
 ```{r}
-#| label: fig-kfold-diagram
+#| label: plot-kfold-diagram
 #| fig-cap: "5-fold cross-validation: each fold takes a turn as the test set"
 
 # Visual diagram of k-fold CV
@@ -206,36 +238,10 @@ for (round in 1:k) {
 text(k / 2, 0.3, "→ Average all 5 scores = cross-validation estimate", cex = 1, font = 2)
 ```
 
-### The Formula
-
-The cross-validation estimate of model performance is just the average error
-across all folds:
-
-$$\text{CV}(k) = \frac{1}{k} \sum_{i=1}^{k} \text{Error}_i$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $k$ | Number of folds | How many splits you make |
-| $\text{Error}_i$ | Error on fold $i$ when it's the test set | How badly the model did on that fold |
-| $\text{CV}(k)$ | Cross-validation score | The averaged, reliable performance estimate |
-
-For classification, "Error" is usually **misclassification rate** (% wrong).
-For regression, it's usually **RMSE** or **MSE**.
-
-
-## 4. Choosing k (the Number of Folds)
-
-Confusing but important: **this $k$ is different from KNN's $k$.**
-This is the number of folds, not the number of neighbors.
-
-| Folds | Name | Train size | Test size | Pros | Cons |
-|:-----:|:-----|:-----------|:----------|:-----|:-----|
-| 5 | 5-fold | 80% | 20% | Fast, good balance | Moderate variance |
-| 10 | 10-fold | 90% | 10% | Better estimate | Slower |
-| $n$ | Leave-one-out (LOO) | $n-1$ | 1 | Uses max training data | Very slow, high variance |
+The cross-validation score for 3, 5, 10, 25 and $n$ folds, each repeated thirty times with different fold assignments to show how much the estimate moves.
 
 ```{r}
-#| label: fig-fold-comparison
+#| label: plot-fold-comparison
 #| fig-cap: "More folds = more stable estimate, but diminishing returns past 10"
 
 set.seed(42)
@@ -278,30 +284,10 @@ ggplot(results_all, aes(folds, score)) +
        title = "More folds = less variance in the estimate")
 ```
 
-**Rule of thumb for this guide:** Use **5-fold or 10-fold**. These are the
-standard choices and almost always sufficient.
-
-
-## 5. What Cross-Validation Is Actually Used For
-
-Cross-validation answers two questions:
-
-### Question 1: How good is this model?
-
-"What accuracy will my SVM get on new data?" → Train with CV, report the
-average score.
-
-### Question 2: Which parameter value is best?
-
-This is the **primary use in this guide**: choosing hyperparameters.
-
-- What $k$ should I use in KNN?
-- What $C$ should I use in SVM?
-- How many components in PCA?
-- Which variables in regression?
+Cross-validation used to choose a parameter: 5-fold accuracy for ten values of $k$ in KNN.
 
 ```{r}
-#| label: fig-tune-k-knn
+#| label: plot-tune-k-knn
 #| fig-cap: "Cross-validation finds the best k for KNN by testing each value"
 
 library(class)
@@ -343,8 +329,10 @@ ggplot(data.frame(k = k_values, accuracy = cv_results), aes(k, accuracy)) +
        title = "Using cross-validation to choose k in KNN")
 ```
 
+The same folds used to choose C for a linear SVM.
+
 ```{r}
-#| label: fig-tune-c-svm
+#| label: plot-tune-c-svm
 #| fig-cap: "Same idea for SVM: cross-validate over different C values"
 
 library(e1071)
@@ -376,38 +364,10 @@ ggplot(data.frame(C = c_values, accuracy = cv_svm), aes(C, accuracy)) +
        title = "Using cross-validation to choose C in SVM")
 ```
 
-
-## 6. The Train / Validate / Test Split
-
-When you use CV to **tune** parameters, the CV folds become your validation
-set. You still need a **separate test set** that was never part of any tuning.
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  ALL DATA                                                │
-│                                                          │
-│  ┌────────────────────────────────┐  ┌────────────────┐  │
-│  │  Training + Validation (80%)   │  │  Test Set (20%) │  │
-│  │                                │  │                 │  │
-│  │  ← cross-validation happens    │  │  ← touched ONCE │  │
-│  │    here to tune parameters     │  │    at the very  │  │
-│  │                                │  │    end          │  │
-│  └────────────────────────────────┘  └────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
-
-**The workflow:**
-
-1. Set aside 20% as the **test set** (lock it away)
-2. Use the remaining 80% for **k-fold CV** to choose parameters
-3. Retrain the final model on all 80% with the best parameters
-4. Evaluate **once** on the test set → this is your reported performance
-
-**Why?** If you tune on test data, you're indirectly fitting to it. The test
-set must be truly unseen.
+The whole workflow in one chunk: hold out a test set, cross-validate on the rest to choose $k$, then score once on the test set.
 
 ```{r}
-#| label: fig-full-workflow
+#| label: plot-full-workflow
 #| fig-cap: "The complete model-building workflow with cross-validation"
 
 # Simulate the full workflow
@@ -444,31 +404,10 @@ cat("\nIf these two numbers are close → model generalizes well")
 cat("\nIf test << CV → you overfit during tuning (rare with proper CV)")
 ```
 
-
-## 7. Common Mistakes (Common Pitfalls)
-
-::: {.callout-warning}
-### Trap 1: Testing on Training Data
-
-> "Our model achieves 98% accuracy!"
->
-> "On what data?"
->
-> "The training data."
->
-> **Meaningless.** A model that memorizes gets 100% on training data.
-:::
-
-::: {.callout-warning}
-### Trap 2: Confusing Training Accuracy with Real Performance
-
-High training accuracy + low validation accuracy = **overfitting**.
-
-The **validation score is the one that matters.**
-:::
+Training $R^2$ against cross-validated $R^2$ as the polynomial degree grows. Training only goes up; validation turns over.
 
 ```{r}
-#| label: fig-overfit-gap
+#| label: plot-overfit-gap
 #| fig-cap: "The gap between training and validation accuracy reveals overfitting"
 
 # Show train vs validation accuracy across model complexity
@@ -517,33 +456,10 @@ ggplot(gap_df, aes(complexity, r_squared, color = set)) +
        color = "Evaluated on", title = "Training R² always goes up — validation reveals the truth")
 ```
 
-::: {.callout-warning}
-### Trap 3: Using Test Data to Tune Parameters
-
-If you try 20 different values of $k$ on the test set and pick the best one,
-you've **fit to the test set**. It's no longer a fair evaluation.
-
-**Rule:** Test set = used **once**, at the very end.
-:::
-
-::: {.callout-warning}
-### Trap 4: Not Enough Data in Each Fold
-
-If $n = 20$ and $k = 10$, each test fold has only 2 points. That's not enough
-for a reliable error estimate. Use fewer folds with small datasets.
-:::
-
-
-## 8. Special Case: Leave-One-Out Cross-Validation (LOOCV)
-
-When $k = n$ (number of folds = number of data points):
-
-- Each round: train on $n-1$ points, test on 1 point
-- Repeat $n$ times
-- Average all $n$ errors
+Leave-one-out on six points: each panel fits the line without one point and measures the miss on that point.
 
 ```{r}
-#| label: fig-loocv
+#| label: plot-loocv
 #| fig-cap: "LOOCV: each point gets a turn as the sole test point"
 
 # Visual: highlight one point at a time
@@ -574,13 +490,7 @@ for (i in 1:6) {
 par(mfrow = c(1, 1))
 ```
 
-**LOOCV pros:** Uses maximum training data (n-1 points each round).
-**LOOCV cons:** Runs $n$ times (slow for large data), high variance.
-
-**When to use:** Small datasets where every point matters.
-
-
-## 9. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 CROSS-VALIDATION RECIPE
@@ -588,9 +498,9 @@ CROSS-VALIDATION RECIPE
 
 1. PURPOSE: Estimate how well a model generalizes to unseen data
 
-2. k-FOLD CV:
-   - Split data into k equal folds
-   - Each fold takes a turn as test set
+2. k-FOLD CV (a METHOD, done INSIDE the training data):
+   - Split the training data into k equal folds
+   - Each fold takes a turn as the held-out fold
    - Average the k scores
    - Standard choice: k = 5 or k = 10
 
@@ -603,9 +513,12 @@ CROSS-VALIDATION RECIPE
    - Regression: which variables?     → CV with different subsets
    - PCA: how many components?        → CV with 1, 2, 3, ... components
 
-5. THREE-WAY SPLIT:
-   Training (fit model) → Validation (tune params via CV) → Test (final eval)
+5. THREE JOBS:
+   Training (fit model) → Validation (choose / tune) → Test (final eval)
+   With CV, the folds do the validation job, so the data is split in two:
+   Training (CV happens in here) + Test (held out)
    Test set: touched ONCE, at the very end
+   The winner's validation score is optimistic — report the test score
 
 6. OVERFITTING DETECTION:
    Training accuracy >> Validation accuracy = OVERFIT
@@ -616,13 +529,10 @@ CROSS-VALIDATION RECIPE
    - Never tune on test data
    - High training accuracy alone means NOTHING
    - The validation/CV score is what matters
+   - Too many folds on a small data set = too few points per fold
 ```
 
-
-## 10. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -636,4 +546,3 @@ Before moving on, try to answer these without scrolling up:
    more training data per round?
 7. A classmate says "I tried 50 different models on the test set and picked
    the best one." What's wrong with this?
-:::

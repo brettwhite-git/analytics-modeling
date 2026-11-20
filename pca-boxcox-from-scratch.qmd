@@ -1,23 +1,104 @@
 ---
-title: "PCA & Box-Cox From Scratch: Fixing Your Data Before Modeling"
-subtitle: "Dimensionality reduction and variance stabilization"
+title: "How do you reshape data so a model can use it?"
+subtitle: "Turn correlated predictors until they stop repeating each other, bend a lopsided response until its spread is even, and take out a shared trend before it passes for a relationship."
 engine: knitr
 ---
 
-## 1. The Problem: Too Many Correlated Predictors
+::: {.ink-figure data-figure="pca-figure" data-step="0" data-caption="Fig. 1 · two predictors that mostly repeat each other · made-up data, centred, same units"}
+:::
 
-You're building a regression model. You have 50 predictors. Many of them
-measure similar things — they're **correlated**. This causes problems:
+You are building a regression model and you have 50 predictors. Many of them measure nearly the same thing, the way an assessment score and a homework score do. That overlap causes three problems at once. Correlated predictors make the coefficients unstable, which is **multicollinearity**. Many predictors relative to the number of data points invite overfitting. And some of the predictors are mostly noise.
 
-- **Multicollinearity**: correlated predictors make coefficients unstable
-- **Overfitting**: too many predictors relative to data points
-- **Noise**: some predictors are mostly noise, not signal
+If two features carry almost the same information, you do not need both. Look at the figure: neither axis runs along the cloud. The points spread along a diagonal, and each axis only sees part of that spread. Principal component analysis, PCA, finds the directions the data really varies along and lets you keep only those.
 
-PCA solves all three by compressing your predictors into a smaller set of
-**uncorrelated** components that capture the important patterns.
+## Turning the axes
+
+Draw a line through the centre of the cloud and drop every point straight onto it. Those landing spots are the **projections**, and their variance tells you how much of the spread that line captures. Turn the line and the number changes.
+
+::: {.ink-figure data-figure="pca-figure" data-step="1" data-caption="Fig. 2 · turn the line and watch the variance of the projections · computed live · made-up data"}
+:::
+
+One angle gives the largest variance. That direction is the first principal component, **PC1**. The second, **PC2**, is perpendicular to it and takes the most of whatever spread is left, and so on for as many dimensions as you have. PCA is a rotation of the coordinate system: nothing is stretched and no point moves relative to the others. In the rotated space the components are uncorrelated with each other, which is what removes the multicollinearity.
+
+You do not have to search by turning a line. The recipe is: standardise the data so each feature has mean 0 and standard deviation 1, compute the covariance matrix ($\mathbf{X}^T \mathbf{X}$), find its eigenvalues and eigenvectors, and sort them by eigenvalue, largest first. The first eigenvector is PC1, the second is PC2.
+
+| Concept | What it is | Plain English |
+|:--------|:-----------|:-------------|
+| **Eigenvector** | A direction in feature space | Which way does the data spread? |
+| **Eigenvalue** | A number paired with each eigenvector | How much variance is in that direction? |
+
+## What an eigenvalue describes
+
+The eigenvector with the largest eigenvalue points in the direction of maximum variance. In the curve beside Fig. 2, the top of the hill is the first eigenvalue and the bottom of the valley is the second. Divide an eigenvalue by the sum of all of them and you have the share of the total variance that component carries.
+
+::: {.ink-figure data-figure="pca-figure" data-step="2" data-steps="2:both components|3:keep only PC1" data-caption="Fig. 3 · the components from the covariance matrix, then the cloud reduced to one of them · made-up data"}
+:::
+
+Now read the two lines of arithmetic beside the figure. PC1 is some amount of $x_1$ plus some amount of $x_2$. So is PC2. Neither component is one of your original variables; each is a blend of all of them. The eigenvalue is the variance along that blend. [Exam trap: eigenvalues describe the components, not the original covariates. PCA rotates the space, and every component mixes all the original variables. A large first eigenvalue tells you PC1 matters. It does not tell you that $x_1$, or any single covariate, matters.]{.side}
+
+With correlated data, PC1 often carries so much that you can drop PC2 and lose very little. Press "keep only PC1" and each point slides onto the line: two numbers per point become one, and the variance you gave up is exactly the second eigenvalue. Two features are easy to draw, but the method earns its keep when it compresses many features into a few components. In the R below, ten correlated features driven by two hidden factors need only a handful of components to hold 90% of the variance. The rest is mostly noise.
+
+To choose how many to keep, plot the eigenvalues (or the percent of variance) for each component. This is the **scree plot**, and it is read like the elbow plot for k-means: look for the place where the curve flattens and keep the components before the drop-off. The alternative rule is to keep components until the cumulative variance explained reaches 80 to 90%.
+
+## What PCA cannot see
+
+PCA ranks components by variance in X. It never looks at the response, so it does not rank them by predictive power for Y. A high-variance component might be irrelevant noise, and a low-variance component might hold the signal you need. The R below builds exactly that case: PC1 has the most variance and the least correlation with the response, and PC3 has the least variance and the most. [Exam trap: "keep the components with the most variance" and "keep the components that predict best" are different rules. Do not drop low-variance components blindly.]{.side}
+
+So treat PCA as a preprocessing step. The usual workflow is: start with many correlated predictors, run PCA to get uncorrelated components, use cross-validation to decide how many to keep, feed those components into regression (or SVM, KNN and so on), and validate the final model on test data. In the ten-feature example, three components reach a similar adjusted $R^2$ to all ten predictors, with a simpler model, less overfitting risk and no multicollinearity.
+
+Three things have to hold before PCA is worth running. Scaling is the one that bites: with income in the tens of thousands and age in the tens, unscaled PCA simply reports that income has bigger numbers.
+
+| Requirement | Why | What happens if violated |
+|:------------|:----|:------------------------|
+| **Standardize first** | Features with larger ranges dominate | PCA reflects scale, not importance |
+| **Continuous features** | PCA assumes linear relationships | Binary/categorical features need other methods |
+| **Some correlation** | If features are uncorrelated, PCA can't compress | You get back the same features |
+
+## Bending the response
+
+A different problem needs a different fix. Regression assumes **constant variance**: the residuals should be spread about equally everywhere. Real data often breaks this. Plot the residuals against the fitted values and you see a funnel, tight on the left and wide on the right. That is **heteroscedasticity**, and it makes the model's predictions unreliable: accurate for small values, wildly off for large ones.
+
+The Box-Cox transformation fixes it by transforming the response:
+
+$$T(y) = \begin{cases} \dfrac{y^{\lambda} - 1}{\lambda} & \text{if } \lambda \neq 0 \\[6pt] \log(y) & \text{if } \lambda = 0 \end{cases}$$
+
+Here $y$ is the original response, the thing you are predicting, $T(y)$ is the stabilised version, and the power $\lambda$ controls the shape of the transformation. A few values of $\lambda$ are worth knowing by name. [At λ = 0 the top formula would divide by zero, so the log takes its place. The response has to be positive for any of this to work.]{.side}
+
+| $\lambda$ | Transform | Effect |
+|:---------:|:----------|:-------|
+| 1 | $y$ (no change) | Data is fine as-is |
+| 0.5 | $\sqrt{y}$ | Mild compression of large values |
+| 0 | $\log(y)$ | Strong compression — common in practice |
+| -1 | $1/y$ | Very aggressive compression |
+
+::: {.ink-figure data-figure="boxcox-figure" data-step="0" data-caption="Fig. 4 · a lopsided sample at λ = 1, with the bell curve of the same mean and spread · made-up data"}
+:::
+
+You do not pick $\lambda$ by eye. Box-Cox finds the best value automatically by trying different values and taking the one that makes the residuals most normally distributed. Fig. 4 shows the starting point on a single lopsided sample: at $\lambda = 1$ the large values trail off in a long tail and a bell curve does not fit.
+
+::: {.ink-figure data-figure="boxcox-figure" data-step="1" data-steps="1:the log|2:slide λ" data-caption="Fig. 5 · the same sample, transformed live in your browser · made-up data"}
+:::
+
+As $\lambda$ falls, the large values are pulled in harder and the tail shortens. Slide it and watch the skewness: somewhere near the log it crosses zero, and if you keep going the transform overshoots. Applied to a real response, the right $\lambda$ makes the funnel in the residual plot disappear and leaves residuals that are more uniform and more normal.
+
+## Taking out the trend
+
+Sometimes the trouble is time. When you want to study the relationship between X and Y but both are trending over time, the shared trend creates a **spurious correlation**. Ice cream sales and drownings both climb through the months of the example below, and they correlate strongly without one having anything to do with the other.
+
+The fix is to remove the trend first and analyse what is left. Fit a line against time and subtract it:
+
+$$y_{\text{detrended}} = y - (\hat{a}_0 + \hat{a}_1 \cdot \text{time})$$
+
+Do this to both variables and compare the detrended versions. Once the time trend is gone, the spurious correlation goes with it.
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+Two features that carry overlapping information.
 
 ```{r}
-#| label: fig-correlated-data
+#| label: plot-correlated-data
 #| fig-cap: "These two features are highly correlated — they carry redundant information"
 
 library(ggplot2)
@@ -40,21 +121,10 @@ ggplot(df, aes(x1, x2)) +
                        " — these carry overlapping information"))
 ```
 
-If both features carry almost the same information, do you really need both?
-PCA finds the **directions** in the data that capture the most variation, and
-lets you keep just those.
-
-
-## 2. PCA: What It Does Geometrically
-
-PCA **rotates** your coordinate system so that:
-
-1. The **first axis** (PC1) points in the direction of maximum spread
-2. The **second axis** (PC2) points perpendicular to PC1, capturing the next most spread
-3. And so on...
+The same data standardised, with the PCA directions drawn on it, and then in the rotated space. PC1 (horizontal) holds the main spread, PC2 (vertical) holds what is left, and the two are uncorrelated.
 
 ```{r}
-#| label: fig-pca-rotation
+#| label: plot-pca-rotation
 #| fig-cap: "PCA rotates the axes to align with the directions of maximum variance"
 
 # Standardize
@@ -93,33 +163,10 @@ abline(h = 0, v = 0, lty = 2, col = "gray70")
 par(mfrow = c(1, 1))
 ```
 
-Notice in the PCA space:
-
-- **PC1** (horizontal) captures the main spread — most of the information
-- **PC2** (vertical) captures what's left — much less spread
-- The two components are **uncorrelated** (perpendicular)
-
-
-## 3. The PCA Algorithm: Step by Step
-
-1. **Standardize** the data (mean = 0, SD = 1 for each feature)
-2. Compute the **covariance matrix** ($\mathbf{X}^T \mathbf{X}$)
-3. Find the **eigenvalues** and **eigenvectors**
-4. Sort by eigenvalue (largest first)
-5. First eigenvector = PC1, second = PC2, etc.
-
-### What Are Eigenvalues and Eigenvectors?
-
-| Concept | What it is | Plain English |
-|:--------|:-----------|:-------------|
-| **Eigenvector** | A direction in feature space | Which way does the data spread? |
-| **Eigenvalue** | A number paired with each eigenvector | How much variance is in that direction? |
-
-The eigenvector with the **largest** eigenvalue points in the direction of
-**maximum variance** — that's PC1.
+The eigenvalues and the share of variance each component captures.
 
 ```{r}
-#| label: fig-eigenvalues
+#| label: plot-eigenvalues
 #| fig-cap: "Eigenvalues tell you how much variance each component captures"
 
 # Show eigenvalues
@@ -133,14 +180,10 @@ cat(sprintf("\nPC1 alone captures %.1f%% of the information!\n", var_explained[1
 cat("With correlated data, you can often drop PC2 and lose very little.")
 ```
 
-
-## 4. Higher Dimensions: Where PCA Really Shines
-
-Two features is easy to visualize. But the real power of PCA is compressing
-**many** features into a few components.
+Ten correlated features, all driven by two hidden factors, and how the variance piles up in the first few components.
 
 ```{r}
-#| label: fig-high-dim
+#| label: plot-high-dim
 #| fig-cap: "10 correlated features compressed into components — most variance in first 2-3"
 
 set.seed(42)
@@ -187,23 +230,12 @@ text(n_for_90 + 1, cum_var[n_for_90] - 5,
 par(mfrow = c(1, 1))
 ```
 
-**10 features → `r n_for_90` components** that capture 90%+ of the
-information. The remaining components are mostly noise.
+**10 features → `r n_for_90` components** that capture 90%+ of the information. The remaining components are mostly noise.
 
-
-## 5. Choosing How Many Components: The Scree Plot / Elbow
-
-Same idea as the elbow method for k-means:
-
-1. Plot eigenvalues (or % variance) for each component
-2. Look for the **elbow** — where the curve flattens
-3. Keep components before the dropoff
-
-**Alternative rule:** Keep components until you reach **80-90%** cumulative
-variance explained.
+The scree plot for the same ten features. Look for the elbow.
 
 ```{r}
-#| label: fig-scree-elbow
+#| label: plot-scree-elbow
 #| fig-cap: "The scree plot elbow suggests 2-3 components are sufficient"
 
 plot(1:10, pca10$sdev^2, type = "b", pch = 19, col = "steelblue", lwd = 2,
@@ -216,20 +248,10 @@ text(4.5, pca10$sdev[3]^2, "Elbow here →\nkeep 2-3 components",
   col = "coral", cex = 0.9)
 ```
 
-
-## 6. The Critical PCA Trap (High-Value Distinction)
-
-::: {.callout-warning}
-### PCA Ranks by Variance, NOT Predictive Power
-
-**PCA ranks components by variance in X, NOT by predictive power for Y.**
-
-A high-variance component might be **irrelevant noise**. A low-variance
-component might contain the **actual signal** you need for prediction.
-:::
+The trap: data built so that the signal sits in a low-variance direction.
 
 ```{r}
-#| label: fig-pca-trap
+#| label: plot-pca-trap
 #| fig-cap: "PC1 has the most variance but PC3 actually predicts the response"
 
 set.seed(42)
@@ -272,23 +294,10 @@ cat("\nThis is why you MUST validate PCA-based models on actual prediction.\n")
 cat("Don't blindly drop low-variance components!")
 ```
 
-::: {.callout-warning}
-### Practical Rule
-PCA is a **preprocessing** step. You must still validate the
-full model (PCA + regression/SVM/etc.) via cross-validation.
-:::
-
-
-## 7. PCA Requirements
-
-| Requirement | Why | What happens if violated |
-|:------------|:----|:------------------------|
-| **Standardize first** | Features with larger ranges dominate | PCA reflects scale, not importance |
-| **Continuous features** | PCA assumes linear relationships | Binary/categorical features need other methods |
-| **Some correlation** | If features are uncorrelated, PCA can't compress | You get back the same features |
+Why you standardise first. Without scaling, the feature with the larger range dominates PC1.
 
 ```{r}
-#| label: fig-scaling-pca
+#| label: plot-scaling-pca
 #| fig-cap: "Without scaling, the high-range feature dominates PC1"
 
 set.seed(42)
@@ -318,18 +327,10 @@ mtext("Both contribute fairly", side = 1, line = 2.5, cex = 0.8, col = "darkgree
 par(mfrow = c(1, 1))
 ```
 
-
----
-
-# Part 2: Box-Cox Transformation
-
-## 8. A Different Problem: Unequal Variance
-
-Regression assumes **constant variance** — the spread of residuals should be
-the same everywhere. But real data often violates this:
+Heteroscedasticity: the spread of the response grows with x, and the residual plot shows a funnel.
 
 ```{r}
-#| label: fig-heteroscedasticity
+#| label: plot-heteroscedasticity
 #| fig-cap: "The funnel shape: variance increases with the predicted value"
 
 set.seed(42)
@@ -355,36 +356,10 @@ text(25, 15, "Variance increases →\n(heteroscedasticity)", col = "coral", cex 
 par(mfrow = c(1, 1))
 ```
 
-This funnel shape means the model's predictions are **unreliable** — accurate
-for small values, wildly off for large values.
-
-**Box-Cox fixes this** by transforming the response variable.
-
-
-## 9. The Box-Cox Formula
-
-$$T(y) = \begin{cases} \frac{y^{\lambda} - 1}{\lambda} & \text{if } \lambda \neq 0 \\ \log(y) & \text{if } \lambda = 0 \end{cases}$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $y$ | Original response variable | The thing you're predicting |
-| $T(y)$ | Transformed response | The stabilized version |
-| $\lambda$ | Power parameter | Controls the shape of the transformation |
-
-**Special cases of $\lambda$:**
-
-| $\lambda$ | Transform | Effect |
-|:---------:|:----------|:-------|
-| 1 | $y$ (no change) | Data is fine as-is |
-| 0.5 | $\sqrt{y}$ | Mild compression of large values |
-| 0 | $\log(y)$ | Strong compression — common in practice |
-| -1 | $1/y$ | Very aggressive compression |
-
-Box-Cox **finds the optimal $\lambda$** automatically by trying different
-values and picking the one that makes the residuals most normally distributed.
+The Box-Cox profile from `MASS::boxcox`, and the optimal $\lambda$ it finds.
 
 ```{r}
-#| label: fig-boxcox-lambda
+#| label: plot-boxcox-lambda
 #| fig-cap: "Box-Cox finds the optimal λ that stabilizes variance"
 
 library(MASS)
@@ -407,8 +382,10 @@ cat(sprintf("Closest standard transform: %s\n",
         paste0("y^", round(optimal_lambda, 2)))))))
 ```
 
+Residuals before and after the transform.
+
 ```{r}
-#| label: fig-boxcox-effect
+#| label: plot-boxcox-effect
 #| fig-cap: "Before and after Box-Cox: the funnel shape disappears"
 
 # Apply transform
@@ -444,20 +421,10 @@ hist(residuals(fit_trans), breaks = 15, col = "steelblue", border = "white",
 par(mfrow = c(1, 1))
 ```
 
-The funnel shape is gone. Residuals are more uniform and more normal.
-
-
-## 10. Detrending: Removing Time's Influence
-
-When you want to study the relationship between X and Y, but **both** are
-trending over time, the time trend creates a **spurious correlation**.
-
-**Fix:** Remove the trend first, then analyze the detrended data.
-
-$$y_{\text{detrended}} = y - (\hat{a}_0 + \hat{a}_1 \cdot \text{time})$$
+Two unrelated series that both trend upward, before and after detrending.
 
 ```{r}
-#| label: fig-detrending
+#| label: plot-detrending
 #| fig-cap: "Both variables trend upward with time → spurious correlation. Detrending reveals the truth."
 
 set.seed(42)
@@ -503,21 +470,10 @@ abline(h = 0, lty = 2, col = "gray50")
 par(mfrow = c(1, 1))
 ```
 
-After removing the time trend, the spurious correlation disappears.
-
-
-## 11. PCA + Regression: The Full Workflow
-
-The typical use of PCA in this guide:
-
-1. You have many correlated predictors
-2. Run PCA to get uncorrelated components
-3. Use cross-validation to decide how many components to keep
-4. Feed components into regression (or SVM, KNN, etc.)
-5. Validate the final model on test data
+PCA followed by regression: three components against all ten predictors.
 
 ```{r}
-#| label: fig-pca-regression
+#| label: plot-pca-regression
 #| fig-cap: "PCA + regression: compress 10 features into 3 components, then regress"
 
 # Use the 10-feature data from earlier
@@ -541,8 +497,7 @@ cat("\n10 predictors → 3 components with similar Adj R²")
 cat("\nSimpler model, less overfitting risk, no multicollinearity")
 ```
 
-
-## 12. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 PCA RECIPE
@@ -571,6 +526,10 @@ PCA RECIPE
    - Continuous features
    - Some correlation among features (otherwise PCA can't compress)
 
+7. EIGENVALUES DESCRIBE COMPONENTS, NOT ORIGINAL VARIABLES:
+   PCA rotates the space. Every component is a mix of all the original features,
+   so an eigenvalue alone says nothing about one original feature's importance.
+
 BOX-COX RECIPE
 ==============
 
@@ -593,11 +552,7 @@ Remove time trend before analyzing relationships:
 Prevents spurious correlations caused by shared time trends.
 ```
 
-
-## 13. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -612,4 +567,5 @@ Before moving on, try to answer these without scrolling up:
    What should you do before concluding umbrellas cause accidents?
 8. PCA gives you 5 components from 20 features. How do you decide which
    components to keep?
-:::
+9. The first eigenvalue is much larger than the rest. Can you conclude that
+   the first original covariate is the most important one? Why not?

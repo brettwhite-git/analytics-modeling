@@ -1,81 +1,91 @@
 ---
-title: "Variable Selection: Choosing What Your Model Gets to See"
-subtitle: "LASSO, ridge, stepwise methods, and the bias-variance tradeoff"
+title: "How do you decide which variables a model gets to see?"
+subtitle: "Give the coefficients a budget. The shape of that budget decides whether a variable is dropped or only turned down."
 engine: knitr
 ---
 
-## The Problem: Too Many Variables
+::: {.ink-figure data-figure="lasso-figure" data-step="0" data-caption="Fig. 1 · an ordinary least-squares fit with two predictors, and it uses both · made-up data"}
+:::
 
-Every model we've built so far uses **factors** (predictor variables) to make predictions. But how many factors should a model actually use? There are two compelling reasons to prefer fewer:
+Every model so far has used **factors** (predictor variables) to make a prediction, and regression will happily use every one you hand it. The first reason to hand it fewer is overfitting. When the number of factors gets close to the number of data points, the model starts fitting *random* patterns as well as *real* ones. With three data points and one factor, different samples give wildly different regression lines. With enough factors relative to data, even a meaningless one, such as the temperature 37 days after someone was born, appears to predict their adult height.
 
-**1. Overfitting risk.** When the number of factors approaches the number of data points, the model starts fitting *random* patterns in addition to *real* ones. With only 3 data points and 1 factor, different samples produce wildly different regression lines. With enough factors relative to data, even meaningless ones (like the temperature 37 days after someone's birth) appear to have predictive power.
+The second reason is simplicity. Fewer factors cost less to collect and are easier to explain to people who are not analysts. There is also less chance that one of them is noise: 20 factors each tested at $p = 0.05$ leave a 64% chance that at least one is meaningless. In credit decisions the law forbids factors such as race, sex, religion and marital status, and an overly complex model can use them indirectly through correlated proxies (zip code for race, "lives in Utah" for religion). If you cannot clearly say what your model is doing, it will not be trusted or used, and in some industries it would be illegal to use.
 
-**2. Simplicity and explainability.** Fewer factors means:
+## One factor at a time
 
-- Less data collection cost
-- Easier explanation to non-technical stakeholders
-- Less chance of including a non-significant factor (20 factors at $p = 0.05$ gives a 64% chance at least one is meaningless)
-- **Legal compliance**: In credit decisions, factors like race, sex, religion, and marital status are forbidden. Overly complex models can use these indirectly through correlated proxies (zip code $\rightarrow$ race, "lives in Utah" $\rightarrow$ religion)
+The oldest methods build the model in steps. **Forward selection** starts with no factors. At each step it adds the single best remaining factor, the one with the lowest p-value or the largest improvement in $R^2$, as long as it is good enough (for example $p < 0.10$ to $0.15$). It stops when nothing left meets the threshold, and it can optionally remove weak factors at the end.
 
-> **Key insight:** If you can't clearly communicate what your model is doing, it won't be trusted or used — and in some industries, it would be illegal to use.
+**Backward elimination** runs the other way. It starts with all the factors and removes the worst one at each step, until nothing is bad enough to remove (for example, every remaining factor has $p < 0.05$). **Stepwise regression** combines the two: after adding each new factor it immediately checks whether any factor already in the model should now come out, so the model can adjust as new factors change the picture. It is the most commonly used of the three. All three can use p-values, $R^2$, AIC or BIC as the criterion.
 
----
+These are **greedy** methods. Each step makes the best local decision without considering what it does to later steps, so they are fast and good for a first look at the data. [A greedy method can miss the best model. A run of locally best choices is not guaranteed to be the best choice overall.]{.side} The price is that they tend to fit random effects, and the models they produce often do worse on new data than the global methods that follow.
 
-## Greedy Methods: Step by Step
+## A budget for the coefficients
 
-These methods make locally optimal decisions at each step without considering future consequences.
+LASSO (Least Absolute Shrinkage and Selection Operator) does not step through the factors at all. It runs the usual regression, minimising the squared error, with one constraint added:
 
-### Forward Selection
-Start with **no factors**. At each step, add the single best factor (lowest p-value or highest $R^2$ improvement) if it's "good enough" (e.g., $p < 0.10$ to $0.15$). Stop when no remaining factor meets the threshold. Optionally remove weak factors at the end.
+$$\min_{a_0, \ldots, a_p} \; \sum_{i=1}^{n} \Bigl( y_i - \bigl( a_0 + \sum_{j=1}^{p} a_j x_{ij} \bigr) \Bigr)^2 \quad \text{subject to} \quad \sum_{j=1}^{p} |a_j| \le T$$
 
-### Backward Elimination
-Start with **all factors**. At each step, remove the worst factor until nothing is "bad enough" to remove (e.g., all remaining factors have $p < 0.05$).
+The sum of the absolute values of the coefficients has to fit inside a budget $T$. The model spends that budget on the coefficients that matter most and drives the rest **exactly to zero**, which removes those variables from the model. A tighter budget removes more variables, not fewer: a smaller $T$ forces more coefficients to zero.
 
-### Stepwise Regression
-**Combines both**: after adding each new factor, immediately check if any existing factors should now be removed. This allows the model to adjust as new factors change the picture. Most commonly used of the three.
+::: {.ink-figure data-figure="lasso-figure" data-step="1" data-caption="Fig. 2 · the same fit, held inside the LASSO budget with T = 1 · made-up data"}
+:::
 
-All three can use **p-values, $R^2$, AIC, or BIC** as the selection criterion.
+With two coefficients you can draw the whole thing. The plane is every possible pair $(a_1, a_2)$. The cross is the least-squares solution, and the rings around it are contours of equal error, which grows as you move away from the cross. The allowed pairs form a **diamond**, with straight edges and corners that sit on the axes. LASSO's answer is the first place the expanding rings touch the diamond, and that is usually a corner, where one coefficient is zero. In the figure the unconstrained fit of $(1.53,\ 0.43)$ becomes $(1.00,\ 0)$: the whole budget goes to $a_1$ and the second variable is out.
 
-> **Limitation:** Greedy methods tend to overfit random effects and often don't perform as well on new data compared to global methods.
+Because the constraint acts on the size of the coefficients, the data has to be scaled first. On unscaled data the units of each variable decide which coefficients look large, and the budget is spent accordingly. [Scale the data before LASSO or ridge. It is the same requirement as for SVM: the constraint acts on coefficient magnitudes, and units change those.]{.side}
 
----
+There is no formula for the right $T$. You try different values and compare the quality of the models they give, using cross-validation.
 
-## LASSO: Budget Allocation
+## A round budget
 
-LASSO (Least Absolute Shrinkage and Selection Operator) takes a fundamentally different approach. Instead of stepping through factors one at a time, it adds a **constraint** to the regression optimization:
+Ridge regression uses the same idea with the constraint on the **squared** coefficients:
 
-$$\sum_{j=1}^{p} |a_j| \leq T$$
+$$\sum_{j=1}^{p} a_j^2 \le T$$
 
-The sum of the absolute values of all coefficients must be within a "budget" $T$. The model allocates this budget to the most important coefficients, driving the rest **exactly to zero** — effectively removing those variables.
+In the plane this region is a **circle**. Its boundary is curved, and so are the error contours. A curved contour touching a curved boundary almost never lands on an axis, so the solution has every coefficient nonzero. That is the entire geometric explanation: a straight-edged constraint meeting a curved error function picks out corners, and a curved constraint meeting a curved error function does not. With more variables and a tighter $T$, LASSO is even more likely to hit a corner.
 
-**Critical requirement:** LASSO requires **scaled data** because the constraint operates on coefficient magnitudes, and unscaled data means units affect which coefficients appear larger.
+::: {.ink-figure data-figure="lasso-figure" data-step="2" data-steps="2:ridge|3:slide T" data-caption="Fig. 3 · diamond or circle, solved live in your browser · made-up data"}
+:::
 
-The right value of $T$ is found by trying different values and comparing model quality (using cross-validation from the validation walkthrough).
+So ridge **shrinks every coefficient toward zero without eliminating any**. The tighter the constraint, the further the solution moves inward from the least-squares point toward the origin. If the least-squares point is already inside the region, the constraint does nothing and $T$ has to come down before it has any effect. Slide the budget in the figure and watch the small plot beside it: under LASSO the second coefficient stays at exactly zero until $T$ passes 1.10, while under ridge both coefficients fall together and reach zero only when the budget does. [Ridge regression does not do variable selection. It shrinks coefficients but never drives them exactly to zero. LASSO removes variables; ridge only shrinks them.]{.side}
 
----
+If it removes nothing, what is ridge for? It is a form of **regularization**: it reduces overfitting by limiting the size of each variable's effect instead of the number of variables. Use it when a linear regression looks overfit, with validation error much worse than training error, and you do not want to remove variables entirely.
 
-## Ridge Regression: Shrink, Don't Remove
+## Real patterns and random ones
 
-Ridge regression uses a similar constraint, but on **squared** coefficient values:
+Every data set contains **real patterns** (true effects) and **random patterns** (artifacts of noise). A model cannot tell them apart. It can only fit more or less closely to all of them at once.
 
-$$\sum_{j=1}^{p} a_j^2 \leq T$$
+| | Fits random patterns (high) | Avoids random patterns (low) |
+|---|---|---|
+| **Captures real patterns (high)** | Overfitting danger | **Sweet spot** |
+| **Misses real patterns (low)** | Worst case | Underfitting |
 
-This **shrinks all coefficients toward zero** without eliminating any. It's a form of **regularization** — reducing overfitting by constraining coefficient magnitudes rather than removing variables.
+**Bias** is the error from missing real patterns, which is underfitting. Removing variables and shrinking coefficients increases bias. **Variance** is the error from fitting random patterns, which is overfitting. More variables and larger coefficients increase variance. The course lecturer says he dislikes both terms in this context and finds them confusing. The intuition of real against random patterns matters more than the jargon.
 
-**When to use ridge:** When your linear regression model appears overfit (validation error much worse than training error) but you don't want to remove variables entirely.
+The budget $T$ moves you along this trade. A small $T$ fits loosely and risks underfitting, and if you make it too small the model does underfit. A large $T$ fits closely and risks overfitting. The sweet spot is where total prediction error, bias plus variance, is smallest. [The trade-off is about prediction on new data. Training error alone does not reveal it, which is why the figure's training error only ever rises as the budget tightens.]{.side} Validation is how you find it, and domain experts can tell you which patterns are likely to be real.
 
----
+## Choosing a method
 
-## The Geometric Intuition: Why LASSO Removes Variables and Ridge Doesn't
+| Method | Speed | Variable selection? | Regularization? | Best for |
+|--------|-------|-------------------|-----------------|----------|
+| Forward / backward / stepwise | Fast | Yes | No | Initial exploration |
+| LASSO | Slower | Yes (zeros out coefficients) | Yes | Final predictive models |
+| Ridge | Slower | No (shrinks only) | Yes | Reducing overfitting without removing variables |
+| Elastic net | Slower | Yes, plus shrinkage | Yes | Correlated predictors |
 
-This is the core visual insight of the module. In 2D (two coefficients):
+**Elastic net** constrains a combination of the two: LASSO's absolute-value term and ridge's quadratic term. It matters most when factors are correlated. Given two highly correlated predictors, LASSO tends to keep just one, and not necessarily the better one. It might keep an expensive medical test and drop a cheap one that gives similar results. Ridge keeps both but shrinks their coefficients toward each other, and may underestimate a predictor that truly matters. Elastic net is a middle ground. [Elastic net is not "LASSO but better". It is a trade-off, and with uncorrelated factors LASSO alone may be cleaner.]{.side}
+
+There is no rule that settles the choice. The greedy methods are fast and suit a first exploration. LASSO and elastic net are slower and usually give better predictive models. In the lecturer's words, "there's a lot of art to analytics": if you have time to try one method, you have time to try several and compare.
+
+## Run it yourself {.reference}
+
+The diamond and the circle side by side, as a static base-R sketch. Here the ellipses are placed by hand to show the shape of the argument. The figures above compute them from data.
 
 ```{r}
-#| label: fig-lasso-vs-ridge
+#| label: plot-lasso-vs-ridge
 #| fig-cap: "LASSO constraint (diamond) vs. Ridge constraint (circle). The error ellipses tend to touch the diamond at corners (where coefficients = 0) but touch the circle at non-corner points (all coefficients nonzero)."
 #| fig-width: 8
 #| fig-height: 4
-#| echo: false
 
 par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 
@@ -141,52 +151,38 @@ legend("bottomleft", legend = c("Constraint region", "Error contours", "Solution
        pch = c(NA, NA, 19), lwd = c(2, 1, NA), cex = 0.8, bg = "white")
 ```
 
-**The key insight:** The diamond has **straight edges** that create corners on the axes (where coefficients = 0). The expanding error ellipses almost always hit a corner first. The circle has a **curved boundary** — curved ellipses touching a curved surface almost never land on an axis. That's the entire geometric explanation.
+## On one page {.reference}
 
----
+| Method | Constraint or rule | Removes variables? | Use it for |
+|--------|--------------------|:------------------:|------------|
+| Forward selection | Start with none, add the best factor while one is good enough | Yes | Initial exploration (fast, greedy) |
+| Backward elimination | Start with all, remove the worst factor while one is bad enough | Yes | Initial exploration (fast, greedy) |
+| Stepwise | Add, then re-check what is already in | Yes | Initial exploration; most common of the three |
+| LASSO | $\sum \lvert a_j \rvert \le T$ (diamond) | Yes, exactly zero | Final predictive models |
+| Ridge | $\sum a_j^2 \le T$ (circle) | No, shrinks only | An overfit regression, keeping every variable |
+| Elastic net | A combination of both terms | Yes, plus shrinkage | Correlated predictors |
 
-## Bias-Variance Tradeoff
+Common misconceptions:
 
-Every dataset contains **real patterns** (true effects) and **random patterns** (noise artifacts). Models can't tell them apart — they can only fit more or less to *all* patterns simultaneously.
+1. **Ridge regression does NOT do variable selection.** It shrinks coefficients but never drives them exactly to zero.
+2. **LASSO requires scaled data**, because the absolute-value constraint is sensitive to coefficient magnitudes.
+3. **Greedy methods can miss the best model.** They make locally optimal choices that may not be globally optimal.
+4. **Elastic net is not "LASSO but better".** It is a trade-off. With uncorrelated factors, LASSO alone may be cleaner.
+5. **A tighter budget $T$ in LASSO means more variables removed**, not fewer. Smaller $T$ forces more coefficients to zero.
+6. **Bias-variance is about prediction on NEW data.** Training error alone does not reveal the trade-off.
 
-| | Fits random patterns (high) | Avoids random patterns (low) |
-|---|---|---|
-| **Captures real patterns (high)** | Overfitting danger | **Sweet spot** |
-| **Misses real patterns (low)** | Worst case | Underfitting |
+Bias is error from missing real patterns (underfitting); variance is error from fitting random ones (overfitting). Choose $T$ by trying values and comparing them with cross-validation.
 
-- **Bias** = error from missing real patterns (underfitting). Removing variables and shrinking coefficients increases bias.
-- **Variance** = error from fitting random patterns (overfitting). More variables and larger coefficients increase variance.
+## Check yourself {.reference}
 
-The sweet spot minimizes **total prediction error** (bias + variance). Validation helps you find it, and domain experts can guide which patterns are likely real.
+Before moving on, try to answer these without scrolling up:
 
-> **Practitioner note:** He dislikes the terms "bias" and "variance" in this context — finds them confusing. The intuition (real vs. random patterns) matters more than the jargon.
-
----
-
-## Choosing a Method
-
-| Method | Speed | Variable Selection? | Regularization? | Best For |
-|--------|-------|-------------------|-----------------|----------|
-| Forward/Backward/Stepwise | Fast | Yes | No | Initial exploration |
-| LASSO | Slower | Yes (zeros out coefficients) | Yes | Final predictive models |
-| Ridge | Slower | No (shrinks only) | Yes | Reducing overfitting without removing variables |
-| Elastic Net | Slower | Yes + shrinkage | Yes | Correlated predictors |
-
-**Elastic net** combines LASSO (absolute value constraint) with ridge (quadratic constraint). With correlated factors, LASSO arbitrarily picks one; ridge includes both but may underestimate. Elastic net offers a middle ground.
-
-> **Practical emphasis:** "There's a lot of art to analytics" — if you have time to try one method, you have time to try several and compare.
-
----
-
-## Common Pitfalls
-
-::: {.callout-warning}
-### Common Misconceptions
-
-1. **Ridge regression does NOT do variable selection** — it shrinks coefficients but never drives them exactly to zero.
-2. **LASSO requires scaled data** — because the absolute-value constraint is sensitive to coefficient magnitudes.
-3. **Greedy methods can miss the best model** — they make locally optimal choices that may not be globally optimal.
-4. **Elastic net is not "LASSO but better"** — it's a tradeoff. With uncorrelated factors, LASSO alone may be cleaner.
-5. **A tighter budget $T$ in LASSO = more variables removed** — not fewer. Smaller $T$ forces more coefficients to zero.
-6. **Bias-variance is about prediction on NEW data** — training error alone doesn't reveal the tradeoff.
-:::
+1. What are the two reasons to prefer a model with fewer factors?
+2. How do forward selection, backward elimination and stepwise regression differ, and why are all three called greedy?
+3. Why does the LASSO solution tend to land where a coefficient is exactly zero, while the ridge solution does not?
+4. What happens to the number of variables in a LASSO model when you make $T$ smaller?
+5. Why must the data be scaled before LASSO or ridge?
+6. Ridge removes no variables. What is it for?
+7. Which actions increase bias, and which increase variance?
+8. Why can you not find the best $T$ by looking at training error?
+9. What do LASSO and ridge each do with two highly correlated predictors, and where does elastic net fit?

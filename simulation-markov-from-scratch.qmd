@@ -1,35 +1,116 @@
 ---
-title: "Simulation & Markov: Probability Models for Real Systems"
-subtitle: "Distributions, QQ plots, M/M/1 queues, and steady states"
+title: "Why is there a line when the server can keep up?"
+subtitle: "On average the machine is faster than the work arriving at it. A few probability distributions, a simulation and a chain with no memory explain the queue anyway."
 engine: knitr
 ---
 
-## The Big Picture
-
-Most of this guide has been "throw data at a model." This module inverts that: when the *only* thing you know about a data point is its value, a well-matched probability distribution can solve the problem without any feature engineering.
-
-A useful opening story is a startup that wanted to resell empty season-ticket seats as upgrades. A big feature list (ticket holder demographics, weather, team record, opponent, day of week) looked inevitable — until the team realized fans tend to arrive at about the same *relative* position in the crowd every game. The deviation is approximately normal. A single distribution replaced the whole feature pipeline.
-
-This demo walks through the distributions, QQ plots, a simple queuing simulation, and Markov-chain steady state — the four tools the module uses to reason about systems.
-
-::: {.callout-tip}
-**Rule of thumb:** before engineering features, fit a distribution. If it fits, you may be done.
+::: {.ink-figure data-figure="queue-figure" data-step="0" data-caption="Fig. 1 · one server, customers arriving at random · made-up system"}
 :::
 
----
+Wafers arrive at a semiconductor machine every 20 seconds on average, and the machine takes 19 seconds on average to process one. Work with those two averages alone and the queue is always empty: each wafer is finished a second before the next one turns up.
 
-## The Distributions You Should Recognize
+Now let the arrivals and the processing times vary around the same two means. The average queue grows to about 19 wafers. Nothing about the averages changed. Only the randomness did, and to reason about it you need a small kit: a handful of probability distributions, a way to check that one fits, a simulation for when the algebra runs out, and a chain of states for the long run.
 
-### Bernoulli → Binomial → Geometric
+## Fit a distribution first
 
-The Bernoulli trial is a single weighted coin flip. Chain $n$ of them together and count successes → **binomial**. Ask how many until the first success → **geometric**.
+Most modelling is a matter of throwing data at a model. This module inverts that. When the only thing you know about a data point is its value, a well-matched probability distribution can solve the problem with no feature engineering at all.
+
+A startup wanted to resell empty season-ticket seats as upgrades. A long feature list looked inevitable: ticket-holder demographics, weather, team record, opponent, day of the week. Then the team noticed that fans tend to arrive at about the same relative position in the crowd every game, and that the deviation is approximately normal. A single distribution replaced the whole feature pipeline. The rule of thumb: before engineering features, fit a distribution. If it fits, you may be done.
+
+The counting distributions all grow from one seed. A **Bernoulli** trial is a single weighted coin flip. Chain $n$ of them together and count the successes, and you have the **binomial**. Ask instead how many trials it takes to reach the first success, and you have the **geometric**.
+
+| The event | Distribution |
+|:----------|:-------------|
+| A single yes/no trial | Bernoulli |
+| Count of successes in $n$ trials | Binomial |
+| Trials until the first success | Geometric |
+| Arrivals in a fixed window | Poisson |
+| Time between arrivals (memoryless) | Exponential |
+| Time to failure (age-dependent) | Weibull ($k \ne 1$) |
+
+The binomial converges to the normal distribution as $n$ grows, which is why the normal is so useful: it is the large-$n$ limit of so many counting processes.
+
+The geometric is your "how many trials until X" tool, and it doubles as a diagnostic. To find out whether at-bats really are independent, identical Bernoulli trials, check whether the number of at-bats until a broken bat fits a geometric distribution. If it does, you do not need to model the weather, the pitcher, the pitch type or the batter. The independence assumption is already good enough. [Exam trap: in the geometric distribution, $p$ is the probability of the thing you are waiting for. Sometimes that is a good outcome (a job offer), sometimes a bad one (a defective unit). Define it explicitly every time.]{.side}
+
+## Arrivals, gaps and memory
+
+Suppose customers arrive at an average rate of $\lambda$ per minute and the arrivals are independent. Then the **count in a fixed window** is Poisson, and the **time between one arrival and the next** is exponential with mean $1/\lambda$. They are the same distribution in disguise: one in count units, the other in time units.
+
+The exponential has one peculiar property. Given that you have already waited $s$ units, the distribution of the remaining time is still exponential with the same rate:
+
+$$P(X > s + t \mid X > s) = P(X > t)$$
+
+Past history is irrelevant. That is what **memoryless** means, and it is the single property that makes the mathematics of a queue tractable.
+
+Plenty of things do have a memory. Tires are more likely to fail the more miles they have been driven, so the time to failure depends on history and cannot be exponential. The **Weibull** distribution is the tool for that. It is like the geometric, but continuous in time, and its shape parameter $k$ says whether the failure rate shrinks, stays flat or grows with age. [Weibull with $k = 1$ reduces to the exponential. Software reporting a best-fit Weibull with $k = 1.002$ is probably just fitting noise.]{.side}
+
+| Shape | Failure rate | Reading |
+|:-----:|:-------------|:--------|
+| $k < 1$ | Decreasing hazard | Weak parts fail first |
+| $k = 1$ | Constant | The exponential, memoryless |
+| $k > 1$ | Increasing hazard | Wear-out: the tires |
+
+## Checking the fit by eye
+
+Before you lean on a distribution, check that the data agree with it. A statistical test collapses the fit to a single number. A **QQ plot** shows you where a distribution diverges from the data, which matters enormously if the tails are the point of your project.
+
+The plot sets the quantiles of your sample against the quantiles the theoretical distribution says you should see. If the two match, the points fall on the 45° line. Where they drift off tells you the story: an upper tail heavier than normal, a lower tail that is compressed, and so on. Exponential data plotted against exponential quantiles is nearly straight. The same data plotted against normal quantiles is clearly bad, especially in the tails.
+
+## Why averages are not enough
+
+Back to the machine. Give it Poisson arrivals at rate $\lambda$ and exponential service at rate $\mu$, and it is the simplest queue there is, written M/M/1: memoryless arrivals, memoryless service, one server. The figure uses rounder numbers than the wafers. Service takes one minute on average, so $\mu = 1$, and customers arrive at $\lambda = 0.5$ a minute. The server is busy half the time.
+
+::: {.ink-figure data-figure="queue-figure" data-step="1" data-caption="Fig. 2 · the first four hours of a simulated run, with the long-run averages beside it · made-up system"}
+:::
+
+The run is simulated in your browser: draw a random gap before each arrival, draw a random service time, make each customer wait for the one in front, and count who is present. Even at half load there is usually someone there, and now and then a cluster of arrivals builds a short line. Because both distributions are memoryless, this queue also has a closed-form answer, and the simulation lands on it. With $\rho = \lambda / \mu$ for the share of time the server is busy, the average number in the system and the average time each customer spends in it are
+
+$$L = \frac{\rho}{1 - \rho} \qquad\qquad W = \frac{1}{\mu - \lambda}$$
+
+At $\rho = 0.5$ that is one customer and two minutes. The wafer machine runs at $\rho = 19/20 = 0.95$, and $0.95 / 0.05 = 19$: the queue from the opening paragraph.
+
+::: {.ink-figure data-figure="queue-figure" data-step="2" data-steps="2:slide λ|3:the curve" data-caption="Fig. 3 · the first day of the same run, re-simulated as you move the arrival rate · made-up system"}
+:::
+
+Slide the arrival rate up and watch what the denominator does. Going from half busy to 90% busy takes the average from 1 to 9. At 95% it is 19. The line does not grow in proportion to the load. It explodes as $\rho$ approaches 1, and at $\rho \ge 1$ work arrives at least as fast as it can be done, so there is no average to settle on. [Exam trap: "arrivals average every 20 seconds and service takes 19, so the queue is small" is wrong. Variability in the gaps and the service times creates a substantial queue even when $\lambda < \mu$.]{.side}
+
+The closed form exists only because of memorylessness: a queue with closed-form mathematics is M/M/1, and it needs the exponential. A queue with arbitrary complexity is a job for simulation, which exists precisely because averages cannot predict how a queue behaves once randomness enters. Notice that the simulated figures sit near the formula, not on it. A simulation is a sample. Run it again with different random draws and the averages move, so you judge a simulated system by several runs and their spread, never by one.
+
+## A chain with no memory
+
+The same idea, that the next step depends only on where you are now, describes systems that hop between states. A **Markov chain** has a finite set of states and a transition matrix $P$, where $P_{ij}$ is the probability of moving from state $i$ to state $j$ in one step. Each row is a "from" state, so each row adds up to 1.
+
+::: {.ink-figure data-figure="markov-figure" data-step="1" data-steps="0:the question|1:one day at a time" data-caption="Fig. 4 · three kinds of weather and the chance of moving between them · illustration"}
+:::
+
+If today is certainly sunny, the starting distribution is $\pi = (1, 0, 0)$. Tomorrow's distribution is $\pi P$: for each state, add up every way of arriving in it, weighted by the chance of being where you would have to come from. Do that $k$ times and the distribution after $k$ steps is
+
+$$\pi P^k$$
+
+Keep stepping and the bars stop moving. The **steady-state** distribution $\pi^*$ is the one that a further step does not change:
+
+$$\pi^* P = \pi^* \qquad \text{with} \qquad \sum_i \pi^*_i = 1$$
+
+::: {.ink-figure data-figure="markov-figure" data-step="2" data-steps="1:one day at a time|2:other starts" data-caption="Fig. 5 · the steady state, found by repeated multiplication · illustration"}
+:::
+
+Start from a different state and the chain comes back to the same vector: in the long run it forgets where it began. Mathematically, $\pi^*$ is the left eigenvector of $P$ with eigenvalue 1. You can find it by eigen-decomposition, by multiplying until nothing changes, or by walking the chain at random for a long time and recording the fraction of visits to each state. They agree. [Exam trap: Markov chains need irreducibility. A steady state may not exist if states cannot reach each other.]{.side}
+
+Real weather is not actually a good Markov example, because real weather is highly history-dependent. The chains earn their place elsewhere: PageRank, the LRMC college basketball rankings, urban sprawl, long-run disease modelling. In those cases the system is not literally memoryless in the short term, but over long horizons the assumption washes out and the steady state still gives useful rankings.
+
+PageRank is the cleanest case. Treat the web as a graph in which each page is a state, and make the transition probability from page $i$ to page $j$ proportional to whether $i$ links to $j$. The steady-state distribution tells you how often a random walker lands on each page, which was Google's original ranking signal.
+
+## Run it yourself {.reference}
+
+The plots and numbers below are produced by R. Where the page shows code, it sits under "The R".
+
+Binomial counts for two values of $p$, then the geometric: its probabilities and its survival curve.
 
 ```{r}
-#| label: fig-discrete-dists
+#| label: plot-discrete-dists
 #| fig-cap: "Binomial PMFs for different p (top); Geometric PMF and survival function (bottom)."
 #| fig-width: 9
 #| fig-height: 6
-#| echo: false
 
 par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
 
@@ -60,24 +141,13 @@ plot(k, 1 - pgeom(k - 1, prob = 0.25), type = "l", lwd = 2,
 grid()
 ```
 
-The **binomial** converges to the normal distribution as $n$ grows, which is why the normal is so useful — it's the large-$n$ limit of so many counting processes.
-
-The **geometric** is your "how many trials until X" tool. It doubles as a *diagnostic*: if you want to know whether at-bats are really i.i.d. Bernoulli trials, check whether at-bats-until-broken-bat fits a geometric distribution. If it does, you don't need to model weather, pitcher, pitch type, batter — the independence assumption is already good enough.
-
-::: {.callout-warning}
-**Watch out:** in the geometric distribution, $p$ is the probability of the thing you're *waiting for*. Sometimes that's a good outcome (job offer), sometimes bad (defective unit). Define it explicitly every time — you'll see this trap on practice checks.
-:::
-
-### Poisson ↔ Exponential (the same distribution in disguise)
-
-If customers arrive at an average rate $\lambda$ per minute and arrivals are independent, the **count in a fixed window** is Poisson and the **inter-arrival time** is exponential with mean $1/\lambda$. One distribution in time units, the other in count units.
+A Poisson count with $\lambda = 4$ and the exponential gap that goes with it.
 
 ```{r}
-#| label: fig-poisson-exp
+#| label: plot-poisson-exp
 #| fig-cap: "Poisson PMF and the matching exponential density."
 #| fig-width: 9
 #| fig-height: 4
-#| echo: false
 
 par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 
@@ -95,16 +165,13 @@ plot(t, dexp(t, rate = lambda), type = "l", lwd = 2, col = "#d62828",
 grid()
 ```
 
-### Weibull — failure rate that varies with age
-
-The **Weibull** is like the geometric, but continuous in time. Its shape parameter $k$ controls whether the failure rate shrinks, stays flat, or grows.
+The Weibull density for three values of the shape parameter $k$.
 
 ```{r}
-#| label: fig-weibull
+#| label: plot-weibull
 #| fig-cap: "Weibull density for k < 1 (weak parts fail first), k = 1 (exponential), k > 1 (wear-out)."
 #| fig-width: 7
 #| fig-height: 4
-#| echo: false
 
 t <- seq(0.001, 3, length.out = 500)
 plot(t, dweibull(t, shape = 0.5, scale = 1), type = "l", lwd = 2,
@@ -121,24 +188,13 @@ legend("topright",
 grid()
 ```
 
-::: {.callout-note}
-**Check your understanding:** Tires are more likely to fail the more miles they've been driven. Is this memoryless? Which distribution fits?
-
-*Answer: not memoryless (depends on history), so not exponential. Weibull with $k > 1$ is the right tool.*
-:::
-
----
-
-## QQ Plots — Sanity Check for Distribution Fit
-
-A statistical test collapses the fit to a single number. A QQ plot shows you *where* a distribution diverges from the data — which matters enormously if the tails are the point of your project.
+Two QQ plots of the same simulated exponential data: against the exponential, and against the normal.
 
 ```{r}
-#| label: fig-qq
+#| label: plot-qq
 #| fig-cap: "QQ plots: (left) simulated exponential data vs theoretical exponential — nearly straight. (right) the same data vs theoretical normal — clearly bad, especially in the tails."
 #| fig-width: 9
 #| fig-height: 4
-#| echo: false
 
 set.seed(42)
 exp_data <- rexp(500, rate = 1)
@@ -161,21 +217,10 @@ qqline(exp_data, col = "gray60", lty = 2, lwd = 2)
 grid()
 ```
 
-::: {.callout-tip}
-If the data and the theoretical distribution match, points fall on the 45° line. *Where* they drift off tells you the story — upper-tail heavier than normal, lower-tail compressed, etc.
-:::
-
----
-
-## Why Averages Aren't Enough — A Queuing Simulation
-
-A classic queueing example: wafers arrive at a semiconductor machine every 20 seconds on average; processing takes 19 seconds on average. Under these averages alone, the queue is always empty and throughput is effortless. Add Poisson arrivals and exponential service — same means — and the average queue explodes to ~19 wafers.
-
-Let's simulate it.
+The wafer machine as an M/M/1 simulation: mean gap 20 seconds, mean service 19 seconds. The wait it reports is the time a wafer spends in line before its service starts.
 
 ```{r}
 #| label: simulate-mm1
-#| echo: true
 
 set.seed(1)
 
@@ -205,12 +250,13 @@ cat("Max wait time  (sec):", round(max(sim$wait_time), 2), "\n")
 cat("Utilization (expected):", round((1 / 19) / (1 / 20), 3), "\n")
 ```
 
+The distribution of those waits. Most are short, but the tail is long.
+
 ```{r}
-#| label: fig-mm1
+#| label: plot-mm1
 #| fig-cap: "Wait-time distribution for an M/M/1 queue with mean inter-arrival 20s and mean service 19s. Most waits are short but the tail is long — the *average* already disagrees with the 'no queue' story that averaging inputs would tell."
 #| fig-width: 8
 #| fig-height: 4
-#| echo: false
 
 hist(sim$wait_time, breaks = 60, col = "#c7e4d2", border = "#2d6a4f",
      main = "M/M/1 wait-time distribution",
@@ -220,19 +266,10 @@ legend("topright", paste("mean =", round(mean(sim$wait_time), 1), "s"),
        col = "#d62828", lwd = 2, lty = 2, bty = "n")
 ```
 
-::: {.callout-warning}
-**Common pitfall:** "If arrivals average every 20 seconds and service takes 19 seconds, the queue is small." *This is wrong.* Variability in inter-arrival and service times — even with those means — creates a substantial queue. Simulation exists precisely because averages can't predict queue behavior once randomness enters.
-:::
-
----
-
-## Memorylessness — The Single Property That Makes the Math Tractable
-
-The exponential distribution has one peculiar property: given that you've already waited $s$ units, the distribution of remaining time is *still* exponential with the same rate. Past history is irrelevant.
+Memorylessness, checked by counting: the chance of waiting 2 more is the same whether or not you have already waited 3.
 
 ```{r}
 #| label: memoryless-check
-#| echo: true
 
 set.seed(7)
 samples <- rexp(50000, rate = 1)
@@ -248,19 +285,10 @@ cat("P(X > 2) unconditional:       ", round(p_exceed_2, 4), "\n")
 cat("P(X > 5 | X > 3) conditional: ", round(p_exceed_3_plus_2, 4), "\n")
 ```
 
-The two numbers are (approximately) the same. That's what memorylessness means — and it's why M/M/1 queues admit closed-form solutions. Tire failure, by contrast, *is* history-dependent (worn tires fail faster), so tires cannot be modeled as exponential — Weibull with $k > 1$ is the right tool.
-
----
-
-## Markov Chains — Steady State via Eigen-Decomposition
-
-A Markov chain has a finite set of states and a transition matrix $P$ where $P_{ij}$ is the probability of moving from state $i$ to state $j$ in one step. Starting with an initial distribution $\pi$, the distribution after $k$ steps is $\pi P^k$. The **steady-state** distribution $\pi^*$ is the one that doesn't change: $\pi^* P = \pi^*$ with $\sum \pi_i^* = 1$.
-
-Mathematically, $\pi^*$ is the left eigenvector of $P$ with eigenvalue 1.
+A three-state weather chain and its steady state, from the eigen-decomposition of the transposed transition matrix.
 
 ```{r}
 #| label: markov-weather
-#| echo: true
 
 # Classic weather example: Sunny / Cloudy / Rainy
 states <- c("Sunny", "Cloudy", "Rainy")
@@ -283,9 +311,10 @@ names(pi_star) <- states
 round(pi_star, 4)
 ```
 
+The same steady state from a random walk of 100,000 steps. The two agree.
+
 ```{r}
 #| label: markov-verify
-#| echo: true
 
 # Verify by simulation: start in Sunny, take many steps, record visit fractions
 set.seed(42)
@@ -303,23 +332,10 @@ names(empirical) <- states
 round(empirical, 4)
 ```
 
-The eigen-decomposition and the empirical random walk agree — that's the Markov-chain steady state.
-
-::: {.callout-note}
-**Check your understanding:** Real weather is *not* actually a good Markov example — real weather is highly history-dependent. Why bother with Markov chains at all?
-
-*Answer: applications like PageRank (ranking web pages by random-walk steady state), LRMC college basketball rankings, urban sprawl, and long-run disease modeling. In these cases the system isn't literally memoryless short-term, but over long horizons the memorylessness assumption washes out and the steady state still gives useful rankings.*
-:::
-
----
-
-## PageRank — One Matrix Multiply
-
-PageRank treats the web as a graph: each page is a state, and the transition probability from page $i$ to page $j$ is proportional to whether $i$ links to $j$. The steady-state distribution tells you how often a random walker lands on each page — Google's original ranking signal.
+PageRank on a web of five pages. Page 3 dominates: it receives links from almost every other page, so a random walker gets funnelled there.
 
 ```{r}
 #| label: pagerank
-#| echo: true
 
 # Tiny web of 5 pages
 link_matrix <- matrix(0, nrow = 5, ncol = 5)
@@ -345,11 +361,7 @@ names(page_rank) <- paste0("Page", 1:5)
 sort(round(page_rank, 4), decreasing = TRUE)
 ```
 
-Page 3 dominates — it receives links from almost every other page, so a random walker gets funneled there.
-
----
-
-## Cheat Sheet
+## On one page {.reference}
 
 | Situation | Distribution / tool |
 |---|---|
@@ -364,12 +376,22 @@ Page 3 dominates — it receives links from almost every other page, so a random
 | Queue with arbitrary complexity | Simulation |
 | Long-run rankings over a transition graph | Markov chain steady state |
 
-::: {.callout-warning}
-**Common pitfalls recap:**
+Common pitfalls:
 
 1. **Averages ≠ queues.** Variability makes lines even when $\lambda < \mu$.
 2. **Geometric $p$ direction.** Define $p$ as the thing you're waiting for, not always "success."
 3. **Exponential only when memoryless.** If history matters, use Weibull.
 4. **Weibull k = 1 reduces to exponential.** Software reporting "best fit Weibull $k = 1.002$" is probably just fitting noise.
 5. **Markov chains need irreducibility.** A steady state may not exist if states can't reach each other.
-:::
+
+## Check yourself {.reference}
+
+Before moving on, try to answer these without scrolling up:
+
+1. Tires are more likely to fail the more miles they've been driven. Is this memoryless? Which distribution fits?
+2. Real weather is not actually a good Markov example, because it is highly history-dependent. Why bother with Markov chains at all?
+3. Arrivals average one every 20 seconds and service takes 19 seconds. Why is the queue not small?
+4. Customers arrive at rate $\lambda$. Which distribution describes the count in a fixed window, and which the gap between two arrivals?
+5. In a geometric distribution, what exactly is $p$ the probability of?
+6. What does a QQ plot show you that a single test statistic does not?
+7. When might a Markov chain have no steady state?

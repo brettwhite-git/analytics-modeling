@@ -1,0 +1,236 @@
+/* InkKit — one look for every figure. Colours come from the site tokens in ink.css, so figures
+   follow the light and dark themes. See ink/DRAWING-RULES.md. */
+.ink-kit {
+  --ik-ease: cubic-bezier(0.42, 0.05, 0.4, 1);
+  color: var(--near-black);
+  display: block;
+  height: 100%;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 100%;
+}
+.ink-kit .ik-accent {
+  color: var(--brand);
+}
+
+/* ---------- ink: every stroke is drawn in with one dashoffset (pathLength = 1) ---------- */
+.ink-kit .ik-ink path,
+.ink-kit path.ik-ink[pathLength] {
+  stroke-dasharray: 1 1.2;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-dashoffset var(--ik-dur, 640ms) var(--ik-ease) var(--ik-d, 0ms);
+}
+.ink-kit .ik-ink {
+  opacity: 0.8;
+}
+.ink-kit .is-off .ik-ink path,
+.ink-kit .is-off path.ik-ink[pathLength] {
+  stroke-dashoffset: 1.1;
+  transition: stroke-dashoffset 240ms var(--ik-ease) 0ms;
+}
+.ink-kit.is-undrawn .ik-ink path,
+.ink-kit.is-undrawn path.ik-ink[pathLength] {
+  stroke-dashoffset: 1.1;
+  transition: none;
+}
+
+/* ---------- thread: stitched, sewn in along its length through a mask ---------- */
+.ink-kit .ik-thread {
+  opacity: 0.45;
+}
+.ink-kit .ik-thread.ik-accent {
+  opacity: 0.75;
+}
+.ink-kit .ik-pen {
+  stroke-dasharray: 1 1.2;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 900ms var(--ik-ease) var(--ik-d, 0ms);
+}
+.ink-kit .ik-pen.is-off {
+  stroke-dashoffset: 1.1;
+  transition: stroke-dashoffset 240ms var(--ik-ease) 0ms;
+}
+.ink-kit.is-undrawn .ik-pen {
+  transition: none;
+}
+
+/* ---------- things that cannot be drawn as a stroke: hatch, dots, paper patches ---------- */
+.ink-kit .ik-fade {
+  opacity: var(--ik-op, 1);
+  transition: opacity 320ms cubic-bezier(0.23, 1, 0.32, 1) var(--ik-d, 0ms);
+}
+.ink-kit .ik-hatch path {
+  stroke-width: 0.6;
+}
+.ink-kit .ik-paper {
+  fill: var(--ivory);
+  stroke: none;
+}
+.ink-kit .is-off .ik-fade,
+.ink-kit.is-undrawn .ik-fade {
+  opacity: 0;
+  transition: opacity 160ms ease 0ms;
+}
+
+/* ---------- type: written in with a clip ---------- */
+.ink-kit .ik-t {
+  clip-path: inset(-8px -8px -8px -8px);
+  transition: clip-path 560ms var(--ik-ease) var(--ik-d, 0ms);
+}
+.ink-kit .is-off .ik-t,
+.ink-kit.is-undrawn .ik-t {
+  clip-path: inset(-8px 100% -8px 0);
+  transition: none;
+}
+.ink-kit text {
+  fill: currentColor;
+  pointer-events: none;
+}
+.ink-kit .ik-label {
+  fill: var(--stone);
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+.ink-kit .ik-label.ik-accent,
+.ink-kit .ik-axis.ik-accent,
+.ink-kit .ik-val.ik-accent {
+  fill: var(--brand);
+}
+.ink-kit .ik-val {
+  fill: var(--near-black);
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ink-kit .ik-axis {
+  fill: var(--stone);
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 10px;
+  font-weight: 500;
+}
+.ink-kit .ik-math {
+  fill: var(--near-black);
+  font-family: var(--serif, Charter, Georgia, serif);
+  font-size: 16px;
+  font-style: italic;
+  white-space: pre;
+}
+.ink-kit .ik-code {
+  fill: var(--dark-warm);
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 10.5px;
+  font-variant-ligatures: none;
+  font-weight: 500;
+  white-space: pre;
+}
+.ink-kit .ik-hand {
+  fill: var(--near-black);
+  fill-opacity: 0.8;
+  font-family: "Caveat", "Comic Sans MS", cursive;
+  font-size: 20px;
+  font-weight: 600;
+}
+.ink-kit .ik-note {
+  fill: var(--brand);
+  font-family: var(--serif, Charter, Georgia, serif);
+  font-size: 13px;
+  font-style: italic;
+  paint-order: stroke fill;
+  stroke: var(--ivory);
+  stroke-linejoin: round;
+  stroke-width: 4px;
+}
+
+/* ---------- live layers: redrawn on every drag, so no draw-in ---------- */
+.ink-kit .ik-now {
+  transition: opacity 240ms ease;
+}
+.ink-kit .ik-now .ik-ink path,
+.ink-kit .ik-now path.ik-ink[pathLength],
+.ink-kit .ik-now .ik-t,
+.ink-kit .ik-now .ik-fade,
+.ink-kit .ik-now .ik-pen {
+  transition: none;
+}
+.ink-kit .is-off .ik-now,
+.ink-kit .ik-now.is-off,
+.ink-kit.is-undrawn .ik-now {
+  opacity: 0;
+}
+
+/* ---------- controls ---------- */
+.ink-kit .ik-hit {
+  fill: transparent;
+  outline: none;
+  stroke: none;
+}
+.ink-kit .is-off .ik-hit,
+.ink-kit .is-off.ik-drag {
+  pointer-events: none;
+}
+.ink-kit .ik-slider .ik-hit {
+  cursor: ew-resize;
+  touch-action: pan-y;
+}
+.ink-kit .ik-knob path {
+  transition: stroke-width 140ms ease, stroke-dashoffset var(--ik-dur, 640ms) var(--ik-ease) var(--ik-d, 0ms);
+}
+.ink-kit .ik-slider:hover .ik-knob path,
+.ink-kit .ik-slider:focus-within .ik-knob path {
+  stroke-width: 2;
+}
+.ink-kit .ik-slider .ik-hit:focus-visible ~ .ik-knob,
+.ink-kit .ik-slider:has(.ik-hit:focus-visible) .ik-knob {
+  color: var(--brand);
+}
+.ink-kit .ik-button .ik-hit {
+  cursor: pointer;
+}
+.ink-kit .ik-button:hover .ik-label,
+.ink-kit .ik-button:has(.ik-hit:focus-visible) .ik-label {
+  fill: var(--brand);
+}
+.ink-kit .ik-drag {
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+.ink-kit .ik-drag.is-held {
+  cursor: grabbing;
+}
+.ink-kit .ik-drag:hover path,
+.ink-kit .ik-drag:focus-visible path,
+.ink-kit .ik-drag.is-held path {
+  stroke-width: 1.7;
+}
+.ink-kit .ik-mark .ik-hit {
+  pointer-events: none;
+}
+.ink-kit .ik-drag .ik-hit {
+  pointer-events: auto;
+}
+
+/* ---------- reduced motion: the finished drawing, instantly ---------- */
+.ink-kit.is-reduced *,
+.ink-kit.is-reduced {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ink-kit * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* a paper patch (a slider knob's backing, a label's backing) is hidden with its step */
+.ink-kit .is-off .ik-paper,
+.ink-kit.is-undrawn .ik-paper {
+  opacity: 0;
+}

@@ -1,320 +1,80 @@
 ---
-title: "Analytics Modeling From Scratch"
-subtitle: "Formula-first walkthroughs for building intuition, code, and judgment"
+title: "Analytics modeling, from scratch"
+subtitle: "Fourteen methods, each explained as a short essay with figures you can move."
 engine: knitr
-format:
-  html:
-    css: styles.css
 ---
 
-Every walkthrough builds a modeling idea from the ground up. You see the
-question the method answers, the formula it relies on, the R code that makes it
-concrete, and the judgment calls that matter when the math meets messy data.
+Every chapter starts from a question and builds one modeling idea from the ground up: the problem the method solves, the formula that carries it, and the judgment calls that matter when the math meets messy data. The figures are computed in your browser, so you can drag a point or slide a parameter and watch the answer change. The R that produces every plot is at the end of each chapter.
 
-## Get Started
+## Chapters {#chapters}
 
-Choose the path that matches how you want to learn today.
+::: {.chapter-list}
 
-::: {.path-grid}
-::: {.path-card}
-[**Goals**](#choose-by-goal)
-
-Start from the modeling job: classify, forecast, optimize, transform, or validate.
-:::
-
-::: {.path-card}
-[**Topics**](#topic-map)
-
-Jump directly to a formula-first walkthrough for a specific method.
-:::
-
-::: {.path-card}
-[**Practice**](#featured-practice)
-
-Use focused drills to check recall, costs, and decision logic.
-:::
-:::
-
-## The Modeling Loop
-
-Each page follows the same rhythm so you can move from intuition to implementation without losing the thread.
-
-::: {.modeling-loop}
-::: {.loop-step}
-**Question**
-
-What job is the method trying to do?
-:::
-
-::: {.loop-step}
-**Formula**
-
-Which mathematical object carries the idea?
-:::
-
-::: {.loop-step}
-**Code**
-
-How does the formula become executable R?
-:::
-
-::: {.loop-step}
-**Judgment**
-
-Where can the model mislead you?
-:::
-:::
-
-## Choose by Goal
-
-Pick the job you are trying to do, then jump straight into the walkthrough that matches the modeling problem.
-
-::: {.route-grid}
-::: {.route-card}
-**Classify observations**
-
-Known labels, decision boundaries, and neighbor votes.
-
-::: {.route-links}
-[SVM](svm-from-scratch.qmd){.route-link}
-[KNN](knn-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Check model performance**
-
-Estimate how well a model handles data it did not see while training.
-
-::: {.route-links}
-[Cross-Validation](cross-validation-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Group unlabeled data**
-
-Find structure from distances, centroids, and repeated assignment.
-
-::: {.route-links}
-[K-Means](kmeans-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Detect process shifts**
-
-Accumulate evidence until a small change becomes visible.
-
-::: {.route-links}
-[CUSUM](cusum-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Forecast future values**
-
-Work through trend, memory, and volatility in ordered data.
-
-::: {.route-links}
-[Time Series](time-series-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Predict or explain outcomes**
-
-Connect variables to outcomes with linear and logistic relationships.
-
-::: {.route-links}
-[Regression](regression-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Transform features**
-
-Reduce dimensions or reshape skewed variables before modeling.
-
-::: {.route-links}
-[PCA & Box-Cox](pca-boxcox-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Build interpretable rules**
-
-Create decision paths from recursive splits and pruning.
-
-::: {.route-links}
-[CART](cart-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Choose variables**
-
-Balance signal, bias, variance, and shrinkage.
-
-::: {.route-links}
-[Variable Selection](variable-selection-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Design data collection**
-
-Compare treatments intentionally with tests, factors, and adaptive choices.
-
-::: {.route-links}
-[Design of Experiments](doe-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Simulate uncertainty**
-
-Model queues, distributions, and steady-state behavior.
-
-::: {.route-links}
-[Simulation & Markov](simulation-markov-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Handle missing values**
-
-Reason about missingness mechanisms before choosing an imputation strategy.
-
-::: {.route-links}
-[Missing Data](missing-data-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Formulate decisions**
-
-Turn objectives, constraints, and variables into solvable models.
-
-::: {.route-links}
-[Optimization](optimization-from-scratch.qmd){.route-link}
-:::
-:::
-
-::: {.route-card}
-**Recognize advanced families**
-
-Build a practical map of methods you will see beyond the basics.
-
-::: {.route-links}
-[Advanced Topics](advanced-topics-from-scratch.qmd){.route-link}
-:::
-:::
-:::
-
-## Topic Map
-
-Use the full topic map when you want the complete formula-first walkthrough for a method.
-
-::: {.grid}
-
-::: {.g-col-12 .g-col-md-6}
 ### Classification
-- [**SVM From Scratch**](svm-from-scratch.qmd) — Maximum-margin hyperplanes and the kernel trick
-- [**KNN From Scratch**](knn-from-scratch.qmd) — Majority vote among nearest neighbors
-:::
 
-::: {.g-col-12 .g-col-md-6}
+- [Support vector machines](svm-from-scratch.qmd) The widest street between two classes
+- [K nearest neighbours](knn-from-scratch.qmd) A majority vote among the closest points
+
 ### Validation
-- [**Cross-Validation From Scratch**](cross-validation-from-scratch.qmd) — Why testing on training data is cheating
-:::
 
-::: {.g-col-12 .g-col-md-6}
+- [Cross-validation](cross-validation-from-scratch.qmd) Why testing on training data is cheating
+
 ### Clustering
-- [**K-Means From Scratch**](kmeans-from-scratch.qmd) — Finding groups nobody told you about
-:::
 
-::: {.g-col-12 .g-col-md-6}
-### Change Detection
-- [**CUSUM From Scratch**](cusum-from-scratch.qmd) — Catching the moment everything changed
-:::
+- [K-means](kmeans-from-scratch.qmd) Finding groups nobody told you about
 
-::: {.g-col-12 .g-col-md-6}
-### Time Series
-- [**Time Series From Scratch**](time-series-from-scratch.qmd) — Exponential smoothing, ARIMA, GARCH
-:::
+### Change detection
 
-::: {.g-col-12 .g-col-md-6}
+- [CUSUM](cusum-from-scratch.qmd) Catching the moment something changed
+
+### Time series
+
+- [Smoothing, ARIMA and GARCH](time-series-from-scratch.qmd) Level, trend, season and volatility
+
 ### Regression
-- [**Regression From Scratch**](regression-from-scratch.qmd) — Linear & logistic regression
-:::
 
-::: {.g-col-12 .g-col-md-6}
+- [Linear and logistic regression](regression-from-scratch.qmd) Connecting variables to outcomes
+
 ### Transformations
-- [**PCA & Box-Cox From Scratch**](pca-boxcox-from-scratch.qmd) — Fixing your data before modeling
-:::
 
-::: {.g-col-12 .g-col-md-6}
+- [PCA and Box-Cox](pca-boxcox-from-scratch.qmd) Reshaping data before you model it
+
 ### Trees
-- [**CART From Scratch**](cart-from-scratch.qmd) — If-then rules that think like humans
-:::
 
-::: {.g-col-12 .g-col-md-6}
-### Variable Selection
-- [**Variable Selection From Scratch**](variable-selection-from-scratch.qmd) — LASSO, ridge, stepwise, and bias-variance tradeoff
-:::
+- [CART](cart-from-scratch.qmd) If-then rules, grown and pruned
 
-::: {.g-col-12 .g-col-md-6}
-### Design of Experiments
-- [**DOE From Scratch**](doe-from-scratch.qmd) — A/B testing, factorial designs, multi-armed bandits
-:::
+### Variable selection
 
-::: {.g-col-12 .g-col-md-6}
-### Simulation & Markov
-- [**Simulation & Markov From Scratch**](simulation-markov-from-scratch.qmd) — Distributions, QQ plots, M/M/1 queues, steady states
-:::
+- [LASSO, ridge and stepwise](variable-selection-from-scratch.qmd) Fewer variables, on purpose
 
-::: {.g-col-12 .g-col-md-6}
-### Missing Data
-- [**Missing Data From Scratch**](missing-data-from-scratch.qmd) — MCAR/MAR/MNAR, indicators, imputation strategies
-:::
+### Design of experiments
 
-::: {.g-col-12 .g-col-md-6}
+- [A/B tests, factorials and bandits](doe-from-scratch.qmd) Collecting data deliberately
+
+### Simulation
+
+- [Queues and Markov chains](simulation-markov-from-scratch.qmd) Randomness you can run
+
+### Missing data
+
+- [Imputation](missing-data-from-scratch.qmd) What to do about the holes
+
 ### Optimization
-- [**Optimization From Scratch**](optimization-from-scratch.qmd) — LP, binary variables, and why formulation is the hard part
+
+- [Linear and integer programs](optimization-from-scratch.qmd) Why formulation is the hard part
+
+### Beyond the basics
+
+- [Advanced topics](advanced-topics-from-scratch.qmd) Bayesian models, neural nets, boosting and more
+
 :::
 
-::: {.g-col-12 .g-col-md-6}
-### Advanced Topics
-- [**Advanced Topics From Scratch**](advanced-topics-from-scratch.qmd) — Nonparametric, Bayesian, neural nets, game theory, survival, gradient boosting
-:::
+## Practice {#practice}
 
-:::
+::: {.chapter-list}
 
-## Featured Practice
+- [Comprehensive quiz](comprehensive-quiz.qmd) Mixed concept checks with short explanations
+- [Binary choice drill](binary-choice-drill.qmd) Precise true-or-false statements for fast recall
+- [Confusion matrix cost drill](confusion-matrix-drill.qmd) Total cost from false positives and false negatives
 
-::: {.practice-strip}
-::: {.practice-card}
-**Comprehensive Quiz**
-
-Mixed concept checks with short explanations.
-
-[Open quiz](comprehensive-quiz.qmd){.route-link}
-:::
-
-::: {.practice-card}
-**Binary Choice Drill**
-
-Precise true/false-style statements for fast recall.
-
-[Start drill](binary-choice-drill.qmd){.route-link}
-:::
-
-::: {.practice-card}
-**Confusion Matrix Cost Drill**
-
-Calculate decision costs from false positives and false negatives.
-
-[Practice costs](confusion-matrix-drill.qmd){.route-link}
-:::
 :::
