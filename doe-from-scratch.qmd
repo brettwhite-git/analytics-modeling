@@ -1,43 +1,107 @@
 ---
-title: "Design of Experiments: Collecting Data With Purpose"
-subtitle: "A/B testing, factorial designs, and multi-armed bandits"
+title: "What should you test when the data does not exist yet?"
+subtitle: "You have a limited number of trials to spend. How you spend them decides what you can learn, and how much you give up while learning it."
 engine: knitr
 ---
 
-## The Problem: You Don't Have Data Yet
+::: {.ink-figure data-figure="factorial-figure" data-step="0" data-caption="Fig. 1 · three choices about one banner ad make eight ads you could run · illustration"}
+:::
 
-Most of this guide assumes data already exists. DOE flips that assumption: **you need to design the data collection itself.** When getting the full dataset isn't possible or would take too long, you must decide *what* to test, *how many* tests to run, and *how* to structure the tests to get useful answers efficiently.
+Most of this guide assumes the data already exists. Design of experiments starts one step earlier: you have no data, getting all of it is impossible or would take too long, and you have to decide what to collect. Say you are about to run a banner ad. There are two fonts, two wordings and two background colours to choose from, which already makes eight different ads, and nobody has clicked on any of them yet.
 
-**When DOE matters:**
+The same situation turns up whenever you get to choose the comparisons. An online retailer deciding which products to suggest. A political poll that can reach only 600 people but needs them to cover every demographic group. Medical treatments, farming methods, startup strategies. In each case you must decide what to test, how many tests to run, and how to arrange them so the answer is useful and arrives in time.
 
-- Choosing between banner ad designs (which gets more clicks?)
-- An online retailer deciding what products to suggest
-- Political polls — surveying only 600 people but needing representative coverage across demographics
-- Comparing medical treatments, agricultural methods, startup strategies
+## Like with like
 
----
+Two ideas come before any particular method. The first is **comparison and control**. Suppose you want to know whether red cars sell for more than blue cars. If your red cars are two-year-old Porsches and your blue cars are ten-year-old family cars, the price gap tells you nothing about colour, because colour is tangled up with age and with the type of car. The groups you compare have to be alike in every respect except the one you are testing.
 
-## Comparison, Control, and Blocking
+The second is the **blocking factor**: something that could itself create variation in the result. The type of car is one, since sports cars are more likely to be red. Instead of pooling everything, you analyse red sports cars separately from red family cars, and likewise for blue. Within each block the cars are more alike, so one known source of variation has been accounted for and the variance of your estimate goes down. [Blocking does not test the blocking factor. It removes a source of variation you already know about so the factor you care about shows more clearly.]{.side}
 
-Before any specific method, two foundational concepts:
+## Two alternatives
 
-### Comparison and Control
-To determine whether red cars sell for more than blue cars, you must **control for other factors**. Comparing two-year-old red Porsches to ten-year-old blue family cars conflates color with age and car type. You need groups that are comparable in all dimensions except the one you're testing.
+The simplest design compares two alternatives, and it is called an **A/B test**. Assign each test subject at random to one alternative or the other, record the outcome, and run a hypothesis test on the difference. For the banner, you show ad A or ad B at random to the first 2,000 visitors and count clicks. Each visitor either clicks or does not, so the data are binomial.
 
-### Blocking Factors
-A **blocking factor** is something that could create variation in your results. Car type (sports car vs. family car) is a blocking factor — sports cars are more likely to be red. By analyzing red sports cars separately from red family cars, you **reduce variance** in your estimates because you've accounted for one source of variation.
+In the course example ad A was clicked 46 times in 1,003 showings, which is 4.6%, and ad B 97 times in 997, which is 9.7%. A two-proportion test says a gap that large is very unlikely to be chance, so you use ad B. Had ad B been clicked only 47 times, the test would have found no significant difference. That is a useful answer too: you may pick either ad on other grounds, such as cost or looks.
 
----
+An A/B test only helps if three things hold.
 
-## A/B Testing
+| Requirement | Why it matters |
+|:------------|:---------------|
+| Enough data, collected quickly | The answer must arrive in time to be used |
+| A representative sample | Results from one population may not apply to another |
+| A test that is small next to the whole population | If you expect 2,500 views and test on 2,000, only 500 are left to benefit |
 
-The simplest DOE method: compare **two alternatives** by randomly assigning test subjects and measuring outcomes.
+[Exam trap: two separate requirements hide here. The sample must be representative of the target population (college students do not stand in for retirees), and enough of the population must remain after the test to benefit from the answer.]{.side}
 
-### How It Works
+## Many factors at once
 
-1. Randomly show Ad A or Ad B to the first 2,000 visitors
-2. Track clicks (binomial data)
-3. Run a hypothesis test
+The banner has three **factors**, each with two choices: font (Arial or Roboto), wording ("MS in Analytics" or "Analytics Masters") and background (gold or white). A **full factorial design** tests every combination:
+
+$$2 \times 2 \times 2 = 8$$
+
+Each corner of the cube in Fig. 1 is one of those eight ads. Run all eight, then use analysis of variance (ANOVA) to split the variation in the results into how much each factor contributes.
+
+The count grows fast. Seven factors with three choices each give
+
+$$3^7 = 2{,}187$$
+
+combinations, which is almost always too many to test. A **fractional factorial design** tests a carefully chosen subset instead. The subset has to be **balanced**: each choice appears the same number of times, and each pair of choices appears the same number of times. Balance is what lets you still estimate the effect of each factor without running every combination.
+
+::: {.ink-figure data-figure="factorial-figure" data-step="1" data-steps="1:half the runs|2:choose your own" data-caption="Fig. 2 · four of the eight runs, counted for balance · illustration"}
+:::
+
+In Fig. 2 four corners are kept. Every font, every wording and every background appears twice, and every pair, such as Roboto on gold, appears once. Switch to the second view and click corners in and out: most sets of four fail. The four corners of one face, for example, never show the other choice of that factor at all. In practice you do not build these subsets by hand; analytics software does it. [Exam trap: a full factorial tests all combinations. A fractional factorial tests a balanced subset, not a random one.]{.side}
+
+There is a second route. If you believe the factors are **independent**, you can run a subset of combinations and fit a regression with the factors as categorical variables, reading each factor's effect from its coefficient. The risk is that the factors are not independent. A white font and a white background might each test well on their own, and a white font on a white background is unreadable. When factors interact like that, the regression needs **interaction terms**, and you may need to test those specific combinations. The course also names response surface methodology, which allows squared terms as well as linear ones, without going into it.
+
+## Learning while earning
+
+An A/B test and a factorial design both fix the plan in advance. That has a cost. Test 10 alternatives 1,000 times each and you show the best one only 1,000 times and the worse ones 9,000 times. Every trial spent on a worse alternative is value you did not collect.
+
+::: {.ink-figure data-figure="bandit-figure" data-step="0" data-caption="Fig. 3 · a fixed test of three alternatives, 200 trials each · simulated from made-up rates"}
+:::
+
+Fig. 3 runs a small version: three alternatives whose true success rates are hidden from the experimenter, and 600 trials split equally. The fixed test collects 139 successes. Had all 600 trials gone to B, the best arm, the same simulated outcomes would have given 173. The 34 in between is the price of the test. You cannot simply skip the test, though, because before it you do not know that B is best.
+
+So every trial pulls two ways.
+
+| Strategy | Focus | Risk |
+|:---------|:------|:-----|
+| **Exploration** | Getting more information about which alternative is truly best | Wastes value on bad options |
+| **Exploitation** | Using the apparent best alternative now | Might miss a better option |
+
+A **multi-armed bandit** does both at once. Start with every alternative equally likely to be chosen. After each batch of tests, update your estimate of how likely each one is to be the best, and assign the next batch according to those updated probabilities. You keep exploring, because several alternatives are still being tested, and you exploit more and more, because the apparent best gets the largest share. The name comes from the slot machine, a "one-armed bandit" with one lever and a payout set so that you lose on average. A multi-armed bandit is the problem of choosing among several such machines with unknown payouts.
+
+::: {.ink-figure data-figure="bandit-figure" data-step="1" data-steps="1:batch by batch|2:how much to explore" data-caption="Fig. 4 · the same 600 trials, assigned a batch at a time · simulated from made-up rates"}
+:::
+
+Fig. 4 uses a deliberately simple rule so you can follow it by eye: the first batch is split equally, and in every later batch a fixed share of the trials is spread equally over all three arms while the rest go to the arm with the best observed rate so far. After four batches the bandit is no better off than the fixed test, 54 successes against 55, because an early lucky streak sent two batches to C. The small explore share kept testing B, B's observed rate overtook C's, and by the end the bandit has 161 successes to the fixed test's 139. [Exam trap: exploration is gathering information, exploitation is using it. A bandit usually beats a fixed test because it learns faster and earns more value while it learns.]{.side}
+
+The second view lets you change the rule. Set the explore share to zero and this run locks onto C and finishes with 135, below the fixed test. Across 200 other simulated runs, no exploration ends on the wrong arm 17 times and a 20% share only 6 times, and smaller batches with no exploration go wrong more often still. Push the share to 100% and the bandit becomes the fixed test again, with every trial on a worse arm paid for in full.
+
+Those are the choices a real bandit leaves you as well, and the course is plain that there is no simple rule for making them.
+
+| Parameter | Options |
+|:----------|:--------|
+| Batch size | How many tests between recalculations |
+| Probability updates | Bayesian updates, or observed distributions |
+| Assignment rule | Based on probability of being best, or on expected value |
+
+## Which design when
+
+All three methods answer the same question, how to collect data efficiently enough to make a good decision, and all three are decided before any data is collected. They differ in how many alternatives they handle and in whether the plan changes as results come in.
+
+| Method | When to use | Number of alternatives | Adaptive? |
+|:-------|:------------|:-----------------------|:----------|
+| **A/B testing** | Simple comparison, two options | 2 | No (fixed test) |
+| **Factorial design** | Understand what each factor contributes | Many combinations | No (fixed design) |
+| **Multi-armed bandit** | Choose the best while minimising waste | Multiple | Yes (learns as it goes) |
+
+## Run it yourself {.reference}
+
+Every result below is produced by the R on this page. Open "The R" under either of them to see the code.
+
+The banner ad A/B test from the lectures, as a two-proportion test.
 
 ```{r}
 #| label: ab-test-demo
@@ -58,69 +122,7 @@ cat("Conclusion:", ifelse(result$p.value < 0.05,
     "No significant difference — either ad is fine"), "\n")
 ```
 
-### Three Requirements
-
-| Requirement | Why It Matters |
-|------------|----------------|
-| **Enough data collected quickly** | The answer must arrive in time to be useful |
-| **Representative sample** | Results from one population may not apply to another |
-| **Test is small vs. total population** | If you expect 2,500 views and test 2,000, only 500 remain to benefit |
-
-> **Key nuance:** "No significant difference" is also a useful answer — it means you can choose either alternative based on other criteria (cost, aesthetics, etc.).
-
----
-
-## Factorial Designs
-
-When you have **multiple factors** to test, not just two alternatives.
-
-### Full Factorial
-Test **every combination** of factor levels:
-
-| Factor | Choices |
-|--------|---------|
-| Font | Arial, Roboto |
-| Wording | "MS in Analytics", "Analytics Masters" |
-| Background | Gold, White |
-
-$2 \times 2 \times 2 = 8$ combinations. Run all 8, then use **ANOVA** (Analysis of Variance) to decompose how much each factor contributes.
-
-### The Scaling Problem
-Seven factors with three choices each: $3^7 = 2{,}187$ combinations. That's almost always too many to test.
-
-### Fractional Factorial
-Test a **carefully chosen subset** of combinations. The subset must be **balanced**:
-
-- Each choice appears the same number of times
-- Each *pair* of choices appears the same number of times
-
-This preserves the ability to estimate main effects without testing every combination.
-
-### Regression Approach
-If factors are believed to be **independent**, use regression with categorical variables to estimate each factor's effect from the subset. But watch out for interactions:
-
-::: {.callout-warning}
-### The Interaction Trap
-A white font and a white background might each test well individually — but a white font *on* a white background would be unreadable. When factors interact, you need **interaction terms** in your regression, and you may need to test those specific combinations.
-:::
-
----
-
-## Multi-Armed Bandits
-
-### The Problem with Fixed Testing
-With 10 alternatives tested 1,000 times each, you show the best ad only 1,000 times but show *suboptimal* ads 9,000 times. Every trial spent on a bad alternative is **lost value**.
-
-### Exploration vs. Exploitation
-
-| Strategy | Focus | Risk |
-|----------|-------|------|
-| **Exploration** | Getting more information (which is truly best?) | Wastes value on bad options |
-| **Exploitation** | Using the apparent best option now | Might miss a better option |
-
-The multi-armed bandit algorithm **balances both simultaneously**.
-
-### The Algorithm
+A bandit over three ads. This one sets each batch's selection probabilities in proportion to the smoothed click rate observed so far, a different rule from the one drawn in Fig. 4, and plots how those probabilities move.
 
 ```{r}
 #| label: bandit-simulation
@@ -178,41 +180,57 @@ abline(h = 1/K, col = "gray70", lty = 2)
 text(n_rounds * 0.8, 1/K + 0.03, "Equal probability", col = "gray50", cex = 0.8)
 ```
 
-### Name Origin
-"One-armed bandit" = a slot machine (one lever arm, calibrated so you lose money on average). "Multi-armed bandit" = choosing among multiple slot machines with unknown payouts.
+## On one page {.reference}
 
-### Parameters to Tune
+```
+DESIGN OF EXPERIMENTS
+=====================
 
-| Parameter | Options |
-|-----------|---------|
-| Batch size | How many tests between recalculations |
-| Probability updates | Bayesian updates vs. observed distributions |
-| Assignment rule | Based on probability of being best, or on expected value |
+DOE happens BEFORE data collection: it designs what data to collect.
 
----
+1. COMPARISON AND CONTROL
+   Compare groups that are alike in everything except what you test.
+   BLOCKING FACTOR = a known source of variation (car type).
+   Analyse within blocks -> lower variance.
 
-## Connecting the Methods
+2. A/B TESTING            two alternatives, random assignment,
+                          binomial data, hypothesis test
+   needs: enough data quickly
+          a REPRESENTATIVE sample of the target population
+          a test that is SMALL next to the whole population
+   "No significant difference" is also a useful answer.
 
-| Method | When to Use | Number of Alternatives | Adaptive? |
-|--------|-------------|----------------------|-----------|
-| **A/B Testing** | Simple comparison, two options | 2 | No (fixed test) |
-| **Factorial Design** | Understand factor contributions | Many combinations | No (fixed design) |
-| **Multi-Armed Bandit** | Choose best while minimizing waste | Multiple | Yes (learns as it goes) |
+3. FACTORIAL DESIGNS      several factors
+   FULL        = ALL combinations (2 x 2 x 2 = 8), then ANOVA
+   FRACTIONAL  = a BALANCED subset:
+                 each choice appears equally often
+                 each PAIR of choices appears equally often
+   REGRESSION  = if factors are independent, categorical variables
+                 on a subset; interactions (white font on white
+                 background) need interaction terms
 
-All three address the same core question: *how do I collect data efficiently to make a good decision?* They differ in complexity, the number of alternatives, and whether the algorithm adapts during testing.
+4. MULTI-ARMED BANDITS    several alternatives, adaptive
+   EXPLORATION  = get information    EXPLOITATION = use the apparent best
+   start equal -> after each batch update P(each is best)
+               -> assign the next batch by those probabilities
+   usually beats a fixed test: learns faster, earns more while learning
+   tune: batch size, how probabilities are updated, assignment rule
 
----
+   METHOD        ALTERNATIVES        ADAPTIVE?
+   A/B test      2                   no
+   Factorial     many combinations   no
+   Bandit        multiple            yes
+```
 
-## Common Pitfalls
+## Check yourself {.reference}
 
-::: {.callout-warning}
-### Common Misconceptions
+Before moving on, try to answer these without scrolling up:
 
-1. **A/B testing requires a REPRESENTATIVE sample** — results from college students may not apply to retirees. Sample must match the target population.
-2. **A/B testing also requires enough REMAINING population** — if your test uses most of the population, there's nobody left to benefit from the answer.
-3. **Full factorial tests ALL combinations** — don't confuse with fractional factorial, which tests a balanced subset.
-4. **Fractional factorial must be BALANCED** — not any random subset of combinations works. Each choice and pair of choices must appear equally often.
-5. **Multi-armed bandits beat fixed testing** — they learn faster AND earn more value during the learning process.
-6. **DOE happens BEFORE data collection** — it's about designing what data to collect, not analyzing data you already have.
-7. **Interaction terms can invalidate independence assumptions** — the regression approach in factorial designs assumes factors don't interact unless interaction terms are included.
-:::
+1. Why can you not compare two-year-old red Porsches with ten-year-old blue family cars to learn about colour?
+2. What does a blocking factor do to the variance of your estimate, and why?
+3. What are the three requirements for an A/B test? Which two are most often confused?
+4. An A/B test finds no significant difference. Is that a failure?
+5. What is the difference between a full and a fractional factorial design, and what makes a fraction balanced?
+6. When is the regression approach to a factorial design unsafe, and what fixes it?
+7. Why does a fixed test of many alternatives waste value, and what does a multi-armed bandit do instead?
+8. Does design of experiments happen before or after data collection?

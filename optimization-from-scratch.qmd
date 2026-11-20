@@ -1,25 +1,19 @@
 ---
-title: "Optimization: Variables, Constraints, and the Art of Modeling"
-subtitle: "Linear programming, binary variables, and why the modeling matters more than the solver"
+title: "How do you choose the best plan when everything has a limit?"
+subtitle: "Software will solve an optimisation model in milliseconds. Writing the model down is the part it cannot do for you."
 engine: knitr
 ---
 
-## The Prescriptive Turn
-
-Most of this guide so far has answered *what will happen?* Optimization answers *what should we do?* Given a goal, some constraints, and a set of decisions we control, what combination of decisions is best?
-
-Two uses of optimization to remember:
-
-1. **Top-level prescriptive analytics** — what should we invest in, how should we schedule workers, which route should the delivery truck take?
-2. **Underneath almost every model in this guide** — linear regression, LASSO, ridge, logistic regression, SVM, exponential smoothing, ARIMA, GARCH, k-means — all are optimization problems being solved to pick parameters.
-
-::: {.callout-tip}
-**The big insight:** software can *solve* optimization problems, but software cannot *formulate* them for you. The modeling is the hard part — and that makes it a competitive skill.
+::: {.ink-figure data-figure="lp-figure" data-step="0" data-caption="Fig. 1 · three limits, and the plans they leave · made-up workshop"}
 :::
 
----
+A small workshop makes tables and chairs. A table needs 5 hours on the saw and 2 in the paint shop; a chair needs 2 and 5. The week has 30 saw hours and 26 paint hours, and there are orders for at most 4 chairs. A table earns \$500 and a chair \$400. How many of each should it make?
 
-## The Three Pieces of Every Optimization Model
+Most of this guide answers *what will happen?* Optimisation answers *what should we do?* Given a goal, some limits and a set of decisions you control, it finds the best combination of decisions. It shows up in two places. At the top level it is prescriptive analytics: what to invest in, how to schedule workers, which route the delivery truck takes. And it sits underneath almost every model in this guide, picking their parameters. The thing to remember through all of it: software can *solve* an optimisation problem, but it cannot *formulate* one for you. The modelling is the hard part, and that makes it a competitive skill.
+
+## Three parts of every model
+
+Every optimisation model is built from the same three pieces.
 
 | Piece | What it represents |
 |---|---|
@@ -27,29 +21,9 @@ Two uses of optimization to remember:
 | **Constraints** | The rules those decisions must obey |
 | **Objective function** | The single number we're maximizing or minimizing |
 
-A **solution** = a value for every variable. A **feasible solution** satisfies every constraint. The **optimal solution** is the feasible solution with the best objective value.
+A **solution** is a value for every variable. A **feasible solution** satisfies every constraint. The **optimal solution** is the feasible solution with the best objective value. In the figure, every point of the hatched region is a feasible solution, and the workshop's model reads: maximise $500x_1 + 400x_2$ subject to $5x_1 + 2x_2 \le 30$, $2x_1 + 5x_2 \le 26$, $x_2 \le 4$ and $x_1, x_2 \ge 0$. [A language habit: never say "more optimal" or "most optimal". It is like saying "more best". A solution is either optimal or it isn't.]{.side}
 
-::: {.callout-warning}
-**A useful language habit:** never say "more optimal" or "most optimal." It's like saying "more best." A solution is either optimal or it isn't.
-:::
-
----
-
-## A Tiny LP: The Diet Problem
-
-The original problem that kicked off linear programming in the 1940s: feed soldiers at minimum cost subject to nutritional constraints. Here's a two-food, two-nutrient version.
-
-**Decision**: how much of each food to serve.
-- $x_1$ = servings of bread
-- $x_2$ = servings of cheese
-
-**Constraints**: need at least 8 g of protein and 10 g of carbs per meal.
-- Bread: 2 g protein, 4 g carbs per serving
-- Cheese: 5 g protein, 1 g carbs per serving
-
-**Objective**: minimize cost.
-- Bread: $0.20 / serving
-- Cheese: $0.50 / serving
+When the objective and every constraint are straight-line expressions like these, the model is a **linear program**. The problem that started the field in the 1940s was a linear program: feed soldiers at minimum cost subject to nutritional constraints. Here is a version with two foods and two nutrients. The decision is how much of each food to serve, $x_1$ servings of bread and $x_2$ of cheese. A meal needs at least 8 g of protein and 10 g of carbs. Bread has 2 g of protein and 4 g of carbs per serving and costs \$0.20; cheese has 5 g and 1 g and costs \$0.50.
 
 $$
 \begin{aligned}
@@ -60,9 +34,98 @@ $$
 \end{aligned}
 $$
 
+The two problems look different, one a maximum under "at most" limits and the other a minimum under "at least" limits, but they have the same three parts and the same solver handles both.
+
+## Why the answer is at a corner
+
+With two variables you can draw the whole problem. Each constraint cuts off a half-plane, and the feasible set is what is left where they all overlap. The objective is a family of parallel lines, one for each value it can take. Pick a profit, and the plans that earn exactly that much lie on one line.
+
+::: {.ink-figure data-figure="lp-figure" data-step="1" data-steps="1:slide the profit line|2:change a price" data-caption="Fig. 2 · the same model, solved in your browser · made-up workshop"}
+:::
+
+Slide the line toward higher profit and it sweeps across the region. For a while part of it is still inside, so that profit can be reached. Then it lets go, and the last thing it touches is a corner. That is the answer: the optimum of a linear program sits at a vertex of the feasible region, where two constraints are both used up. Those are the **binding** constraints; the others have slack.
+
+The reason is that the objective is linear. Moving along any edge changes the objective steadily in one direction, so you can always do at least as well by going on to the vertex at its end. That is the whole idea behind the simplex algorithm, which walks from vertex to vertex until no neighbour improves the objective. Change what a table earns and the line tilts; at some price a different corner becomes the last one touched, and the plan jumps there with nothing in between. [In the diet problem the cost line is exactly parallel to the protein line (0.20/2 = 0.50/5), so there is a tie: the corner `lpSolve` reports, (2.33, 0.67), and the all-bread corner (4, 0) both cost \$0.80, and so does every point between them. A tie fills an edge, and a vertex is still among the best.]{.side}
+
+## Choosing the variables
+
+Picking the right variables matters more than the algebra. The standard warning is a call centre that needs $d_i$ workers on day $i$ of the week and wants everyone to work 5 consecutive days and then take 2 off.
+
+The obvious variables are $x_i$, the number of workers on day $i$. The objective $\sum x_i$ and the demand constraints $x_i \ge d_i$ are trivial to write. The five-consecutive-days rule is nearly impossible to express.
+
+The right variables are $x_i$, the number of workers who *start* their five-day stretch on day $i$. The objective becomes $5 \sum x_i$. Tuesday's demand is
+
+$$x_{\text{Fri}} + x_{\text{Sat}} + x_{\text{Sun}} + x_{\text{Mon}} + x_{\text{Tue}} \ge d_{\text{Tue}}$$
+
+and the five-in-a-row rule is built into the definition of the variable, with no extra constraints needed. [Common pitfall: optimisation is as much about formulation as about solving. The same problem written with the wrong variables can become intractable. Whenever a constraint feels awkward to write, ask whether a different variable definition would make it disappear.]{.side}
+
+## Yes-or-no decisions
+
+Some decisions are not amounts. Take a portfolio where $x_i$ is the dollars put into stock $i$. Add a second variable $y_i \in \{0, 1\}$ that is 1 if you invest in stock $i$ and 0 otherwise, and you can model real constraints that are impossible with continuous variables alone.
+
+A **fixed charge**: if buying any amount of a stock costs a flat transaction fee $t$, add $\sum_i t \cdot y_i$ to the objective and link the two variables with $x_i \le B \cdot y_i$. If you are not buying, $x_i$ must be zero; if you are, it can be anything up to the budget $B$. A **minimum investment size** is $x_i \ge m_i \cdot y_i$: you can't put \$3 into Google when one share costs hundreds. [Link the variables. Solvers only see math, not your English intent. A relationship such as $\sum_d v_{id} = y_i$ does not exist for the solver unless you write it.]{.side}
+
+Logical rules become plain arithmetic on the binary variables.
+
+| Rule | Constraint |
+|---|---|
+| Must invest in Tesla | $y_{\text{TSLA}} = 1$ |
+| Invest in at least one of {A, G, AP} | $y_A + y_G + y_{AP} \ge 1$ |
+| Exactly one of them | $y_A + y_G + y_{AP} = 1$ |
+| FedEx and UPS together or neither | $y_{\text{FDX}} = y_{\text{UPS}}$ |
+| Coke and Pepsi opposite decisions | $y_{\text{KO}} = 1 - y_{\text{PEP}}$ |
+
+A binary variable is a variable that must be a whole number, and that requirement changes the problem. Go back to the workshop: its best corner calls for 4.67 tables and 3.33 chairs, and nobody buys two thirds of a table.
+
+::: {.ink-figure data-figure="lp-figure" data-step="3" data-steps="2:the LP answer|3:whole numbers only" data-caption="Fig. 3 · the best whole-number plan, found by checking every one · made-up workshop"}
+:::
+
+Rounding the corner gives 5 tables and 3 chairs, which needs 31 saw hours when there are 30. The best whole-number plan is 5 and 2, which is not the nearest lattice point to the corner, and at other prices it is further away still. With whole-number variables the answer is no longer at a corner of the region, so the corner-walking trick is gone. Here the figure can afford to check all 28 candidate plans. A model with hundreds of binary variables has far too many combinations for that.
+
+## How hard is it to solve?
+
+Problem types differ enormously in how hard they are to solve. From easiest to hardest:
+
+| Type | Notes |
+|---|---|
+| **Linear Program (LP)** | Millions of variables, fast. What we've been doing. |
+| **Convex Quadratic Program (QP)** | Fast. Portfolio optimization, ridge regression. |
+| **Convex Optimization (general)** | Still "easy" in theory, can be slow. |
+| **Integer Program (IP)** | Hard. Some small IPs don't have known optimal solutions even after days of compute. |
+| **General Non-Convex** | Brutal. Even tiny problems may be intractable. |
+| **Network Optimization** | *Faster* than LP. Shortest path, assignment, max flow. |
+
+Recognising the type matters. A problem written as an integer program may be intractable, while the same problem reformulated as a network-flow problem can solve in milliseconds. This is why modelling ability matters more than knowing how to call a solver. [Binary variables make integer programs hard. Don't default to $y \in \{0, 1\}$ without considering whether an LP or network formulation would do.]{.side}
+
+## When the numbers are uncertain
+
+Everything so far treats the inputs as known. When they are uncertain (demand forecasts, returns, transition rates), the deterministic optimum can be catastrophically bad. There are four approaches.
+
+| Approach | Idea |
+|---|---|
+| **Conservative constraints** | Pad the RHS: require demand + $\theta$ extra buffer. |
+| **Chance constraints** | $P(\text{demand met}) \ge p$. Needs a distribution estimate. |
+| **Scenario optimization** | Define multiple scenarios, solve for a *robust* solution (feasible in all) or minimize expected cost across them. |
+| **Stochastic dynamic programming / Markov Decision Processes** | Model the system as states + decisions + transition probabilities and find the best policy via Bellman's equation. |
+
+Scenario optimisation in particular is very flexible. You can represent a messy probabilistic world as a discrete set of what-ifs and let the solver pick a policy that works across them.
+
+## The optimisation inside every model
+
+Linear regression, LASSO, ridge, logistic regression, SVM, exponential smoothing, ARIMA, GARCH and k-means are all optimisation problems inside: each one is solved to pick parameters. Linear regression, for instance, minimises $\sum_i (y_i - a_0 - a_1 x_i)^2$ over the coefficients $a_0$ and $a_1$. [Statisticians and optimisers mean different things by "variable". Statisticians call the data $x_{ij}$ variables, because they vary across rows. Optimisers call the coefficients $a_0, a_1, \ldots$ variables, because they are what the solver picks. Always check which hat the person is wearing.]{.side}
+
+Hand that sum of squares to a general-purpose optimiser and you get the same intercept and slope as `lm()`. The optimiser is doing what `lm()` does under the hood; it just exposes the optimisation.
+
+And because it is an optimisation problem, you can customise it: force the intercept to zero, constrain coefficients to be monotone, or use $|y - \hat{y}|^{1.5}$ instead of squared error. Standard regression packages can't do that. Optimisation solvers can.
+
+## Run it yourself {.reference}
+
+Every result below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+The diet problem, solved with `lpSolve`: the objective, the constraint matrix, the directions and the right-hand sides.
+
 ```{r}
 #| label: lp-solve
-#| echo: true
 
 library(lpSolve)
 
@@ -89,16 +152,13 @@ cat("Bread servings x1:  ", round(sol$solution[1], 3), "\n")
 cat("Cheese servings x2: ", round(sol$solution[2], 3), "\n")
 ```
 
-### The Feasible Region — Seeing Why the Optimum Is at a Corner
-
-For two-variable LPs, we can draw the feasible region.
+The feasible region for the diet problem, with the optimum and one iso-cost line through it.
 
 ```{r}
-#| label: fig-feasible
+#| label: plot-feasible
 #| fig-cap: "Feasible region for the diet LP. Each constraint cuts off a half-plane; the feasible set is their intersection. The optimum of a linear objective lives at a vertex of this region."
 #| fig-width: 7
 #| fig-height: 6
-#| echo: false
 
 par(mar = c(4, 4, 3, 1))
 plot(NULL, xlim = c(0, 6), ylim = c(0, 6),
@@ -148,32 +208,10 @@ legend("topright",
        lwd = c(2, 2, NA, NA), bty = "n", cex = 0.85)
 ```
 
-::: {.callout-note}
-**Check your understanding:** Why does the optimum of an LP always sit at a vertex of the feasible region?
-
-*Answer: because the objective is linear. Moving along any edge changes the objective monotonically — you can always improve by going to a vertex. That's the entire idea behind the simplex algorithm, which walks from vertex to vertex until no neighbor improves the objective.*
-:::
-
----
-
-## The Variable-Choice Trap: Call Center Scheduling
-
-Picking the right variables matters more than the algebra. The canonical scheduling warning is a call center that needs $d_i$ workers on day $i$ of the week and wants everyone to work 5 consecutive days before 2 off.
-
-**"Obvious" variables** — $x_i$ = number of workers on day $i$:
-- Objective ($\sum x_i$) and demand ($x_i \ge d_i$) are trivial to write.
-- The 5-consecutive-days rule is *nearly impossible* to express.
-
-**Correct variables** — $x_i$ = number of workers who *start* their 5-day stretch on day $i$:
-- Objective becomes $5 \sum x_i$.
-- Tuesday demand is $x_{\text{Fri}} + x_{\text{Sat}} + x_{\text{Sun}} + x_{\text{Mon}} + x_{\text{Tue}} \ge d_{\text{Tue}}$.
-- The 5-in-a-row rule is *built into the variable definition* — zero extra constraints needed.
-
-Let's solve it.
+The call centre, with one variable for each start day. The 5-in-a-row rule lives in the coverage matrix, not in any constraint.
 
 ```{r}
 #| label: call-center
-#| echo: true
 
 days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
@@ -213,39 +251,10 @@ coverage_actual <- as.vector(coverage %*% lp_sched$solution)
 print(setNames(coverage_actual, days))
 ```
 
-::: {.callout-warning}
-**Common pitfall:** optimization is as much about *problem formulation* as about solving. The same problem, written with the wrong variables, can become intractable. Whenever a constraint feels awkward to write, consider whether a different variable definition would make it disappear.
-:::
-
----
-
-## Binary Variables: Fixed Charges and Logical Rules
-
-Introducing $y_i \in \{0, 1\}$ (1 if we invest in stock $i$, 0 otherwise) lets us model *real* constraints that are impossible with continuous variables alone.
-
-### Fixed charges (transaction fees)
-
-If buying any amount of a stock costs a flat transaction fee $t$, add $\sum_i t \cdot y_i$ to the objective, and link: $x_i \le B \cdot y_i$ (if not buying, must be zero; if buying, up to budget $B$).
-
-### Minimum investment size
-
-$x_i \ge m_i \cdot y_i$ — can't put $3 into Google because one share is hundreds.
-
-### Logical rules
-
-| Rule | Constraint |
-|---|---|
-| Must invest in Tesla | $y_{\text{TSLA}} = 1$ |
-| Invest in at least one of {A, G, AP} | $y_A + y_G + y_{AP} \ge 1$ |
-| Exactly one of them | $y_A + y_G + y_{AP} = 1$ |
-| FedEx and UPS together or neither | $y_{\text{FDX}} = y_{\text{UPS}}$ |
-| Coke and Pepsi opposite decisions | $y_{\text{KO}} = 1 - y_{\text{PEP}}$ |
-
-Let's solve a small portfolio problem that uses some of these.
+A small portfolio with a budget, a fixed fee and a minimum per stock, at least one of AMZN, GOOG and AAPL, and FedEx and UPS as a matched pair. The solver picks the best set, respects the minimum-investment rule, includes at least one of {AMZN, GOOG, AAPL}, and treats FedEx/UPS as a matched pair.
 
 ```{r}
 #| label: portfolio-binary
-#| echo: true
 
 stocks <- c("TSLA", "AMZN", "GOOG", "AAPL", "FDX", "UPS")
 returns <- c(0.18, 0.15, 0.12, 0.14, 0.09, 0.08)  # expected return (decimal)
@@ -321,51 +330,10 @@ cat("Expected return net of fees: $",
     round(sum(x_vals * returns) - sum(y_vals * txn_fee), 0), "\n")
 ```
 
-The solver picks the best set, respects the minimum-investment rule, includes at least one of {AMZN, GOOG, AAPL}, and treats FedEx/UPS as a matched pair.
-
----
-
-## The Problem-Type Hierarchy (Easiest → Hardest)
-
-| Type | Notes |
-|---|---|
-| **Linear Program (LP)** | Millions of variables, fast. What we've been doing. |
-| **Convex Quadratic Program (QP)** | Fast. Portfolio optimization, ridge regression. |
-| **Convex Optimization (general)** | Still "easy" in theory, can be slow. |
-| **Integer Program (IP)** | Hard. Some small IPs don't have known optimal solutions even after days of compute. |
-| **General Non-Convex** | Brutal. Even tiny problems may be intractable. |
-| **Network Optimization** | *Faster* than LP. Shortest path, assignment, max flow. |
-
-::: {.callout-tip}
-**Recognizing the type matters.** A problem written as an IP may be intractable, but the same problem re-formulated as a network-flow problem can solve in milliseconds. This is why modeling ability matters more than knowing how to call a solver.
-:::
-
----
-
-## Handling Uncertainty — Four Approaches
-
-When input data is uncertain (demand forecasts, returns, transition rates), the deterministic optimum can be catastrophically bad. Four approaches:
-
-| Approach | Idea |
-|---|---|
-| **Conservative constraints** | Pad the RHS: require demand + $\theta$ extra buffer. |
-| **Chance constraints** | $P(\text{demand met}) \ge p$. Needs a distribution estimate. |
-| **Scenario optimization** | Define multiple scenarios, solve for a *robust* solution (feasible in all) or minimize expected cost across them. |
-| **Stochastic dynamic programming / Markov Decision Processes** | Model the system as states + decisions + transition probabilities and find the best policy via Bellman's equation. |
-
-Scenario optimization in particular is very flexible — you can represent a messy probabilistic world as a discrete set of "what-ifs" and let the solver pick a policy that works across them.
-
----
-
-## Regression as Optimization — The Terminology Collision
-
-Every regression, LASSO, ridge, logistic regression, SVM, exponential-smoothing, ARIMA, GARCH, and k-means model discussed in this guide is really an optimization problem inside. The confusing bit is terminology: statisticians call the data $x_{ij}$ "variables" (they vary across rows); optimizers call the coefficients $a_0, a_1, \ldots$ "variables" (they're what the solver picks).
-
-Let's solve linear regression explicitly as optimization to drive the point home.
+Linear regression twice: once with `lm()`, once by handing the sum of squared errors to `optim()`.
 
 ```{r}
 #| label: regression-as-optim
-#| echo: true
 
 set.seed(42)
 n <- 60
@@ -388,14 +356,9 @@ cat("optim() intercept =", round(fit_optim$par[1], 4),
     "   slope =",          round(fit_optim$par[2], 4), "\n")
 ```
 
-Same answer. The `optim()` version is doing what `lm()` does under the hood — it just exposes the optimization nature. And because it's an optimization problem, we can *customize* it: force the intercept to zero, constrain coefficients to be monotone, use $|y - \hat{y}|^{1.5}$ instead of squared error, etc. Standard regression packages can't do that; optimization solvers can.
+## On one page {.reference}
 
----
-
-## Cheat Sheet
-
-::: {.callout-warning}
-**Common pitfalls recap:**
+Common pitfalls recap:
 
 1. **"More optimal" is not a thing.** A solution is optimal or it isn't.
 2. **Problem formulation > solver choice.** The call-center example is the canonical illustration.
@@ -404,4 +367,15 @@ Same answer. The `optim()` version is doing what `lm()` does under the hood — 
 5. **Binary variables make IPs hard.** Don't default to "$y \in \{0, 1\}$" without considering whether an LP or network formulation would do.
 6. **Regression is optimization in disguise.** So are LASSO, SVM, exponential smoothing, and k-means. Knowing this lets you customize them.
 7. **Statisticians and optimizers mean different things by "variable."** Always check which hat the person is wearing.
-:::
+
+## Check yourself {.reference}
+
+Before moving on, try to answer these without scrolling up:
+
+1. Why does the optimum of an LP always sit at a vertex of the feasible region?
+2. What are the three pieces of every optimisation model, and what makes a solution feasible? Optimal?
+3. In the call-centre problem, why does "workers who start on day $i$" work where "workers on day $i$" does not?
+4. How do you model a fixed transaction fee with a binary variable? Which constraint links $x_i$ to $y_i$?
+5. Put these in order from easiest to hardest: integer program, linear program, general non-convex, convex quadratic program. Where does network optimisation fit?
+6. Name the four ways to handle uncertain inputs.
+7. What does a statistician mean by "variable"? What does an optimiser mean?

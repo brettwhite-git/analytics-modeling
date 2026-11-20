@@ -1,17 +1,78 @@
 ---
-title: "SVM From Scratch: Unpacking the Formula"
-subtitle: "Start from zero, end with intuition"
+title: "How does a support vector machine draw the line?"
+subtitle: "Two groups of points, one straight line, and a rule for choosing it that depends on almost none of the data."
 engine: knitr
 ---
 
-## 1. The Problem: Drawing a Line Between Two Groups
+::: {.ink-figure data-figure="svm-figure" data-step="0" data-caption="Fig. 1 · every one of these lines separates the two classes · made-up points"}
+:::
 
-Imagine you have a bunch of data points that belong to two categories — say,
-"approve" vs "deny" for a loan application. Each point has two measurements
-(features). Can we draw a line that separates them?
+You have points that already carry a label, say loan applications marked approve or deny, and each one has two measurements. You want a rule for the next application, which arrives without a label. The simplest rule is a straight line: one side is approve, the other is deny.
+
+The trouble is that there is rarely one such line. If the two groups can be separated at all, they can be separated in infinitely many ways, and each line would label a new point near the gap differently. You need a reason to prefer one.
+
+## The widest street
+
+The support vector machine breaks the tie with one idea. Of all the lines that separate the classes, take the one that stays as far as possible from the nearest point on either side. Picture the line as the centre of a street, and widen the street until it touches a point. The width of that street is the **margin**.
+
+::: {.ink-figure data-figure="svm-figure" data-step="1" data-caption="Fig. 2 · the margin, and the points that hold it up"}
+:::
+
+The points the street touches are the **support vectors**. Move any other point, short of pushing it into the street, and the line does not change at all. The whole model is held up by a handful of observations, which is where the name comes from.
+
+The line itself is written
+
+$$\mathbf{w} \cdot \mathbf{x} + b = 0$$
+
+where $\mathbf{x}$ is a point, $\mathbf{w}$ is a vector of weights and $b$ is an intercept. To classify a new point you plug it in and read the sign: positive is one class, negative is the other. The weight vector is perpendicular to the line, so changing $\mathbf{w}$ rotates the line and changing $b$ slides it sideways. [In more than two dimensions the line becomes a plane, then a hyperplane. The equation does not change.]{.side}
+
+## The formula
+
+Scale $\mathbf{w}$ and $b$ so that the support vectors sit exactly at $\mathbf{w} \cdot \mathbf{x} + b = \pm 1$. Then the width of the street is
+
+$$\text{margin} = \frac{2}{\|\mathbf{w}\|}$$
+
+so the widest street is the one with the smallest weights. That turns "find the best line" into a problem you can hand to an optimiser:
+
+$$\min_{\mathbf{w},\, b} \; \tfrac{1}{2}\|\mathbf{w}\|^2 \quad \text{subject to} \quad y_i(\mathbf{w} \cdot \mathbf{x}_i + b) \ge 1 \;\text{ for every } i$$
+
+Here $y_i$ is the label of point $i$, written as $+1$ or $-1$. Multiplying by it makes the left side positive whenever the point is on its own side, so the constraint says: every point on the correct side, and at least one unit clear of the line. The square and the half change nothing about the answer. They only make the calculus cleaner.
+
+## Trading width for mistakes
+
+Real classes overlap, and then no line satisfies every constraint. The soft-margin version lets a point break the rule by an amount $\xi_i$ and charges for it:
+
+$$\min_{\mathbf{w},\, b} \; \tfrac{1}{2}\|\mathbf{w}\|^2 + C \sum_i \xi_i$$
+
+A point with $\xi_i = 0$ is outside the street on its own side. Between 0 and 1 it is inside the street but still correctly classified. At 1 or more it is on the wrong side. The two terms pull against each other: a wider street, or fewer violations.
+
+::: {.ink-figure data-figure="svm-figure" data-step="2" data-steps="2:slide λ|3:move a point" data-caption="Fig. 3 · fitted live in your browser · made-up points"}
+:::
+
+The figure writes the same trade the other way round, as the course lectures do: $\sum_j \max\{0,\, 1 - y_j(\mathbf{a} \cdot \mathbf{x}_j + a_0)\} + \lambda \sum_i a_i^2$. There the knob $\lambda$ multiplies the margin term, so raising it widens the street and lets more points inside. [Exam trap: read the formula before the letter. On the error term, a large C means a narrow margin and overfitting risk. On the coefficient term, a large C or λ means a wide margin and underfitting risk.]{.side}
+
+In R's `e1071` and `kernlab`, C sits on the error term, so it runs opposite to $\lambda$: a large C makes every violation expensive, the street narrows, and the model bends to fit the training points. A small C tolerates violations, the street widens, and the model is simpler. Neither end is right in general. You pick the value by cross-validation.
+
+One practical rule comes before any of this. The method measures distances, so a variable recorded in large units will dominate one recorded in small units. Scale the features first.
+
+## When a line will not do
+
+Some data cannot be split by any straight line: a ring of one class around a cluster of the other, for example. The optimisation above only ever uses the data through dot products $\mathbf{x}_i \cdot \mathbf{x}_j$. Replace that dot product with a **kernel** function $K(\mathbf{x}_i, \mathbf{x}_j)$ and you get the effect of mapping the points into a higher-dimensional space, where a flat separator exists, without ever computing the mapping.
+
+| Kernel | Formula | When to use |
+|:------:|:--------|:------------|
+| Linear | $K = \mathbf{x}_i \cdot \mathbf{x}_j$ | The classes are roughly linearly separable |
+| Polynomial | $K = (\mathbf{x}_i \cdot \mathbf{x}_j + 1)^d$ | Interaction effects between features |
+| RBF (Gaussian) | $K = e^{-\gamma\|\mathbf{x}_i - \mathbf{x}_j\|^2}$ | The default for nonlinear patterns |
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+Two clusters of labelled points, the starting position for everything above.
 
 ```{r}
-#| label: fig-two-groups
+#| label: plot-two-groups
 #| fig-cap: "Two groups of points. Can you draw a line to separate them?"
 
 library(ggplot2)
@@ -31,18 +92,10 @@ ggplot(df, aes(x1, x2, color = group, shape = group)) +
   labs(x = "Feature 1 (e.g., income)", y = "Feature 2 (e.g., credit score)")
 ```
 
-You could probably draw a line through the gap by eye. But **which** line?
-There are infinitely many lines that separate these two groups.
-
-
-## 2. Not Just Any Line — The Best Line
-
-Here's the key insight: some separating lines are better than others.
-A line that barely grazes the closest points is fragile. A line that sits
-right in the middle of the gap is robust.
+Three lines that all separate them. Only one sits in the middle of the gap.
 
 ```{r}
-#| label: fig-many-lines
+#| label: plot-many-lines
 #| fig-cap: "Many lines separate the data, but which one is best?"
 
 ggplot(df, aes(x1, x2, color = group, shape = group)) +
@@ -61,49 +114,10 @@ ggplot(df, aes(x1, x2, color = group, shape = group)) +
   labs(x = "Feature 1", y = "Feature 2")
 ```
 
-The **best** line is the one with the **maximum margin** — the widest possible
-gap between the line and the nearest points on either side.
-
-That's literally what SVM does: **find the line (or hyperplane) with the
-maximum margin**.
-
-
-## 3. What's a Hyperplane?
-
-Don't let the word scare you. It's just the generalization of a "line" to
-higher dimensions.
-
-| Dimensions | Separator      | Math               |
-|:----------:|:--------------:|:------------------:|
-| 2D         | A line         | $w_1 x_1 + w_2 x_2 + b = 0$ |
-| 3D         | A flat plane   | $w_1 x_1 + w_2 x_2 + w_3 x_3 + b = 0$ |
-| nD         | A hyperplane   | $\mathbf{w} \cdot \mathbf{x} + b = 0$ |
-
-The equation $\mathbf{w} \cdot \mathbf{x} + b = 0$ defines the decision
-boundary. Let's unpack every symbol.
-
-
-## 4. Unpacking the Formula Piece by Piece
-
-### The Decision Boundary
-
-$$\mathbf{w} \cdot \mathbf{x} + b = 0$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $\mathbf{x}$ | A data point | One observation — like (income, credit_score) |
-| $\mathbf{w}$ | Weight vector | Controls the **tilt** of the line |
-| $b$          | Bias (intercept) | Shifts the line **up or down** |
-| $\mathbf{w} \cdot \mathbf{x}$ | Dot product | $w_1 x_1 + w_2 x_2 + \dots$ — a weighted sum |
-
-**How it classifies a new point**: plug in $\mathbf{x}$, compute the value:
-
-- If $\mathbf{w} \cdot \mathbf{x} + b > 0$ → class +1 (e.g., Approve)
-- If $\mathbf{w} \cdot \mathbf{x} + b < 0$ → class -1 (e.g., Deny)
-- If $\mathbf{w} \cdot \mathbf{x} + b = 0$ → exactly on the boundary
+The sign of $\mathbf{w} \cdot \mathbf{x} + b$ tells you which side of the line a point is on.
 
 ```{r}
-#| label: fig-sides-of-line
+#| label: plot-sides-of-line
 #| fig-cap: "Points on each side of the decision boundary get different signs"
 
 # Show which side of the line each point falls on
@@ -125,16 +139,10 @@ ggplot(df, aes(x1, x2, color = side)) +
   labs(x = "Feature 1", y = "Feature 2", color = "Side of boundary")
 ```
 
-### The Weight Vector Controls Direction
-
-$\mathbf{w}$ is **perpendicular to the decision boundary**. It points from the
-negative class toward the positive class.
-
-- Changing $\mathbf{w}$ **rotates** the line
-- Changing $b$ **slides** it parallel to itself
+Change $\mathbf{w}$ and the line rotates.
 
 ```{r}
-#| label: fig-w-rotates
+#| label: plot-w-rotates
 #| fig-cap: "Different weight vectors rotate the decision boundary"
 
 ggplot(df, aes(x1, x2, color = group, shape = group)) +
@@ -153,23 +161,10 @@ ggplot(df, aes(x1, x2, color = group, shape = group)) +
   labs(x = "Feature 1", y = "Feature 2")
 ```
 
-
-## 5. The Margin
-
-The **margin** is the distance between the decision boundary and the nearest
-data point on either side.
-
-$$\text{margin} = \frac{2}{\|\mathbf{w}\|}$$
-
-where $\|\mathbf{w}\| = \sqrt{w_1^2 + w_2^2 + \dots}$ is the length of the
-weight vector.
-
-**Key insight**: to make the margin **bigger**, we need $\|\mathbf{w}\|$ to be
-**smaller**. So SVM tries to **minimize** $\|\mathbf{w}\|$ while still
-correctly classifying everything.
+Fit a real SVM with `e1071`, pull $\mathbf{w}$ and $b$ back out, and circle the support vectors.
 
 ```{r}
-#| label: fig-margin
+#| label: plot-margin
 #| fig-cap: "The margin is the gap between the boundary and the closest points (support vectors)"
 
 library(e1071)
@@ -207,41 +202,10 @@ ggplot(df, aes(x1, x2, color = group, shape = group)) +
   labs(x = "Feature 1", y = "Feature 2")
 ```
 
-The circled points are **support vectors** — the closest points to the
-boundary. They're the only points that matter. Move any other point and the
-boundary stays the same. Move a support vector and the boundary shifts.
-
-That's why it's called **Support** Vector Machine — the boundary is
-"supported" by these critical points.
-
-
-## 6. The Optimization Problem (The Full Formula)
-
-Putting it all together, SVM solves:
-
-$$\min_{\mathbf{w}, b} \quad \frac{1}{2}\|\mathbf{w}\|^2$$
-
-subject to:
-
-$$y_i(\mathbf{w} \cdot \mathbf{x}_i + b) \geq 1 \quad \text{for all } i$$
-
-Let's unpack both parts:
-
-### The objective: $\frac{1}{2}\|\mathbf{w}\|^2$
-
-- We want to **maximize** the margin ($\frac{2}{\|\mathbf{w}\|}$)
-- Maximizing $\frac{2}{\|\mathbf{w}\|}$ is the same as minimizing $\|\mathbf{w}\|$
-- We minimize $\frac{1}{2}\|\mathbf{w}\|^2$ instead (same answer, easier calculus — squared removes the square root, the $\frac{1}{2}$ simplifies the derivative)
-
-### The constraint: $y_i(\mathbf{w} \cdot \mathbf{x}_i + b) \geq 1$
-
-- $y_i$ is the label of point $i$: either +1 or -1
-- $\mathbf{w} \cdot \mathbf{x}_i + b$ is the "raw score" — how far point $i$ is from the boundary
-- The product $y_i \times (\text{raw score})$ is positive when the point is on the **correct side**
-- The $\geq 1$ means every point must be **at least 1 unit** away from the boundary (on the correct side)
+The constraint value for every point. The support vectors sit at 1; everything else is comfortably above it.
 
 ```{r}
-#| label: fig-constraint-check
+#| label: plot-constraint-check
 #| fig-cap: "The constraint value for each point — all must be ≥ 1"
 
 # Compute y_i * (w · x_i + b) for each point
@@ -263,30 +227,10 @@ ggplot(df, aes(x = seq_along(constraint), y = constraint,
        shape = "Type", color = "Class")
 ```
 
-Notice: support vectors sit **right at the constraint boundary** (value ≈ 1).
-They're the tightest points. Everything else has comfortable margin.
-
-
-## 7. Soft Margins: What If the Data Overlaps?
-
-Real data is messy. Groups overlap. A perfect separating line might not exist.
-**Soft margin** SVM allows some points to be on the wrong side — for a penalty.
-
-$$\min_{\mathbf{w}, b} \quad \frac{1}{2}\|\mathbf{w}\|^2 + C \sum_{i=1}^{n} \xi_i$$
-
-New pieces:
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $\xi_i$ (xi) | Slack variable for point $i$ | How much point $i$ violates the margin |
-| $C$    | Cost parameter | How much we **penalize** violations |
-
-- $\xi_i = 0$ → point is on the correct side, outside the margin (happy)
-- $0 < \xi_i < 1$ → point is on the correct side, but inside the margin (mild violation)
-- $\xi_i \geq 1$ → point is on the **wrong side** (misclassified)
+Overlapping data at three values of C. In `e1071`, C is on the error term, so a larger C gives a narrower margin.
 
 ```{r}
-#| label: fig-cost-comparison
+#| label: plot-cost-comparison
 #| fig-cap: "Small C = wide margin (some errors OK). Large C = narrow margin (few errors tolerated)."
 
 # Overlapping data
@@ -335,29 +279,10 @@ for (C in c(0.01, 1, 100)) {
 par(mfrow = c(1, 1))
 ```
 
-**The C parameter is the most important tuning knob in SVM:**
-
-- **Small C** (like 0.01): "I don't care much about errors" → wide margin, many support vectors, simpler model (risk of **underfitting**)
-- **Large C** (like 100): "Every error is expensive" → narrow margin, few support vectors, complex model (risk of **overfitting**)
-- You choose C via **cross-validation** (try different values, pick the one that performs best on held-out data)
-
-::: {.callout-warning}
-## Two C Conventions — Know Which One You're Using
-
-**R's `ksvm()` / `e1071` / sklearn** use C as the **cost of misclassification**: Large C = narrow margin = overfit risk. This is what the demo above shows.
-
-**Some formulations** write: $\min \sum \max(0, \ldots) + C \sum a_j^2$ where C multiplies the **regularization term** (like λ). Here: Large C = wider margin = underfit risk. This is the **opposite** convention.
-
-**In practice:** Read the formula. If C is on the regularization term (penalty on coefficients), then large C = wider margin. If C is on the error term (cost of misclassification), then large C = narrower margin. The notation will usually tell you — don't assume one convention.
-:::
-
-
-## 8. The Kernel Trick: When a Line Won't Cut It
-
-What if no straight line can separate the data?
+Data no straight line can separate.
 
 ```{r}
-#| label: fig-nonlinear-data
+#| label: plot-nonlinear-data
 #| fig-cap: "This data can't be separated by any straight line"
 
 set.seed(7)
@@ -380,21 +305,10 @@ ggplot(df3, aes(x1, x2, color = group)) +
   coord_equal()
 ```
 
-The **kernel trick** maps data into a higher dimension where a linear separator
-exists, **without actually computing the transformation**. It replaces the dot
-product $\mathbf{x}_i \cdot \mathbf{x}_j$ with a kernel function
-$K(\mathbf{x}_i, \mathbf{x}_j)$.
-
-Common kernels:
-
-| Kernel | Formula | When to use |
-|:------:|:--------|:------------|
-| Linear | $K = \mathbf{x}_i \cdot \mathbf{x}_j$ | Data is (roughly) linearly separable |
-| Polynomial | $K = (\mathbf{x}_i \cdot \mathbf{x}_j + 1)^d$ | Interaction effects between features |
-| **RBF (Gaussian)** | $K = e^{-\gamma\|\mathbf{x}_i - \mathbf{x}_j\|^2}$ | **Default choice** — handles most nonlinear patterns |
+The same data with a linear kernel and with an RBF kernel.
 
 ```{r}
-#| label: fig-kernel-comparison
+#| label: plot-kernel-comparison
 #| fig-cap: "RBF kernel draws a curved boundary where linear can't"
 
 par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
@@ -431,8 +345,7 @@ points(grid3$x1, grid3$x2,
 par(mfrow = c(1, 1))
 ```
 
-
-## 9. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 THE SVM RECIPE
@@ -464,11 +377,7 @@ THE SVM RECIPE
    SVM uses distances — unscaled features with large ranges dominate
 ```
 
-
-## 10. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -478,4 +387,3 @@ Before moving on, try to answer these without scrolling up:
 4. Why are they called "support" vectors?
 5. When would you use an RBF kernel instead of a linear one?
 6. Why must you scale features before using SVM?
-:::

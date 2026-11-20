@@ -1,0 +1,234 @@
+/* KNN figure — a hand-ruled plot, the k-nearest-neighbours formula, the R, and the boundary between two classes.
+   Colours come from the site's variables only, so it follows body.theme-dark / light.
+   See ../DRAWING-RULES.md */
+.knn-figure {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--near-black);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  --kf-ease: cubic-bezier(.42, .05, .4, 1);
+  --kf-paper: var(--ivory);
+}
+.knn-figure path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.knn-figure .kf-paper { fill: var(--kf-paper); stroke: none; }
+
+/* ---------- ink: every stroke is drawn in with one dashoffset (pathLength = 1) ---------- */
+.knn-figure .kf-ink path {
+  stroke-dasharray: 1 1.2;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--kf-dur, 640ms) var(--kf-ease) var(--kf-d, 0ms);
+}
+.knn-figure .kf-edge { opacity: .8; }
+.knn-figure .kf-fine { opacity: .6; }
+.knn-figure .kf-hair { opacity: .45; }
+.knn-figure .kf-mark { opacity: .88; }
+
+/* ---------- type: written in with a clip ---------- */
+.knn-figure .kf-t {
+  clip-path: inset(-8px -8px -8px -8px);
+  transition: clip-path 560ms var(--kf-ease) var(--kf-d, 0ms);
+  pointer-events: none;
+}
+.knn-figure .kf-label {
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  fill: var(--stone);
+}
+.knn-figure .kf-label--quiet { font-size: 9px; fill-opacity: .8; letter-spacing: .06em; }
+.knn-figure .kf-val {
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--near-black);
+  fill-opacity: .88;
+}
+.knn-figure .kf-axis {
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--stone);
+}
+.knn-figure .kf-sub { font-size: .7em; }
+.knn-figure .kf-up { font-style: normal; }
+.knn-figure .kf-math {
+  font-family: var(--serif, Charter, Georgia, serif);
+  font-style: italic;
+  font-size: 17px;
+  fill: var(--near-black);
+  fill-opacity: .9;
+  white-space: pre;
+  transition-duration: 900ms;
+}
+.knn-figure .kf-math--small { font-size: 12.5px; fill: var(--stone); fill-opacity: 1; transition-duration: 700ms; }
+.knn-figure .kf-code {
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: 10.5px;
+  font-weight: 500;
+  fill: var(--dark-warm);
+  white-space: pre;
+  font-variant-ligatures: none;
+}
+.knn-figure .kf-code__k { fill: var(--near-black); font-weight: 700; }
+.knn-figure .kf-kval {
+  font-family: var(--serif, Charter, Georgia, serif);
+  font-style: italic;
+  font-size: 18px;
+  fill: var(--near-black);
+  fill-opacity: .9;
+  white-space: pre;
+}
+.knn-figure .kf-kval__n { font-style: normal; }
+
+/* not yet drawn */
+.knn-figure.is-undrawn .kf-ink path { stroke-dashoffset: 1.1; transition: none; }
+.knn-figure.is-undrawn .kf-t { clip-path: inset(-8px 100% -8px -8px); transition: none; }
+
+/* ---------- the plot: faint until the maths is worked through ---------- */
+.knn-figure .kf-plot { transition: opacity 420ms ease; }
+.knn-figure.kf-step-0 .kf-plot { opacity: .36; }
+
+.knn-figure .kf-hatch { stroke: var(--near-black); stroke-opacity: .4; stroke-width: .6; }
+.knn-figure .kf-contour { stroke: var(--near-black); stroke-opacity: .86; stroke-width: 1.6; }
+.knn-figure .kf-contour:not(.kf-contour--old) {
+  stroke-dasharray: 1 1.2;
+  stroke-dashoffset: 1.1;                     /* un-drawn: the stroke runs back the way it came */
+  transition: stroke-dashoffset 360ms var(--kf-ease);
+}
+.knn-figure.kf-field .kf-contour:not(.kf-contour--old) { stroke-dashoffset: 0; transition-duration: 1100ms; }
+
+/* ---------- the points ---------- */
+.knn-figure .kf-pt { color: var(--near-black); outline: none; pointer-events: none; transition: color 160ms ease; }
+.knn-figure .kf-pt .kf-ink path { --kf-dur: 300ms; }
+.knn-figure .kf-pt__hit { fill: transparent; stroke: none; }
+.knn-figure.kf-step-2 .kf-pt { pointer-events: auto; cursor: grab; touch-action: pan-y pinch-zoom; }
+.knn-figure.kf-step-2 .kf-pt.is-pinned,
+.knn-figure.kf-step-2 .kf-pt.is-held { touch-action: none; }
+.knn-figure.is-dragging,
+.knn-figure.is-dragging .kf-pt { cursor: grabbing; }
+.knn-figure.kf-step-2 .kf-pt:hover,
+.knn-figure.kf-step-2 .kf-pt:focus-visible,
+.knn-figure.kf-step-2 .kf-pt.is-pinned,
+.knn-figure.kf-step-2 .kf-pt.is-held { color: var(--brand); }
+.knn-figure.kf-step-2 .kf-pt:hover .kf-mark path,
+.knn-figure.kf-step-2 .kf-pt:focus-visible .kf-mark path,
+.knn-figure.kf-step-2 .kf-pt.is-pinned .kf-mark path,
+.knn-figure.kf-step-2 .kf-pt.is-held .kf-mark path { stroke-width: 1.6; }
+.knn-figure.kf-step-2 .kf-pt:hover .kf-mark,
+.knn-figure.kf-step-2 .kf-pt:focus-visible .kf-mark,
+.knn-figure.kf-step-2 .kf-pt.is-held .kf-mark { opacity: 1; }
+
+/* ---------- the query point and its threads (step 1) ---------- */
+.knn-figure .kf-query { color: var(--brand); pointer-events: none; }
+.knn-figure .kf-query .kf-ink path { --kf-dur: 420ms; --kf-d: 160ms; }
+.knn-figure .kf-query .kf-mark { opacity: .95; }
+.knn-figure .kf-query__dot { fill: currentColor; stroke: none; transition: opacity 0s linear 360ms; }
+.knn-figure:not(.kf-step-1) .kf-query .kf-ink path {
+  stroke-dashoffset: 1.1;
+  transition: stroke-dashoffset 240ms var(--kf-ease) 0ms;
+}
+.knn-figure:not(.kf-step-1) .kf-query__dot,
+.knn-figure:not(.kf-step-1) .kf-query .kf-paper,
+.knn-figure.is-undrawn .kf-query__dot,
+.knn-figure.is-undrawn .kf-query .kf-paper { opacity: 0; transition: none; }
+.knn-figure .kf-thread { stroke: var(--brand); stroke-opacity: .7; stroke-width: 1.1; }
+
+/* ---------- step 0: the thread from the formula to the code does not meet ---------- */
+.knn-figure .kf-gapline { stroke: var(--brand); stroke-opacity: .8; stroke-width: 1.2; }
+.knn-figure .kf-fray path { fill: none; stroke: var(--brand); stroke-opacity: .7; stroke-width: .75; stroke-linecap: round; }
+.knn-figure .kf-fray { opacity: 0; transition: opacity 260ms cubic-bezier(0.23, 1, 0.32, 1); }
+.knn-figure .kf-fray.is-shown { opacity: 1; }
+
+/* ---------- beside the plot: slider, what to check, the vote ---------- */
+.knn-figure .kf-slider { cursor: ew-resize; outline: none; touch-action: pan-y; }
+.knn-figure .kf-slider__hit { fill: transparent; stroke: none; }
+.knn-figure .kf-knob { transition: transform 140ms cubic-bezier(.3, .7, .3, 1); }
+.knn-figure .kf-knob__edge { opacity: .9; }
+.knn-figure .kf-knob__edge path { transition: stroke-dashoffset var(--kf-dur, 640ms) var(--kf-ease) var(--kf-d, 0ms), stroke-width 140ms ease; }
+.knn-figure .kf-slider:hover .kf-knob__edge path,
+.knn-figure .kf-slider:focus-visible .kf-knob__edge path,
+.knn-figure .kf-slider.is-held .kf-knob__edge path { stroke-width: 1.9; }
+.knn-figure .kf-knob__halo { opacity: .6; }
+.knn-figure .kf-knob__halo path { --kf-dur: 220ms; --kf-d: 0ms; }
+.knn-figure .kf-slider:not(:focus-visible) .kf-knob__halo path { stroke-dashoffset: 1.1; }
+.knn-figure .kf-vote__side { transition: opacity 160ms ease; }
+.knn-figure .kf-vote__side.is-losing { opacity: .45; }
+.knn-figure .kf-vote { --kf-d: 620ms; }
+
+.knn-figure.kf-step-0 .kf-slider { pointer-events: none; }
+.knn-figure.kf-step-0 .kf-side .kf-ink path,
+.knn-figure:not(.kf-step-1) .kf-vote .kf-ink path {
+  stroke-dashoffset: 1.1;
+  transition: stroke-dashoffset 260ms var(--kf-ease) 0ms;
+}
+.knn-figure.kf-step-0 .kf-side .kf-t,
+.knn-figure:not(.kf-step-1) .kf-vote .kf-t { clip-path: inset(-8px 100% -8px -8px); transition: none; }
+.knn-figure.kf-step-0 .kf-side .kf-paper,
+.knn-figure.is-undrawn .kf-side .kf-paper { opacity: 0; }
+
+/* ---------- step 2: the pinned line of code and the quiet note ---------- */
+.knn-figure:not(.kf-step-2) .kf-code--pin { clip-path: inset(-8px 100% -8px -8px); transition: none; }
+.knn-figure.kf-step-2 .kf-code--pin { transition: clip-path 620ms var(--kf-ease) 320ms; }
+
+/* handwriting (the site's .note-line hand: Caveat, written in with a clip) */
+.knn-figure .kf-hand {
+  font-family: "Caveat", "Comic Sans MS", cursive;
+  font-weight: 600;
+  font-size: 21px;
+  fill: var(--near-black);
+  fill-opacity: .8;
+  clip-path: inset(-8px 100% -8px -4px);
+  transition: clip-path 0s;
+}
+.knn-figure.kf-step-2 .kf-hand {
+  clip-path: inset(-8px -6px -8px -4px);
+  transition: clip-path 820ms var(--kf-ease) 700ms;
+}
+.knn-figure.kf-step-2 .kf-hand--2 { transition-delay: 1350ms; }
+
+/* ---------- callouts: (a) (b) (c) ---------- */
+.knn-figure .kf-note { pointer-events: none; }
+.knn-figure .kf-note__text {
+  font-family: var(--serif, Charter, Georgia, serif);
+  font-style: italic;
+  font-size: 13px;
+  fill: var(--brand);
+  stroke: var(--kf-paper);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  clip-path: inset(-8px 100% -8px -8px);
+  transition: clip-path 0s;
+}
+.knn-figure .kf-note__leader {
+  stroke: var(--brand);
+  stroke-opacity: .7;
+  stroke-width: .7;
+  stroke-dasharray: 1 1.2;
+  stroke-dashoffset: 1.1;
+  transition: stroke-dashoffset 0s;
+}
+.knn-figure .kf-note.is-shown .kf-note__text {
+  clip-path: inset(-8px -8px -8px -8px);
+  transition: clip-path 520ms var(--kf-ease) 120ms;
+}
+.knn-figure .kf-note.is-shown .kf-note__leader {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 420ms var(--kf-ease) 480ms;
+}
+
+/* ---------- reduced motion: the finished drawing, instantly ---------- */
+.knn-figure.is-reduced *,
+.knn-figure.is-reduced .kf-note.is-shown .kf-note__text,
+.knn-figure.is-reduced .kf-note.is-shown .kf-note__leader,
+.knn-figure.is-reduced.kf-step-2 .kf-hand,
+.knn-figure.is-reduced.kf-step-2 .kf-code--pin { transition: none !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .knn-figure * { transition: none !important; animation: none !important; }
+}

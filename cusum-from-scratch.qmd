@@ -1,26 +1,112 @@
 ---
-title: "CUSUM From Scratch: Catching the Moment Everything Changed"
-subtitle: "Change detection — when did the process shift?"
+title: "How do you catch the moment a process changed?"
+subtitle: "No single measurement gives the shift away, so you keep a running score and wait for the evidence to pile up."
 engine: knitr
 ---
 
-## 1. The Problem: Did Something Change?
+::: {.ink-figure data-figure="cusum-figure" data-step="0" data-caption="Fig. 1 · one hundred measurements of a process that should average 10 · made-up data"}
+:::
 
-A factory makes bolts that should be exactly 10 cm long. Every hour you
-measure a bolt. The measurements bounce around a little — that's normal
-random variation. But at some point, the machine drifts and starts making
-bolts that are slightly too long.
+A factory makes bolts that should be exactly 10 cm long. Every hour you measure one. The measurements bounce around a little, which is normal random variation. At some point the machine drifts and starts making bolts that are slightly too long, and you want to know when.
 
-**When did the change happen?**
+You cannot answer by looking at one measurement, because any single value might be high by chance. In the figure the mean does move partway through, by about as much as the noise itself, and each point still looks reasonable on its own. You need a method that accumulates evidence over time and speaks up only when it is confident. That method is CUSUM, short for **cu**mulative **sum**.
 
-You can't just look at one measurement — any single value might be high by
-chance. You need a method that **accumulates evidence** over time and shouts
-"something changed!" only when it's confident.
+## A running score
 
-That's CUSUM.
+The idea is to keep a score. Start it at zero. At each time step, ask whether the new observation is above what you expect. If it is, add to the score. If it is not, subtract from it, but never let it go below zero. When the score crosses a threshold, declare a change.
+
+It works like a detective building a case. One above-average observation is a small piece of evidence and convinces nobody. When the pieces keep arriving, the case eventually closes.
+
+::: {.ink-figure data-figure="cusum-figure" data-step="1" data-caption="Fig. 2 · the same measurements, and the score computed from them · made-up data"}
+:::
+
+You might try the plain cumulative sum of the deviations from the mean. It shows the trend, but it is noisy before the shift, because random below-average values drag it down. CUSUM adds two things to fix that, an allowance and a floor at zero:
+
+$$S_t = \max(0, \; S_{t-1} + (x_t - \mu) - C)$$
+
+and you declare a change when $S_t > T$. That is the whole method.
+
+| Symbol | What it is | Plain English |
+|:------:|:-----------|:-------------|
+| $S_t$ | CUSUM statistic at time $t$ | The running score (accumulated evidence) |
+| $S_{t-1}$ | Previous score | What we had so far |
+| $x_t$ | Current observation | The new measurement |
+| $\mu$ | Expected mean | What the process *should* be producing |
+| $x_t - \mu$ | Deviation | How far this observation is from expected |
+| $C$ | Allowance (critical value) | Filters out normal noise, so only "big enough" deviations count |
+| $\max(0, \dots)$ | Floor at zero | Prevents negative accumulation, so past good behavior doesn't mask future problems |
+| $T$ | Threshold | How much evidence you need before declaring a change |
+
+Read as a procedure, each time step goes like this. Take the new observation $x_t$. Compute its deviation $x_t - \mu$. Subtract the allowance $C$, which discards small, normal fluctuations. Add the result to the previous score $S_{t-1}$. If the total is negative, reset it to 0. If $S_t > T$, sound the alarm.
+
+In Fig. 2 the mean moves up by 0.3 cm after $t = 60$, with noise of the same size. With $C = 0.15$ and $T = 2$ the score stays near zero while nothing is wrong, starts climbing right after the change, and crosses the threshold at $t = 72$. The twelve steps in between are the detection delay.
+
+## Two knobs
+
+$C$ is a filter. It is subtracted from every deviation, so that ordinary fluctuations do not accumulate. With a large $C$, only big deviations count: detection is slower and false alarms are fewer. With a small $C$, small deviations count too: detection is faster and false alarms are more frequent. At $C = 0$ every above-average observation adds to the score, which makes it very sensitive.
+
+$T$ sets how certain you need to be before declaring a change. A large $T$ asks for a lot of evidence, which gives fewer false alarms and slower detection. A small $T$ triggers on less evidence, which gives faster detection and more false alarms.
+
+::: {.ink-figure data-figure="cusum-figure" data-step="2" data-steps="2:slide C and T|3:change the shift" data-caption="Fig. 3 · computed live in your browser; the score restarts after each false alarm · made-up data"}
+:::
+
+Both knobs therefore turn the same way, and this is the central tradeoff of the method. Small $C$ and small $T$ give fast detection and more false alarms. Large $C$ and large $T$ give slow detection and fewer false alarms. You cannot have both. In Fig. 3, set $C$ to zero and the alarm comes at $t = 64$ instead of 72, at the price of a false alarm early on. Push $C$ to 0.4 and the score never reaches the threshold at all: no false alarms, and no detection either. [Exam trap: "What happens if we increase T?" Fewer false alarms, slower detection. "What happens if we increase C?" The same effect. Neither has a universal best value.]{.side}
+
+The right values depend on what each kind of mistake costs.
+
+| Scenario | Want | Set |
+|:---------|:-----|:----|
+| Nuclear reactor monitoring | Fast detection (safety!) | Small C, small T |
+| Marketing campaign tracking | Few false alarms (budget!) | Large C, large T |
+| Manufacturing quality | Balance both | Moderate C and T |
+
+The second button under Fig. 3 changes the size of the shift itself. A small, persistent shift is exactly what CUSUM is for, but the smaller it is, the longer the evidence takes to pile up.
+
+## The floor, and the other direction
+
+The $\max(0, \dots)$ is not decoration. Without it, a long stretch of below-average values would build up a large negative score. When a real shift then happens, the score has to climb back out of that hole before it can trigger an alarm, and detection is late. The proper CUSUM resets to zero whenever it would go negative, so every moment is a potential fresh start for detecting a change.
+
+The formula so far only detects increases. To detect decreases, run a second score with the deviation mirrored:
+
+$$S_t^+ = \max(0, \; S_{t-1}^+ + (x_t - \mu) - C) \quad \text{(detects increase)}$$
+
+$$S_t^- = \max(0, \; S_{t-1}^- - (x_t - \mu) - C) \quad \text{(detects decrease)}$$
+
+and raise the alarm when either $S_t^+ > T$ or $S_t^- > T$. This is the two-sided CUSUM.
+
+## What an alarm tells you
+
+CUSUM tells you **when** something changed. It does not tell you what changed or why. Suppose it detects a shift in manufacturing quality at day 60. "The machine is broken" is the wrong conclusion. The right one is "something changed around day 60, and we need to investigate what happened." CUSUM is a detection tool, not a diagnosis tool, and the investigation happens after the alarm. [Exam trap: an alarm is a time, not a cause. CUSUM detects; it does not diagnose.]{.side}
+
+The same score works wherever a measurement arrives in sequence and has an expected level.
+
+| Application | What $x_t$ measures | What "change" means |
+|:------------|:-------------------|:-------------------|
+| Manufacturing | Part dimension | Machine needs recalibration |
+| Healthcare | Patient vitals | Condition is deteriorating |
+| Finance | Transaction amounts | Potential fraud pattern |
+| Website | Page load times | Server performance degraded |
+| Retail | Daily sales | Market shift or competitor action |
+
+It also helps to know what CUSUM is not.
+
+| Method | Detects | When to use |
+|:-------|:--------|:------------|
+| **CUSUM** | Shift in process mean | Ongoing monitoring, small persistent shifts |
+| **Control chart** | Individual outlier points | Quick spikes, obvious violations |
+| **t-test** | Difference between two groups | Comparing before/after with known breakpoint |
+| **Exponential smoothing** | Trends and patterns | Forecasting future values |
+
+Its strength is the small, gradual shift that individual observations cannot reveal. A single point might look normal, but CUSUM accumulates the evidence until the pattern is undeniable.
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+A process with mean 10 that shifts by 0.5 at $t = 60$, with 0.3 of natural variation.
 
 ```{r}
-#| label: fig-the-problem
+#| label: plot-the-problem
 #| fig-cap: "Can you spot where the process shifted? It's hard to tell from individual points."
 
 library(ggplot2)
@@ -49,26 +135,10 @@ ggplot(df, aes(time, value)) +
        title = "Individual measurements — the shift is buried in noise")
 ```
 
-Each point looks reasonable on its own. The shift is only 0.5 cm in a process
-with 0.3 cm of natural variation. CUSUM will find it.
-
-
-## 2. The Idea: Keep a Running Score
-
-CUSUM stands for **CU**mulative **SUM**. The idea:
-
-1. Start with a score of **zero**
-2. Each time step, check: is this observation **above** what we expect?
-3. If yes, **add** to the score (evidence is accumulating)
-4. If no, **subtract** from the score (but never go below zero)
-5. When the score crosses a **threshold** → declare a change
-
-It's like a detective building a case. Each above-average observation is a
-small piece of evidence. One piece isn't convincing. But when evidence keeps
-piling up, eventually you're confident something changed.
+The individual deviations from $\mu$, and their naive cumulative sum.
 
 ```{r}
-#| label: fig-accumulation
+#| label: plot-accumulation
 #| fig-cap: "CUSUM accumulates positive deviations. When they pile up, a change is detected."
 
 # Simple visual: show deviations accumulating
@@ -97,43 +167,10 @@ text(65, max(cumdev) * 0.3, "Shift here →", col = "coral", cex = 0.9)
 par(mfrow = c(1, 1))
 ```
 
-The naive cumulative sum shows the trend, but it's noisy before the shift
-because random below-average values create a downward drift. CUSUM fixes this
-with two clever additions: the **allowance** (C) and the **floor at zero**.
-
-
-## 3. The CUSUM Formula
-
-$$S_t = \max(0, \; S_{t-1} + (x_t - \mu) - C)$$
-
-**Declare a change when** $S_t > T$
-
-That's the whole formula. Let's unpack every piece:
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $S_t$ | CUSUM statistic at time $t$ | The running score (accumulated evidence) |
-| $S_{t-1}$ | Previous score | What we had so far |
-| $x_t$ | Current observation | The new measurement |
-| $\mu$ | Expected mean | What the process *should* be producing |
-| $x_t - \mu$ | Deviation | How far this observation is from expected |
-| $C$ | Allowance (critical value) | Filters out normal noise — only counts "big enough" deviations |
-| $\max(0, \dots)$ | Floor at zero | Prevents negative accumulation — past good behavior doesn't mask future problems |
-| $T$ | Threshold | How much evidence you need before declaring a change |
-
-### Step by Step
-
-At each time step:
-
-1. Take the new observation $x_t$
-2. Compute the deviation: $x_t - \mu$ (how far from expected?)
-3. Subtract the allowance $C$ (ignore small, normal fluctuations)
-4. Add to previous score $S_{t-1}$
-5. If the result is negative, reset to 0 (fresh start)
-6. If $S_t > T$, **sound the alarm**
+The CUSUM statistic with $C = 0.2$ and $T = 4$, and the time it first crosses the threshold.
 
 ```{r}
-#| label: fig-cusum-formula
+#| label: plot-cusum-formula
 #| fig-cap: "CUSUM in action: the score accumulates after the shift and crosses the threshold"
 
 # Compute CUSUM
@@ -172,20 +209,10 @@ ggplot(df_cusum, aes(time, S)) +
        title = "CUSUM detects the shift")
 ```
 
-
-## 4. What C and T Do (The Two Knobs)
-
-### C (Allowance): How Much Noise to Ignore
-
-$C$ is a filter. It subtracts from each deviation so that normal random
-fluctuations don't accumulate.
-
-- **Large C**: Only big deviations count → slower detection, fewer false alarms
-- **Small C**: Small deviations count → faster detection, more false alarms
-- **C = 0**: Every above-average observation adds to the score (very sensitive)
+The same data at three values of $C$.
 
 ```{r}
-#| label: fig-c-effect
+#| label: plot-c-effect
 #| fig-cap: "Larger C = slower detection but fewer false alarms"
 
 par(mfrow = c(1, 3), mar = c(4, 4, 3, 1))
@@ -220,15 +247,10 @@ for (C_test in c(0.05, 0.2, 0.5)) {
 par(mfrow = c(1, 1))
 ```
 
-### T (Threshold): How Much Evidence Before Alarm
-
-$T$ controls how **certain** you need to be before declaring a change.
-
-- **Large T**: Need lots of evidence → fewer false alarms, but slower detection
-- **Small T**: Trigger on less evidence → faster detection, more false alarms
+The same score against three values of $T$.
 
 ```{r}
-#| label: fig-t-effect
+#| label: plot-t-effect
 #| fig-cap: "Larger T = more evidence needed before triggering an alarm"
 
 # Fix C, vary T
@@ -264,43 +286,10 @@ ggplot(df_t, aes(time, S)) +
        title = "Same data, different thresholds")
 ```
 
-
-## 5. The Speed vs. False Alarm Tradeoff
-
-This is the **central tradeoff** to understand. There's no free lunch.
-
-```
-     Fast detection                    Slow detection
-     More false alarms                 Fewer false alarms
-     ◄─────────────────────────────────────────────────►
-     Small C, Small T                  Large C, Large T
-```
-
-**The right C and T depend on the costs:**
-
-| Scenario | Want | Set |
-|:---------|:-----|:----|
-| Nuclear reactor monitoring | Fast detection (safety!) | Small C, small T |
-| Marketing campaign tracking | Few false alarms (budget!) | Large C, large T |
-| Manufacturing quality | Balance both | Moderate C and T |
-
-::: {.callout-warning}
-### Common Pitfall: T and C Parameters
-
-"What happens if we increase T?" → Fewer false alarms, slower
-detection. "What happens if we increase C?" → Same effect. There's no
-universal best value — it depends on the application.
-:::
-
-
-## 6. Why max(0, ...) Matters
-
-The floor at zero is crucial. Without it, a long stretch of below-average
-values would build up a large negative score. Then when a real shift happens,
-the score has to climb back from that hole before triggering an alarm.
+The score with and without the floor at zero.
 
 ```{r}
-#| label: fig-max-zero
+#| label: plot-max-zero
 #| fig-cap: "Without max(0,...), past good behavior delays detection of real changes"
 
 C_demo <- 0.2
@@ -346,24 +335,10 @@ if (!is.na(alarm2)) {
 par(mfrow = c(1, 1))
 ```
 
-The version without `max(0,...)` digs into a negative hole during the normal
-period, then takes longer to climb back up after the shift. The proper CUSUM
-resets to zero whenever it would go negative — every moment is a potential
-fresh start for detecting a change.
-
-
-## 7. Detecting Decreases (Two-Sided CUSUM)
-
-The formula above only detects **increases** (upward shifts). To detect
-**decreases**, run a second CUSUM in the other direction:
-
-$$S_t^+ = \max(0, \; S_{t-1}^+ + (x_t - \mu) - C) \quad \text{(detects increase)}$$
-$$S_t^- = \max(0, \; S_{t-1}^- - (x_t - \mu) - C) \quad \text{(detects decrease)}$$
-
-Alarm when either $S_t^+ > T$ or $S_t^- > T$.
+A process that shifts down at $t = 50$, monitored with both scores.
 
 ```{r}
-#| label: fig-two-sided
+#| label: plot-two-sided
 #| fig-cap: "Two-sided CUSUM catches both upward and downward shifts"
 
 set.seed(99)
@@ -407,39 +382,10 @@ if (!is.na(alarm_down)) {
 par(mfrow = c(1, 1))
 ```
 
-
-## 8. CUSUM Cannot Tell You WHY
-
-::: {.callout-warning}
-### Common Pitfall: CUSUM Cannot Tell You WHY
-
-CUSUM tells you **when** something changed. It does
-**not** tell you **what** changed or **why**.
-
-> "CUSUM detected a shift in manufacturing quality at day 60."
->
-> **Wrong conclusion:** "The machine is broken."
->
-> **Right conclusion:** "Something changed around day 60. We need to
-> investigate what happened."
-:::
-
-CUSUM is a **detection** tool, not a **diagnosis** tool. The investigation
-happens after the alarm.
-
-
-## 9. Real-World Applications
-
-| Application | What $x_t$ measures | What "change" means |
-|:------------|:-------------------|:-------------------|
-| Manufacturing | Part dimension | Machine needs recalibration |
-| Healthcare | Patient vitals | Condition is deteriorating |
-| Finance | Transaction amounts | Potential fraud pattern |
-| Website | Page load times | Server performance degraded |
-| Retail | Daily sales | Market shift or competitor action |
+CUSUM on website response times that degrade after day 50.
 
 ```{r}
-#| label: fig-real-world
+#| label: plot-real-world
 #| fig-cap: "CUSUM applied to website response times — detects server degradation"
 
 set.seed(42)
@@ -482,22 +428,7 @@ if (!is.na(alarm_web)) {
 par(mfrow = c(1, 1))
 ```
 
-
-## 10. CUSUM vs Other Methods
-
-| Method | Detects | When to use |
-|:-------|:--------|:------------|
-| **CUSUM** | Shift in process mean | Ongoing monitoring, small persistent shifts |
-| **Control chart** | Individual outlier points | Quick spikes, obvious violations |
-| **t-test** | Difference between two groups | Comparing before/after with known breakpoint |
-| **Exponential smoothing** | Trends and patterns | Forecasting future values |
-
-CUSUM's superpower is detecting **small, gradual shifts** that individual
-observations can't catch. A single point might look normal, but CUSUM
-accumulates the evidence until the pattern is undeniable.
-
-
-## 11. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 THE CUSUM RECIPE
@@ -541,11 +472,7 @@ THE CUSUM RECIPE
    - CUSUM detects, it doesn't diagnose
 ```
 
-
-## 12. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -560,4 +487,3 @@ Before moving on, try to answer these without scrolling up:
 7. A nuclear power plant wants fast detection at all costs. A marketing
    team wants to avoid false alarms. How should each set C and T?
 8. How is CUSUM different from just looking at individual measurements?
-:::

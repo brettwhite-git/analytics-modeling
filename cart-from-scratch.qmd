@@ -1,21 +1,15 @@
 ---
-title: "CART From Scratch: Decision Trees That Think in If-Then Rules"
-subtitle: "The most interpretable model in machine learning"
+title: "How does a decision tree decide where to cut?"
+subtitle: "One yes-or-no question at a time, a tree carves the data into rectangles that anyone can read, and it will keep carving until it has memorised the noise unless you stop it."
 engine: knitr
 ---
 
-## 1. The Problem: Explain Your Decision
+::: {.ink-figure data-figure="cart-figure" data-step="0" data-caption="Fig. 1 · the best single straight line still gets 20 of these 70 points wrong · made-up data"}
+:::
 
-You've learned models that are powerful but hard to explain:
+The models you have met so far are powerful but hard to explain. A support vector machine says "the hyperplane with maximum margin decided". K-nearest neighbours says "the five nearest neighbours voted", and nobody can say which neighbours. A regression hands over a weighted sum of twelve coefficients. Sometimes the person asking is a loan officer, a doctor, or a manager who wants to know why the model said no, and none of those answers will do.
 
-- SVM: "the hyperplane with maximum margin decided..." (glazed eyes)
-- KNN: "the 5 nearest neighbors voted..." (what neighbors?)
-- Regression: "the weighted sum of 12 coefficients..." (too many numbers)
-
-Sometimes you need a model that a **non-technical person can read and follow**.
-A loan officer. A doctor. A manager who asks "why did the model say no?"
-
-CART gives you **if-then rules** that anyone can understand:
+CART, short for classification and regression trees, answers with if-then rules that a non-technical reader can follow from top to bottom:
 
 ```
 IF income > $50K AND credit_score > 700
@@ -26,16 +20,107 @@ ELSE
   → DENY
 ```
 
-That's a decision tree.
+That is a decision tree. It also copes with patterns like the one above, where one class sits in a band inside the other and no single straight line separates them. The rest of this page is about how the tree finds its rules, and why it has to be held back.
 
+## The first cut
 
-## 2. How CART Works: Splitting the Data
+A tree is built from one move, repeated. Pick one feature and one value, and cut the data in two: everything below the value goes left, everything else goes right. In theory you could branch on combinations of features, but in practice it is done one feature at a time. So the question at every step is which feature, and where.
 
-CART builds a tree by **repeatedly splitting** the data on the feature that
-best separates the groups.
+For classification, CART scores a group of points by its **Gini impurity**:
+
+$$\text{Gini} = 1 - \sum_{k=1}^{K} p_k^2$$
+
+where $p_k$ is the proportion of class $k$ in the node. For two classes this simplifies to $2p(1-p)$.
+
+| Gini value | Meaning |
+|:----------:|:--------|
+| 0 | **Pure**: every point belongs to one class |
+| 0.5 | **Maximum impurity**: a 50/50 mix (for two classes) |
+
+A cut makes two child nodes, each with its own Gini. CART tries every possible cut on every feature and keeps the one with the **lowest weighted average Gini** across the two children, where each child is weighted by how many points it holds.
+
+::: {.ink-figure data-figure="cart-figure" data-step="1" data-caption="Fig. 2 · drag the cut; the curve is the weighted Gini of every place it could go · made-up data"}
+:::
+
+Drag the cut in Fig. 2 and watch the counts on each side. Uncut, the 70 points have a Gini of 0.45. The best vertical cut, near $x_1 = 3.6$, brings the weighted figure down to 0.38 because the left side becomes almost pure. Notice that the count of wrong points does not move at that cut: both sides still vote for the same class. Impurity registers progress that a count of mistakes misses, and the next cut cashes it in.
+
+## Growing the tree
+
+CART does not stop at one split. It takes each child node and asks the same question again, then again of the grandchildren, and so on, recursively. Every cut is parallel to an axis, so the tree divides the plane into rectangles. That is the difference from an SVM, which draws a single line or curve, and from KNN, whose boundaries are irregular. CART always makes **axis-aligned rectangular splits**, and each rectangle is one leaf of the tree and one if-then rule.
+
+::: {.ink-figure data-figure="cart-figure" data-step="2" data-caption="Fig. 3 · the same tree drawn twice: as rectangles on the plane, and as nodes and thread · ringed points are the ones it still gets wrong · made-up data"}
+:::
+
+Slide the depth in Fig. 3. Each level adds cuts, each cut adds a rectangle, and the training error falls. To label a new point you start at the root, answer each question, and take the majority class of the leaf you land in. By convention the tree is drawn upside down, root at the top and leaves at the bottom.
+
+Growth has to end somewhere, and the stopping rules matter. A branch is accepted only if it improves the split criterion by more than some threshold and both sides keep enough data points. The course rule of thumb is that each leaf should hold at least 5% of the data. You can also cap the depth outright. All of these are ways of stopping early.
+
+## Cutting it back
+
+A tree with enough depth can classify every training point correctly. Branch until every leaf holds a single point and the training error is zero, but the tree has only memorised its data, and it will predict poorly on anything new. The signs of an overfit tree are high training accuracy with low test accuracy, many levels and many leaves, leaves that hold very few points, and complicated rules that make no intuitive sense.
+
+::: {.ink-figure data-figure="cart-figure" data-step="3" data-steps="2:grow the tree|3:score points it never saw" data-caption="Fig. 4 · the same trees scored on 70 held-out points; training error keeps falling, held-out error turns back up · made-up data"}
+:::
+
+Fig. 4 scores the same trees on points they were not grown on. At depth 5 the tree makes no mistakes on its own 70 points and 13 on the fresh 70. The held-out error is lowest at depth 3 and rises after it, while the training error keeps falling all the way down. The thin slivers at the deeper levels are rectangles built around single noisy points. [Exam trap: a deeper tree is a more complex model, and complex means overfitting risk, never the reverse. Perfect training accuracy is a warning. Prune using data the tree was not grown on.]{.side}
+
+**Pruning** is the fix, and there are two strategies.
+
+| Strategy | How it works |
+|:---------|:-------------|
+| **Pre-pruning** | Stop growing early (limit depth, minimum samples per leaf) |
+| **Post-pruning** | Grow the full tree, then cut back branches that don't help on validation data |
+
+The course teaches the second as a two-phase process. Grow the tree on one half of the data, then use the held-out half to check whether each branch really reduces the error, and remove the branches that do not. The figure prunes by whole levels to keep the picture simple; real pruning removes individual branches. R's `rpart` does the same job with a complexity parameter, `cp`, chosen by cross-validation. Either way the simpler tree often performs as well as the full one on new data, or better.
+
+## Numbers at the leaves
+
+CART is not only for classification. A **regression tree** predicts a number, and it chooses its cuts by the sum of squared errors, the same objective as linear regression but applied locally inside each rectangle:
+
+$$\text{SSE} = \sum_{i \in \text{left}} (y_i - \bar{y}_{\text{left}})^2 + \sum_{i \in \text{right}} (y_i - \bar{y}_{\text{right}})^2$$
+
+This is the course's "pick the split that minimises the total variance of the two branches" in different words.
+
+As the course presents it, a regression tree splits the data into leaves and fits a separate regression model in each one, so the coefficients can differ between subgroups. In practice each leaf rarely has enough points to support a full model, so the usual simplification is a constant: the leaf predicts the **mean** of its training points. The other tree types follow the same pattern. A classification tree predicts the most common class in the leaf, and a logistic regression tree reports the fraction of positive responses.
+
+Predicting a mean per leaf gives a **staircase**. The prediction is piecewise constant, flat inside each rectangle, and the tree approximates a curve by breaking it into enough small steps. A deep regression tree overfits in the same way a deep classification tree does: the steps start following individual noisy points.
+
+## One tree or many
+
+Set beside the other classifiers, a single tree looks like this.
+
+| | CART | SVM | KNN | Logistic Reg |
+|:--|:-----|:----|:----|:-------------|
+| **Interpretable?** | Yes — if-then rules | Moderate | No | Moderate (coefficients) |
+| **Handles non-linear?** | Yes (inherently) | Yes (kernels) | Yes (inherently) | Only with transforms |
+| **Handles mixed types?** | Yes (numeric + categorical) | Numeric only | Numeric only | Numeric only |
+| **Needs scaling?** | **No** | Yes | Yes | Recommended |
+| **Overfitting risk** | High (deep trees) | Moderate | High (small k) | Low |
+| **Feature selection?** | Built in (top splits = most important) | No | No | Via p-values |
+
+The table holds CART's particular advantages. A tree needs no scaling, because its splits compare a feature to a threshold and never measure a distance. It takes categorical and numeric features side by side. It reports feature importance for free, since the features used in the top splits matter most. And it is the one model here a non-technical stakeholder can read. Its weaknesses are the overfitting you have just seen, boundaries that can only be rectangles, and instability: a small change in the data can produce a very different tree.
+
+| Scenario | Use CART? | Why |
+|:---------|:---------|:----|
+| "Need interpretable rules for a loan officer" | **Yes** | CART = human-readable if-then rules |
+| "Explain to management why the model rejected an applicant" | **Yes** | Trace the tree path |
+| "Classify with maximum accuracy on large dataset" | Maybe not | SVM often more accurate |
+| "Features are a mix of numbers and categories" | **Yes** | CART handles both natively |
+| "Predict a probability" | Logistic regression | CART outputs class, not calibrated probability |
+| "Non-linear relationships, need simple explanation" | **Yes** | Splits naturally capture non-linearity |
+
+The instability is also an opportunity. A **random forest** grows many trees, typically 500 to 1,000 or more, and makes each one different on purpose in two ways. Every tree gets a bootstrap sample: $n$ points drawn with replacement, so some are repeated and others left out. And at each branch only a random subset of the features is considered. The forest then averages the trees' predictions for regression and takes the most common prediction for classification. No pruning is needed, because the trees overfit in different ways and the averaging smooths those differences out. [The trade: a forest usually predicts better than one tree, but 500 trees are a black box. You can report which variables matter overall, not the rule behind any one prediction.]{.side}
+
+**Gradient boosting** builds its trees in sequence instead, each one correcting the errors of those before it. Both are among the most powerful models in practice, and both are built from CART.
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+A tree fitted to made-up loan data with `rpart`, drawn as the if-then rules it learned.
 
 ```{r}
-#| label: fig-tree-visual
+#| label: plot-tree-visual
 #| fig-cap: "CART splits the space into rectangles using if-then rules"
 
 library(ggplot2)
@@ -67,8 +152,10 @@ rpart.plot(tree, type = 4, extra = 101, under = TRUE,
   box.palette = c("coral", "steelblue"))
 ```
 
+The same tree as regions of the plane: every split is a straight cut parallel to an axis.
+
 ```{r}
-#| label: fig-tree-regions
+#| label: plot-tree-regions
 #| fig-cap: "Each split creates a rectangular region — the tree carves up the feature space"
 
 # Show the rectangular regions
@@ -89,31 +176,10 @@ ggplot() +
        title = "CART splits the space into rectangular regions")
 ```
 
-Compare this to SVM (which draws a single line/curve) or KNN (which draws
-irregular boundaries). CART always makes **axis-aligned rectangular splits**.
-
-
-## 3. The Splitting Rule: How CART Chooses Where to Cut
-
-At each step, CART asks: "which feature and which split point best separates
-the classes?"
-
-### For Classification: Gini Impurity
-
-$$\text{Gini} = 1 - \sum_{k=1}^{K} p_k^2$$
-
-where $p_k$ is the proportion of class $k$ in the node.
-
-| Gini Value | Meaning |
-|:----------:|:--------|
-| 0 | **Pure** — all points belong to one class |
-| 0.5 | **Maximum impurity** — 50/50 split (for 2 classes) |
-
-CART picks the split that creates the **lowest weighted average Gini** across
-the two child nodes.
+Gini impurity for two classes, from pure at either end to a 50/50 mix in the middle.
 
 ```{r}
-#| label: fig-gini
+#| label: plot-gini
 #| fig-cap: "Gini impurity: 0 = pure node, 0.5 = maximum mixed"
 
 p <- seq(0, 1, length.out = 100)
@@ -130,8 +196,10 @@ text(0.08, 0.05, "Pure\n(all B)", col = "forestgreen", cex = 0.8)
 text(0.92, 0.05, "Pure\n(all A)", col = "forestgreen", cex = 0.8)
 ```
 
+The weighted Gini of a cut on income at each candidate value, and the cut CART would choose.
+
 ```{r}
-#| label: fig-split-demo
+#| label: plot-split-demo
 #| fig-cap: "CART evaluates every possible split and picks the one with lowest total Gini"
 
 # Simple example: split on income at different points
@@ -160,22 +228,10 @@ text(best_split + 5, max(gini_scores),
   col = "coral", cex = 0.9)
 ```
 
-### For Regression Trees: Sum of Squared Errors
-
-When predicting a **number** instead of a class, CART minimizes SSE at each
-split — same objective as linear regression, but applied locally in each
-rectangle.
-
-$$\text{SSE} = \sum_{i \in \text{left}} (y_i - \bar{y}_{\text{left}})^2 + \sum_{i \in \text{right}} (y_i - \bar{y}_{\text{right}})^2$$
-
-
-## 4. The Tree Grows: Recursive Splitting
-
-CART doesn't stop at one split. It takes each child node and splits it again,
-then splits those children, and so on — **recursively**.
+The tree at depths 1, 3 and 6: more depth, more rectangles.
 
 ```{r}
-#| label: fig-tree-growth
+#| label: plot-tree-growth
 #| fig-cap: "Deeper trees create more splits — from simple to complex"
 
 par(mfrow = c(1, 3), mar = c(2, 2, 3, 1))
@@ -201,20 +257,10 @@ for (depth in c(1, 3, 6)) {
 par(mfrow = c(1, 1))
 ```
 
-A deeper tree creates more rectangles — fitting the training data more
-closely. But there's a problem...
-
-
-## 5. The Overfitting Trap: Deep Trees Memorize
-
-::: {.callout-warning}
-### Deep Trees Memorize
-A tree with enough depth can perfectly classify every training point. But
-it's just **memorizing** — it won't work on new data.
-:::
+A shallow tree and a deep one, each scored on the data it was trained on and on data held back.
 
 ```{r}
-#| label: fig-overfit-tree
+#| label: plot-overfit-tree
 #| fig-cap: "Deep tree: perfect on training data, terrible on new data"
 
 set.seed(42)
@@ -254,26 +300,10 @@ ggplot(results, aes(Model, Accuracy * 100, fill = Set)) +
   labs(y = "Accuracy (%)", title = "Deep tree: high training, low test = OVERFIT")
 ```
 
-**Signs of an overfit tree:**
-
-- High training accuracy, low test accuracy
-- Many levels / many leaves
-- Some leaves have very few data points
-- Complex rules that don't make intuitive sense
-
-
-## 6. The Fix: Pruning
-
-**Pruning** cuts back branches that don't improve generalization. There are
-two strategies:
-
-| Strategy | How it works |
-|:---------|:-------------|
-| **Pre-pruning** | Stop growing early (limit depth, minimum samples per leaf) |
-| **Post-pruning** | Grow the full tree, then cut back branches that don't help on validation data |
+A full tree, and the cross-validated error `rpart` reports at each value of the complexity parameter.
 
 ```{r}
-#| label: fig-pruning
+#| label: plot-pruning
 #| fig-cap: "Pruning: grow a full tree, then trim branches that don't help"
 
 # Grow a full tree
@@ -287,8 +317,10 @@ printcp(tree_full)
 plotcp(tree_full, main = "Cross-Validation Error vs Complexity (cp)")
 ```
 
+The full tree beside the tree pruned to the best `cp`, with their test accuracies.
+
 ```{r}
-#| label: fig-pruned-tree
+#| label: plot-pruned-tree
 #| fig-cap: "The pruned tree: simpler, more generalizable"
 
 # Prune to optimal cp
@@ -315,15 +347,10 @@ cat(sprintf("Pruned tree test accuracy: %.1f%%\n", acc_pruned * 100))
 cat("Simpler tree often performs just as well (or better) on new data!")
 ```
 
-
-## 7. CART for Regression
-
-CART isn't just for classification. It can predict **continuous values** too.
-Instead of majority vote in each leaf, it predicts the **mean** of the
-training points in that leaf.
+Regression trees of depth 2, 4 and 8 fitted to a noisy sine curve. Each leaf predicts a mean, which gives the staircase.
 
 ```{r}
-#| label: fig-regression-tree
+#| label: plot-regression-tree
 #| fig-cap: "Regression tree: predicts the average value in each rectangular region"
 
 set.seed(42)
@@ -351,31 +378,10 @@ for (depth in c(2, 4, 8)) {
 par(mfrow = c(1, 1))
 ```
 
-Notice the **staircase** shape — regression trees make piecewise-constant
-predictions (flat steps). They approximate curves by breaking them into
-enough small rectangles.
-
-
-## 8. CART vs Other Models
-
-| | CART | SVM | KNN | Logistic Reg |
-|:--|:-----|:----|:----|:-------------|
-| **Interpretable?** | Yes — if-then rules | Moderate | No | Moderate (coefficients) |
-| **Handles non-linear?** | Yes (inherently) | Yes (kernels) | Yes (inherently) | Only with transforms |
-| **Handles mixed types?** | Yes (numeric + categorical) | Numeric only | Numeric only | Numeric only |
-| **Needs scaling?** | **No** | Yes | Yes | Recommended |
-| **Overfitting risk** | High (deep trees) | Moderate | High (small k) | Low |
-| **Feature selection?** | Built in (top splits = most important) | No | No | Via p-values |
-
-**CART's unique advantages:**
-
-- **No scaling needed** — splits are based on thresholds, not distances
-- **Handles mixed data** — categorical and numeric features together
-- **Built-in feature importance** — features used in top splits matter most
-- **Human-readable** — the only model a non-technical stakeholder can follow
+A tree given three real features and two columns of noise, and the importance it assigns to each.
 
 ```{r}
-#| label: fig-variable-importance
+#| label: plot-variable-importance
 #| fig-cap: "CART naturally tells you which features are most important"
 
 # Fit a tree with more features
@@ -399,26 +405,7 @@ barplot(sort(importance, decreasing = TRUE),
   ylab = "Importance Score")
 ```
 
-
-## 9. When to Use CART (Practice Scenarios)
-
-| Scenario | Use CART? | Why |
-|:---------|:---------|:----|
-| "Need interpretable rules for a loan officer" | **Yes** | CART = human-readable if-then rules |
-| "Explain to management why the model rejected an applicant" | **Yes** | Trace the tree path |
-| "Classify with maximum accuracy on large dataset" | Maybe not | SVM often more accurate |
-| "Features are a mix of numbers and categories" | **Yes** | CART handles both natively |
-| "Predict a probability" | Logistic regression | CART outputs class, not calibrated probability |
-| "Non-linear relationships, need simple explanation" | **Yes** | Splits naturally capture non-linearity |
-
-**Connection to advanced models:**
-
-- **Random Forest** = many CART trees averaged together (reduces overfitting)
-- **Gradient Boosting** = sequential CART trees correcting each other's errors
-- These are the most powerful ML models in practice, and they're all built from CART
-
-
-## 10. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 CART (Decision Tree) RECIPE
@@ -459,11 +446,7 @@ CART (Decision Tree) RECIPE
    Building block for Random Forest and Boosting
 ```
 
-
-## 11. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -480,4 +463,3 @@ Before moving on, try to answer these without scrolling up:
 9. How does a regression tree differ from a classification tree?
 10. What are Random Forests and Gradient Boosting, and how do they relate
     to CART?
-:::

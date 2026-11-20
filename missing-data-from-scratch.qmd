@@ -1,22 +1,19 @@
 ---
-title: "Missing Data: Bias, Imputation, and the 5% Rule"
-subtitle: "MCAR / MAR / MNAR, listwise deletion, indicators, and three imputation strategies"
+title: "What should you do when a value is missing?"
+subtitle: "Every fix changes the data in its own way, and the right one depends on why the value went missing in the first place."
 engine: knitr
 ---
 
-## The Fiction in Clean Data
-
-Most introductory examples treat a dataset as if every row is complete and every value is right. Real datasets never are. Sensors fail, forms get skipped, wireless signals drop, and high-income survey respondents leave the "income" field blank. The question is not whether you'll have missing data — it's **what kind of missingness, and what to do about it.**
-
-::: {.callout-tip}
-**Rule of thumb:** before touching any imputation method, ask *why* the data is missing. The fix depends entirely on the cause.
+::: {.ink-figure data-figure="impute-figure" data-step="0" data-caption="Fig. 1 · you know x for every row, but y only for some · made-up data"}
 :::
 
----
+Most introductory examples treat a dataset as if every row is complete and every value is right. Real datasets never are. Sensors fail, forms get skipped, wireless signals drop, and high-income survey respondents leave the "income" field blank.
 
-## Three Missingness Regimes
+So the question is not whether you will have missing data. It is what kind of missingness you have, and what to do about it. Before touching any method, ask *why* the data is missing. The fix depends entirely on the cause.
 
-Formal acronyms are not always used, but the distinction is crucial:
+## Why it went missing
+
+Formal acronyms are not always used, but the distinction between these three cases is crucial.
 
 | Acronym | What it means | Example |
 |---|---|---|
@@ -24,11 +21,76 @@ Formal acronyms are not always used, but the distinction is crucial:
 | **MAR** (Missing At Random) | Missingness depends on *observed* variables | Men skip the "weight" field more often than women (depends on gender, which we have) |
 | **MNAR** (Missing Not At Random) | Missingness depends on the *unobserved* value itself | High-income respondents skip the income field; date-of-death missing for living patients (censoring) |
 
-**Why it matters:** discarding rows is safe under MCAR, risky under MAR, and dangerous under MNAR. Let's see the bias in action.
+It matters because discarding rows is safe under MCAR, risky under MAR, and dangerous under MNAR. In Fig. 1, press the button under "y goes missing". When values vanish at random, the rows you keep look like the rows you lost, and their mean stays near the truth. When values vanish mostly where y is high, the rows you keep are the low ones, and their mean drops.
+
+The R at the end of the page runs the same experiment on 1,000 made-up incomes. Dropping 20% completely at random barely shifts the mean; that is noise. Letting older people skip more often (MAR) gives only a modest shift, because age has a weak link to income in that data. Letting high earners skip more often (MNAR) noticeably biases the mean downward, because the highest incomes are the ones most likely to be missing. [Exam trap: "the data is missing at random, so just drop the rows" is only safe under MCAR. Under MNAR, the most common real-world case, the model becomes biased and you will not know unless you specifically look.]{.side}
+
+## Throw the rows away
+
+The simplest option is also the most dangerous. Deleting every row that has a missing value is called listwise deletion, and in R it is one call to `na.omit`.
+
+Use it when you have established that the missingness is MCAR, or close to it, and the loss is small enough that you still have an adequate sample size. Both conditions have to hold.
+
+Do not use it when missingness is driven by the value you care about. That is the "kept" column in Fig. 1 with the button on "when high": a smaller dataset, and a biased one.
+
+## Say that it is missing
+
+Instead of discarding the row, you can make "this value is missing" part of the model. For a categorical variable that is easy: add a new level, "missing", alongside the existing ones.
+
+For a numeric variable the move has three parts:
+
+1. Set the missing values to 0 (or some placeholder).
+2. Add a binary indicator `is_missing`.
+3. Interact the indicator with every other predictor.
+
+The third part is what makes this work. The indicator on its own only shifts the intercept. Without the interactions, the coefficients on the other variables get pulled in odd directions to compensate for the placeholder zeros. [Exam trap: an indicator without interactions does not split the model. It only shifts the intercept.]{.side}
+
+With the interactions, the model can respond differently to the other predictors when the value is missing, which is what you want when missingness correlates with other features. You are in effect fitting two parallel models, one for rows with complete data and one for rows where this variable is missing. Think of it as a tree with one branch.
+
+## Fill it in
+
+Imputation means *estimating* the missing values and filling them in. There are three methods, and they trade simplicity against realism. Two of them are in this section.
+
+The simplest replaces each missing value with one typical value from the rows you have: the mean for a numeric variable, the median for a numeric variable when you want something robust to skew, the mode for a categorical one. It keeps the mean of the column where it was, but it collapses all the variance in the missing subset to zero, and that distorts correlations and any model fitted afterwards.
+
+::: {.ink-figure data-figure="impute-figure" data-step="1" data-steps="1:mean|2:regression" data-caption="Fig. 2 · the same rows, filled in two ways; the readouts are computed from what is drawn · made-up data"}
+:::
+
+In Fig. 2 the filled-in values sit in a flat row. With a quarter of the y values gone at random, the standard deviation of y falls from 1.82 to 1.64 and its correlation with x from 0.78 to 0.75. The filled-in rows have no spread and no relationship with x, and they dilute both.
+
+The second method builds a regression model on the rows *without* missing data that predicts the missing factor from the other factors, then uses it to impute. That usually gives a better individual estimate than the global mean. Press "regression" under Fig. 2 and each filled-in value moves to the fitted line. But it still collapses legitimate variation: every 45-year-old with 15 years on the job gets the same predicted income, even though in the real population their incomes span a range. In the figure the standard deviation is still short of the truth, at 1.74, and the correlation is now too high, at 0.84, because the filled-in points fit the line perfectly.
+
+## Put the noise back
+
+The third method fixes the collapse by adding random noise to each prediction, with the size of the noise set by the residual standard error of the regression:
+
+$$\hat{y}_i = \underbrace{a + b\,x_i}_{\text{regression}} + \underbrace{\varepsilon_i}_{\text{perturbation}}, \qquad \varepsilon_i \sim N(0,\ s^2_{\text{residual}})$$
+
+The perturbation looks like it makes each individual estimate worse, since you are adding noise on purpose. What it buys is the spread of the imputed values. When variance or correlations matter downstream, that matters. [Exam trap: mean imputation is the easiest to do and the easiest to critique, because it kills the variance in the imputed subset. Regression imputation needs perturbation if variance or correlations matter downstream.]{.side}
+
+::: {.ink-figure data-figure="impute-figure" data-step="3" data-steps="1:mean|2:regression|3:plus noise" data-caption="Fig. 3 · move the slider and switch how y goes missing; every number is recomputed · made-up data"}
+:::
+
+In Fig. 3 the noise is drawn with the residual spread of the fitted line, and the standard deviation and correlation return to about their true values. Then switch the button to "when high". In this figure none of the three ways of filling in brings the mean back to the truth. Each one learns only from the rows that are left, and those rows are the low ones.
+
+## How much is too much
+
+Slide "missing" in Fig. 3 from 5% towards 50% and compare the two columns under each method. At 5% the columns stay close whichever method you pick. The further you go, the further they drift apart.
+
+That is the reason for the course's rule of thumb: do not impute more than about **5% of any single factor**. Imputation introduces error, and adding that error to more than a small slice of the data compounds. Past 5%, switch to the indicator-plus-interaction approach, so that you *model* the missingness explicitly rather than hide it behind a guess. [Exam trap: the 5% rule kicks in before you notice it kicking in. Check the proportion missing per factor before choosing a strategy.]{.side}
+
+A second worry follows. You have imputed values that carry error, and now you feed them into a model that has error of its own. How do you quantify the total? The honest answer is that there is no clean way. Use a held-out test set to evaluate overall performance, and accept that the test set itself probably has some missingness too.
+
+The practical reframe is that every dataset has errors. Sensors drift, humans type wrong numbers, digital thermometers give different readings 10 seconds apart. The question is not "is my imputation perfect" but "is my imputation worse than the typical error already baked into the data?" Usually it is not.
+
+## Run it yourself {.reference}
+
+Every number and plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+A thousand made-up people whose income depends on age and years of experience. Here you have the truth.
 
 ```{r}
 #| label: setup-toy-data
-#| echo: true
 
 set.seed(2026)
 
@@ -43,11 +105,10 @@ dat <- data.frame(age, job_yrs, income)
 head(dat)
 ```
 
-We have the *truth*. Now let's hide some of it three different ways.
+Hide some incomes three ways (MCAR, MAR, MNAR) and compare the mean of what is left with the true mean.
 
 ```{r}
 #| label: create-missingness
-#| echo: true
 
 # MCAR: drop 20% of incomes completely at random
 mcar  <- dat
@@ -71,14 +132,13 @@ mean_mnar <- mean(mnar$income, na.rm = TRUE)
 round(c(True = mean_true, MCAR = mean_mcar, MAR = mean_mar, MNAR = mean_mnar))
 ```
 
-MCAR barely shifts the mean (noise). MAR is only a modest shift because the observed variable (age) has a weak link to income. **MNAR noticeably biases the mean downward** because the highest-income values are the ones most likely to be missing.
+The same four means as a bar chart, with the true mean as the dashed line.
 
 ```{r}
-#| label: fig-missingness
+#| label: plot-missingness
 #| fig-cap: "Listwise-deletion bias by missingness regime. MCAR is safe; MNAR is the dangerous case."
 #| fig-width: 7
 #| fig-height: 4
-#| echo: false
 
 means <- c(True = mean_true, MCAR = mean_mcar, MAR = mean_mar, MNAR = mean_mnar)
 bars <- barplot(means, col = c("#2d6a4f", "#4d9978", "#e08a3c", "#d62828"),
@@ -90,24 +150,10 @@ text(bars, means + max(means) * 0.03, labels = round(means), cex = 0.85)
 abline(h = mean_true, col = "gray30", lty = 2)
 ```
 
-::: {.callout-warning}
-**Common pitfall:** students love to assume missing data is random and "just drop the rows." Discarding rows is only safe under MCAR. Under MNAR (the most common real-world case), your model becomes biased and you won't know unless you specifically look.
-:::
-
----
-
-## Strategy 1 — Throw the Data Points Away
-
-The simplest option is also the most dangerous. *Do* use listwise deletion when:
-
-- You've established the missingness is MCAR (or close to it), AND
-- The data loss is small enough that you still have adequate sample size.
-
-*Don't* use it when missingness is driven by the value you care about.
+Listwise deletion on the MNAR data: fewer rows, and a biased mean.
 
 ```{r}
 #| label: listwise
-#| echo: true
 
 # Listwise deletion is just na.omit in R
 complete_cases_mnar <- na.omit(mnar)
@@ -116,21 +162,10 @@ cat("After listwise drop: ", nrow(complete_cases_mnar), "\n")
 cat("Biased mean income:  ", round(mean(complete_cases_mnar$income)), "\n")
 ```
 
----
-
-## Strategy 2 — Add a "Missing" Indicator (and Interact It)
-
-Instead of discarding, encode "this value is missing" as part of the model. For a categorical variable, just add a new level. For a numeric variable, the move is:
-
-1. Set the missing values to 0 (or some placeholder).
-2. Add a binary indicator `is_missing`.
-3. **Crucially: interact the indicator with every other predictor.**
-
-Step 3 is what makes this work. Without the interactions, the coefficients on the other variables get pulled in weird directions to compensate. With them, you're effectively fitting **two parallel models** — one for rows with complete data, one for rows where this variable is missing — a "tree with one branch."
+The indicator approach on the MAR data, first without interactions and then with them.
 
 ```{r}
 #| label: indicator-approach
-#| echo: true
 
 # Start with the MAR dataset
 mar_ind <- mar
@@ -148,23 +183,10 @@ fit_good <- lm(job_yrs ~ age + income + income_missing +
 summary(fit_good)$coefficients |> round(4)
 ```
 
-::: {.callout-note}
-**Why interact with every other variable?** Because the missing-indicator alone only shifts the intercept. To let the model respond *differently* to the other predictors when income is missing — which is what you actually want when missingness correlates with other features — you need the interactions.
-:::
-
----
-
-## Strategy 3 — Imputation (Three Flavors)
-
-Imputation means *estimating* the missing values and filling them in. The three methods covered here trade off simplicity vs realism.
-
-### 3a. Mean / Median / Mode Imputation
-
-Simplest possible: replace each missing value with the mean (numeric), median (numeric, robust to skew), or mode (categorical).
+Mean imputation on the MNAR data. The mean of the filled-in column stays where the kept rows had it.
 
 ```{r}
 #| label: mean-impute
-#| echo: true
 
 mean_impute <- function(x) {
   x[is.na(x)] <- mean(x, na.rm = TRUE)
@@ -178,15 +200,10 @@ cat("True mean income:        ", round(mean_true), "\n")
 cat("Mean-imputed mean income:", round(mean(imputed_mean$income)), "\n")
 ```
 
-Mean imputation preserves the mean of the imputed column but **collapses all variance in the missing subset to zero**, which distorts correlations and downstream models.
-
-### 3b. Predictive Model Imputation (Regression)
-
-Build a regression model on the rows *without* missing data that predicts the missing factor from the other factors. Use it to impute.
+Regression imputation: fit on the complete rows, predict for the rows with a missing income.
 
 ```{r}
 #| label: regression-impute
-#| echo: true
 
 # Fit a model on the complete rows
 complete_rows <- mnar[!is.na(mnar$income), ]
@@ -206,15 +223,10 @@ cat("Range:",
     round(max(predicted_income)), "\n")
 ```
 
-This *usually* gives a better individual estimate than the global mean, but it still collapses legitimate variation — every 45-year-old with 15 years on the job gets the same predicted income, even though in the real population their incomes span a range.
-
-### 3c. Regression + Perturbation
-
-Fix the variance-collapse problem by adding random noise calibrated to the regression residual standard error:
+Regression plus perturbation: the same predictions with noise drawn at the residual standard error.
 
 ```{r}
 #| label: perturb-impute
-#| echo: true
 
 # Residual standard error from the imputation model
 res_sd <- summary(impute_model)$sigma
@@ -230,14 +242,13 @@ cat("Regression+perturbation SD in imputed vals:", round(sd(perturbed)), "\n")
 cat("Full dataset SD (true):                    ", round(sd(dat$income)), "\n")
 ```
 
-The perturbation *looks* like it makes each individual estimate worse (adding noise), but it preserves the spread of the imputed values. When variance matters downstream, this matters.
+The hidden incomes against what each of the three methods put in their place.
 
 ```{r}
-#| label: fig-impute-compare
+#| label: plot-impute-compare
 #| fig-cap: "Three imputation strategies compared against the true distribution. Mean imputation collapses to a spike; regression collapses to a narrow band; perturbation restores the spread."
 #| fig-width: 8
 #| fig-height: 4
-#| echo: false
 
 par(mfrow = c(1, 1), mar = c(4, 4, 3, 1))
 
@@ -262,44 +273,32 @@ legend("topright",
        lwd = 2, bty = "n", cex = 0.9)
 ```
 
----
-
-## The 5% Rule
-
-::: {.callout-tip}
-**Rule of thumb:** don't impute more than about **5% of any single factor**. Past that, switch to the indicator-plus-interaction approach from Strategy 2.
-
-Why? Because imputation introduces error, and adding that error to more than a small slice of the data compounds. At that point you're better off *modeling* the missingness explicitly rather than hiding it behind a guess.
-:::
-
----
-
-## Compounding Error — Honest Answer
-
-You're worried: "I've imputed values with error, now I'm feeding those into a model that also has error. How do I quantify the total error?"
-
-**The honest answer:** there isn't a clean way. Use a held-out test set to evaluate overall performance and accept that the test set itself probably has some missingness too.
-
-Here's the practical reframe: every dataset has errors — sensors drift, humans type wrong numbers, digital thermometers give different readings 10 seconds apart. The question is not "is my imputation perfect" but "is my imputation worse than the typical error already baked into the data?" Usually it isn't.
-
----
-
-## Cheat Sheet
+## On one page {.reference}
 
 | Situation | Best approach |
 |---|---|
 | Missingness tiny, clearly random | Listwise deletion (`na.omit`) |
-| Missingness correlated with *other variables* | Indicator + interactions (Strategy 2) |
-| Missingness correlated with *the missing variable itself* | Indicator + interactions (Strategy 2). Do NOT drop rows. |
+| Missingness correlated with *other variables* | Indicator + interactions |
+| Missingness correlated with *the missing variable itself* | Indicator + interactions. Do NOT drop rows. |
 | Small amount (<5%), value-dependent | Regression imputation, with perturbation if variance matters |
 | >5% missing in one factor | Indicator approach, not imputation |
 
-::: {.callout-warning}
-**Common pitfalls recap:**
+Common pitfalls:
 
-1. **Listwise delete is not "safe default."** It's only safe under MCAR.
-2. **Mean imputation is the easiest to do, the easiest to critique.** Kills variance in the imputed subset.
+1. **Listwise delete is not a "safe default."** It is only safe under MCAR.
+2. **Mean imputation is the easiest to do, the easiest to critique.** It kills variance in the imputed subset.
 3. **Regression imputation needs perturbation** if variance or correlations matter downstream.
-4. **The 5% rule** kicks in before you notice it kicking in. Always check proportion missing per factor before choosing a strategy.
-5. **Indicator without interactions** doesn't split the model — it only shifts the intercept.
-:::
+4. **The 5% rule** kicks in before you notice it kicking in. Always check the proportion missing per factor before choosing a strategy.
+5. **Indicator without interactions** does not split the model. It only shifts the intercept.
+
+## Check yourself {.reference}
+
+Before moving on, try to answer these without scrolling up:
+
+1. What separates MCAR, MAR and MNAR, and under which of them is dropping rows safe?
+2. High-income respondents skip the income field. Which case is that, and which way does the mean of the remaining incomes move?
+3. Why does a missing-value indicator need an interaction with every other predictor?
+4. What does mean imputation do to the variance of a column, and to its correlation with other columns?
+5. What does perturbation add to regression imputation, and what is the size of the noise based on?
+6. How much of a single factor is it reasonable to impute, and what do you do beyond that?
+7. Your imputed values have error and so does your model. How do you assess the total?

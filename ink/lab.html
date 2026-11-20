@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Figure lab. Open as a file, or screenshot with headless Chrome (see ink/AUTHORING.md):
+     lab.html?figure=svm-figure&step=1            finished drawing of one step (reduced motion)
+     &theme=dark  dark sheet      &motion=1  play the draw-in      &w=420  narrower stage -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Figure lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Caveat:wght@500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="ink-kit.css">
+<style>
+  body { background: var(--surface); display: block; margin: 0; padding: 24px; }
+  #box { aspect-ratio: 640 / 450; margin: 0 auto; width: 640px; max-width: 100%; }
+  #bar { display: flex; gap: 8px; justify-content: center; margin-top: 16px; font-family: var(--mono); font-size: 11px; }
+  #bar button { background: none; border: 1px dashed var(--text-tertiary); color: var(--ink); cursor: pointer; font: inherit; padding: 4px 10px; }
+</style>
+</head>
+<body>
+<div id="box"></div>
+<div id="bar"></div>
+<script src="vendor/rough.js"></script>
+<script src="ink-kit.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), key = q.get('figure') || 'svm-figure';
+  document.documentElement.setAttribute('data-theme', q.get('theme') === 'dark' ? 'dark' : 'light');
+  var box = document.getElementById('box'), bar = document.getElementById('bar');
+  if (q.get('w')) box.style.width = q.get('w') + 'px';
+  var s = document.createElement('script');
+  s.src = 'figures/' + key + '.js';
+  s.onload = function () {
+    var api = window.fig = window.ShowcaseFigures[key].mount(box, { reducedMotion: !q.get('motion'), step: +q.get('step') || 0 });
+    for (var i = 0; i < 6; i++) (function (n) {
+      var b = document.createElement('button'); b.textContent = 'step ' + n;
+      b.onclick = function () { api.setStep(n); }; bar.appendChild(b);
+    })(i);
+    var r = document.createElement('button'); r.textContent = 'replay'; r.onclick = function () { api.replay(); }; bar.appendChild(r);
+  };
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>

@@ -1,16 +1,125 @@
 ---
-title: "KNN From Scratch: Unpacking the Formula"
-subtitle: "The simplest idea in machine learning — and why it works"
+title: "How does k nearest neighbours decide?"
+subtitle: "No line, no fitting, no model: a new point is labelled by asking the labelled points closest to it."
 engine: knitr
 ---
 
-## 1. The Problem: Classify a New Point
+::: {.ink-figure data-figure="knn-figure" data-step="0" data-caption="Fig. 1 · labelled points, a formula and five lines of R, not yet connected · illustration, made-up points"}
+:::
 
-You have labeled data — points that already belong to known groups. A new,
-unlabeled point shows up. Which group does it belong to?
+You have labelled data: points that already belong to known groups, say loan applications marked approve or deny. A new, unlabelled point shows up. Which group does it belong to?
+
+K nearest neighbours, KNN for short, gives the plainest answer there is. Look at the closest points you already have and go with the majority. That is the whole algorithm, and the rest of this page is about the three choices hiding inside it: what "closest" means, how many neighbours to ask, and what units to measure in.
+
+## Ask the neighbours
+
+Pick a number $k$, say 5. Measure the distance from the new point to **every** training point. Keep the $k$ closest. Count how many of them belong to each class. The new point gets the class with the most votes.
+
+::: {.ink-figure data-figure="knn-figure" data-step="1" data-caption="Fig. 2 · the k nearest points vote, and the boundary is wherever the vote tips · made-up points"}
+:::
+
+Written as a formula, the predicted class is
+
+$$\hat{y} = \text{mode}(\{y_i : \mathbf{x}_i \in N_k(\mathbf{x})\})$$
+
+where $\hat{y}$ is the prediction for the new point $\mathbf{x}$, $y_i$ is the known class of training point $i$, $N_k(\mathbf{x})$ is the set of the $k$ nearest neighbours of $\mathbf{x}$, and the mode is the most frequent value. In words: the most common class among the $k$ neighbours wins.
+
+If $k$ is even, the vote can tie. The common fixes are to use an odd $k$, to weight each vote by distance so that closer neighbours count more, or to break ties at random.
+
+Notice what did not happen. Nothing was fitted. KNN has no training phase at all; it stores the data and does all its work when a question arrives, which is why it is called a **lazy learner**. [If a scenario says "no training phase" or "lazy learner", it is describing KNN. "Maximum margin" or "support vectors" means SVM.]{.side}
+
+## What "near" means
+
+The only maths KNN needs is a way to say how far apart two points are. The default is Euclidean distance:
+
+$$d(\mathbf{x}, \mathbf{x}') = \sqrt{\sum_{j=1}^{p} (x_j - x_j')^2}$$
+
+Here $\mathbf{x}$ is the new point, the thing you are classifying, and $\mathbf{x}'$ is a training point, one of the known, labelled examples. $p$ is the number of features, that is, how many measurements each point has. $x_j$ is feature $j$ of the new point (income, for example) and $x_j'$ is the same feature of the training point (that person's income).
+
+With two features this is just the Pythagorean theorem:
+
+$$d = \sqrt{(x_1 - x_1')^2 + (x_2 - x_2')^2}$$
+
+A point that differs by 3 in one feature and 4 in the other is at distance $\sqrt{3^2 + 4^2} = 5$. Other rulers exist, and the choice depends on the kind of data.
+
+| Metric | Formula | When to use |
+|:------:|:--------|:------------|
+| **Euclidean** | $\sqrt{\sum(x_j - x_j')^2}$ | Continuous features (default) |
+| **Manhattan** | $\sum |x_j - x_j'|$ | Grid-like data, robust to outliers |
+| **Hamming** | Count of differing features | Categorical/binary features |
+
+On this page, and in the course unless you are told otherwise, the distance is Euclidean.
+
+## How many neighbours
+
+$k$ is the **only** parameter in KNN. It controls the bias-variance tradeoff, just as C does in an SVM.
+
+With $k = 1$ every training point rules its own patch of the plane. The boundary is jagged, it memorises the training data, noise included, and it would look different with a different sample. With a large $k$ each prediction averages over many points, the boundary smooths out, and real structure starts to get voted away.
+
+| Small k (e.g., 1) | Large k (e.g., 50) |
+|:-------------------|:--------------------|
+| Jagged, complex boundary | Smooth, simple boundary |
+| Memorizes training data | Averages over many points |
+| Low bias, high variance | High bias, low variance |
+| **Overfitting risk** | **Underfitting risk** |
+
+::: {.ink-figure data-figure="knn-figure" data-step="1" data-steps="1:slide k|2:move a point" data-caption="Fig. 3 · classified live in your browser: change k, then drag a point · made-up points"}
+:::
+
+You **cannot** calculate the best $k$ from a formula. You try different values and see which performs best on held-out data. That is cross-validation (Module 3), the standard way to tune any hyperparameter. [Exam trap: small k is the complex model, so it carries the overfitting risk. Large k is the simple model, so it carries the underfitting risk. More neighbours means smoother, not more flexible.]{.side}
+
+Some rules of thumb give you a place to start. Begin near $k = \sqrt{n}$, where $n$ is the number of training points. Use an odd $k$ for two classes so the vote cannot tie. Typical values run from 3 to 20.
+
+## Scale first
+
+KNN is built entirely on distance, and distance adds up differences in whatever units the features happen to use. If one feature has a range of 0–100,000 and another has a range of 0–1, the large-range feature **completely dominates** the calculation. Take income in dollars and a credit score: a gap of \$2,000 in income, which is nothing, outweighs a gap of 200 points in credit score, which is nearly the whole scale.
+
+::: {.ink-figure data-figure="knn-scale-figure" data-step="0" data-caption="Fig. 4 · the 5 nearest applicants to the square, measured in raw dollars and score points. The hatched band is everything as near as the 5th · made-up data"}
+:::
+
+In raw units the five "nearest" applicants are simply the five with the closest incomes. Their credit scores are barely consulted, and the vote follows. The fix is **standardisation**, also called z-score scaling:
+
+$$x_j^{\text{scaled}} = \frac{x_j - \bar{x}_j}{s_j}$$
+
+Subtract the feature's mean $\bar{x}_j$ and divide by its standard deviation $s_j$. Each feature then has mean 0 and standard deviation 1, and all features contribute equally to the distance.
+
+::: {.ink-figure data-figure="knn-scale-figure" data-step="1" data-steps="1:scaled|2:stretch income" data-caption="Fig. 5 · the same applicants after scaling, then with the income axis stretched back toward raw dollars · computed live · made-up data"}
+:::
+
+Same points, same new applicant, same $k$. Only the ruler changed, and with it the neighbours and the answer. Scaling is not an optional polish for KNN; when features have different ranges it decides the result. [Exam trap: scale before any distance-based method. KNN, SVM and k-means all measure distance, so an unscaled large-range feature dominates each of them.]{.side}
+
+## Averaging instead of voting
+
+KNN can also predict **continuous values**, not just classes. Instead of a majority vote, take the **average** of the neighbours' values:
+
+$$\hat{y} = \frac{1}{k} \sum_{i \in N_k(\mathbf{x})} y_i$$
+
+The tradeoff is the same one. A small $k$ gives a noisy curve that chases every point (overfits). A large $k$ gives a smooth curve that flattens the real shape (underfits).
+
+## What it costs
+
+KNN's strengths come from having no model. It is dead simple, with no training time and no assumptions about the shape of the data. It is non-linear for free, since the boundary naturally curves around the data, and multi-class for free, since you just count votes. The price is paid at prediction time and in memory, which is clearest next to an SVM.
+
+| | KNN | SVM |
+|:--|:----|:----|
+| **Training** | None — just stores data | Solves optimization to find boundary |
+| **Prediction** | Slow — computes distance to every point | Fast — just evaluate $\mathbf{w} \cdot \mathbf{x} + b$ |
+| **Memory** | Stores entire training set | Stores only support vectors |
+| **Multi-class** | Natural (majority vote) | Needs workarounds (one-vs-one) |
+| **Interpretability** | Low (no model, just neighbors) | Moderate (weight vector shows feature importance) |
+| **Non-linear** | Inherently non-linear | Needs kernel trick |
+| **Best for** | Small datasets, quick prototyping | Large datasets, clear margin between classes |
+
+The deeper weakness is the **curse of dimensionality**. As the number of features grows, distances become meaningless: in high dimensions all points are roughly the same distance from each other, so the ratio of the farthest neighbour's distance to the nearest's heads toward 1 and "nearest" stops distinguishing anything. The fix is to reduce the dimensions first, with PCA (Module 9), and then apply KNN.
+
+## Run it yourself {.reference}
+
+Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
+
+Two groups of labelled points and one new point without a label.
 
 ```{r}
-#| label: fig-mystery-point
+#| label: plot-mystery-point
 #| fig-cap: "A new point (black diamond) arrives. Which group does it belong to?"
 
 library(ggplot2)
@@ -34,22 +143,10 @@ ggplot(df, aes(x1, x2, color = group)) +
   labs(x = "Feature 1", y = "Feature 2")
 ```
 
-KNN's answer is absurdly simple: **look at the closest points and go with the
-majority vote.**
-
-That's it. That's the whole algorithm.
-
-
-## 2. The Algorithm in Plain English
-
-1. Pick a number $k$ (e.g., 5)
-2. Measure the distance from the new point to **every** training point
-3. Find the $k$ closest neighbors
-4. Count how many belong to each class
-5. The new point gets the class with the most votes
+The algorithm by hand for $k = 5$: every distance, the five smallest, the vote.
 
 ```{r}
-#| label: fig-knn-step-by-step
+#| label: plot-knn-step-by-step
 #| fig-cap: "k=5: find 5 nearest neighbors, take majority vote"
 
 # Calculate distances from new point to all training points
@@ -86,29 +183,10 @@ ggplot(df, aes(x1, x2, color = group)) +
   labs(x = "Feature 1", y = "Feature 2")
 ```
 
-
-## 3. The Formula: Distance
-
-The only math KNN needs is a way to measure **how far apart two points are**.
-
-### Euclidean Distance (the default)
-
-$$d(\mathbf{x}, \mathbf{x}') = \sqrt{\sum_{j=1}^{p} (x_j - x_j')^2}$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $\mathbf{x}$ | The new point | The thing we're classifying |
-| $\mathbf{x}'$ | A training point | One of the known, labeled examples |
-| $p$ | Number of features | How many measurements each point has |
-| $x_j$ | Feature $j$ of the new point | e.g., income |
-| $x_j'$ | Feature $j$ of the training point | e.g., that person's income |
-
-In 2D, this is just the Pythagorean theorem:
-
-$$d = \sqrt{(x_1 - x_1')^2 + (x_2 - x_2')^2}$$
+Euclidean distance between two points is the hypotenuse of a right triangle.
 
 ```{r}
-#| label: fig-distance-visual
+#| label: plot-distance-visual
 #| fig-cap: "Euclidean distance = straight-line distance between two points"
 
 p1 <- data.frame(x1 = 2, x2 = 1)
@@ -138,40 +216,10 @@ ggplot() +
   labs(x = "Feature 1", y = "Feature 2")
 ```
 
-### Other Distance Metrics
-
-| Metric | Formula | When to use |
-|:------:|:--------|:------------|
-| **Euclidean** | $\sqrt{\sum(x_j - x_j')^2}$ | Continuous features (default) |
-| **Manhattan** | $\sum |x_j - x_j'|$ | Grid-like data, robust to outliers |
-| **Hamming** | Count of differing features | Categorical/binary features |
-
-For this guide, Euclidean is the default unless told otherwise.
-
-
-## 4. The Classification Rule
-
-Once you have the $k$ nearest neighbors, the predicted class is:
-
-$$\hat{y} = \text{mode}(\{y_i : \mathbf{x}_i \in N_k(\mathbf{x})\})$$
-
-In English: **the most common class among the k neighbors wins.**
-
-| Symbol | What it is |
-|:------:|:-----------|
-| $\hat{y}$ | Predicted class for the new point |
-| $y_i$ | Known class of training point $i$ |
-| $N_k(\mathbf{x})$ | The set of $k$ nearest neighbors of $\mathbf{x}$ |
-| mode | The most frequent value |
-
-What about ties? If $k$ is even, ties are possible. Common fixes:
-
-- Use odd $k$
-- Weight votes by distance (closer neighbors count more)
-- Break ties randomly
+The same new point at $k$ = 1, 3 and 7. The neighbourhood grows and the vote is recounted.
 
 ```{r}
-#| label: fig-voting
+#| label: plot-voting
 #| fig-cap: "Different k values lead to different votes"
 
 library(class)
@@ -218,21 +266,10 @@ for (k in k_vals) {
 par(mfrow = c(1, 1))
 ```
 
-
-## 5. The Key Parameter: Choosing k
-
-$k$ is the **only** parameter in KNN. It controls the bias-variance tradeoff,
-just like C does in SVM.
-
-| Small k (e.g., 1) | Large k (e.g., 50) |
-|:-------------------|:--------------------|
-| Jagged, complex boundary | Smooth, simple boundary |
-| Memorizes training data | Averages over many points |
-| Low bias, high variance | High bias, low variance |
-| **Overfitting risk** | **Underfitting risk** |
+The whole decision boundary at $k$ = 1, 5 and 25, from jagged to smooth.
 
 ```{r}
-#| label: fig-k-boundaries
+#| label: plot-k-boundaries
 #| fig-cap: "Small k = jagged boundary (overfit). Large k = smooth boundary (underfit)."
 
 # Full decision boundary comparison
@@ -270,29 +307,10 @@ for (k in c(1, 5, 25)) {
 par(mfrow = c(1, 1))
 ```
 
-### How to Choose k
-
-You **cannot** calculate the best $k$ from a formula. You must **try
-different values and see which performs best** on held-out data.
-
-This is **cross-validation** (Module 3) — the standard way to tune any
-hyperparameter.
-
-**Rules of thumb:**
-
-- Start with $k = \sqrt{n}$ where $n$ is the number of training points
-- Use odd $k$ for binary classification (avoids ties)
-- Typical range: 3 to 20
-
-
-## 6. Why Scaling Is Mandatory
-
-KNN is entirely based on distance. If one feature has a range of 0–100,000
-and another has a range of 0–1, the large-range feature **completely
-dominates** the distance calculation.
+Income and credit score before and after standardising.
 
 ```{r}
-#| label: fig-scaling
+#| label: plot-scaling
 #| fig-cap: "Without scaling, income dominates. With scaling, both features contribute equally."
 
 set.seed(7)
@@ -329,15 +347,10 @@ mtext("Both features: mean=0, sd=1\nEqual contribution to distance",
 par(mfrow = c(1, 1))
 ```
 
-**Standardization** (z-score scaling):
-
-$$x_j^{\text{scaled}} = \frac{x_j - \bar{x}_j}{s_j}$$
-
-Each feature gets mean = 0 and standard deviation = 1. Now all features
-contribute equally to distance.
+KNN accuracy with $k = 5$ on the unscaled and the scaled features.
 
 ```{r}
-#| label: fig-scaling-accuracy
+#| label: plot-scaling-accuracy
 #| fig-cap: "Scaling dramatically improves KNN accuracy when features have different ranges"
 
 # Compare accuracy with and without scaling
@@ -361,17 +374,10 @@ abline(h = 50, lty = 2, col = "gray50")
 text(0.7, 55, "Random guessing", col = "gray50", cex = 0.8)
 ```
 
-
-## 7. KNN for Regression (Not Just Classification)
-
-KNN can also predict **continuous values**, not just classes.
-
-Instead of majority vote, take the **average** of the neighbors' values:
-
-$$\hat{y} = \frac{1}{k} \sum_{i \in N_k(\mathbf{x})} y_i$$
+KNN regression on a noisy sine curve at three values of $k$.
 
 ```{r}
-#| label: fig-knn-regression
+#| label: plot-knn-regression
 #| fig-cap: "KNN regression: predict by averaging the k nearest neighbors' values"
 
 set.seed(12)
@@ -403,26 +409,10 @@ for (k in c(1, 5, 15)) {
 par(mfrow = c(1, 1))
 ```
 
-Same tradeoff: small $k$ is noisy (overfits), large $k$ is smooth (underfits).
-
-
-## 8. KNN vs SVM: When to Use Which
-
-| | KNN | SVM |
-|:--|:----|:----|
-| **Training** | None — just stores data | Solves optimization to find boundary |
-| **Prediction** | Slow — computes distance to every point | Fast — just evaluate $\mathbf{w} \cdot \mathbf{x} + b$ |
-| **Memory** | Stores entire training set | Stores only support vectors |
-| **Multi-class** | Natural (majority vote) | Needs workarounds (one-vs-one) |
-| **Interpretability** | Low (no model, just neighbors) | Moderate (weight vector shows feature importance) |
-| **Non-linear** | Inherently non-linear | Needs kernel trick |
-| **Best for** | Small datasets, quick prototyping | Large datasets, clear margin between classes |
-
-**Practice tip:** If the scenario mentions "no training phase" or "lazy learner"
-→ KNN. If it mentions "maximum margin" or "support vectors" → SVM.
+The same overlapping data classified by a linear SVM and by KNN.
 
 ```{r}
-#| label: fig-svm-vs-knn
+#| label: plot-svm-vs-knn
 #| fig-cap: "Same data, different approaches: SVM draws a boundary, KNN uses local voting"
 
 library(e1071)
@@ -478,22 +468,10 @@ legend("topleft", bty = "n", legend = "No explicit boundary", cex = 0.8)
 par(mfrow = c(1, 1))
 ```
 
-
-## 9. Strengths and Weaknesses
-
-### Strengths
-- **Dead simple** — no training, no assumptions about data shape
-- **Non-linear for free** — the boundary naturally curves around data
-- **Multi-class for free** — just count votes
-- **No training time** — just store the data
-
-### Weaknesses (The Curse of Dimensionality)
-
-As the number of features grows, distances become **meaningless**. In high
-dimensions, all points are roughly the same distance from each other.
+The ratio of the farthest to the nearest distance as the number of features grows.
 
 ```{r}
-#| label: fig-curse
+#| label: plot-curse
 #| fig-cap: "In high dimensions, the gap between nearest and farthest neighbor shrinks"
 
 set.seed(1)
@@ -515,10 +493,7 @@ text(6, 1.3, "ratio → 1 means all distances are similar\n(KNN can't distinguis
      col = "red", cex = 0.8)
 ```
 
-**Fix:** Use PCA (Module 9) to reduce dimensions before applying KNN.
-
-
-## 10. Cheat Sheet: The Whole Story on One Page
+## On one page {.reference}
 
 ```
 THE KNN RECIPE
@@ -556,11 +531,7 @@ THE KNN RECIPE
    - No model to interpret
 ```
 
-
-## 11. Check Your Understanding
-
-::: {.callout-note}
-### Test Yourself
+## Check yourself {.reference}
 
 Before moving on, try to answer these without scrolling up:
 
@@ -571,4 +542,3 @@ Before moving on, try to answer these without scrolling up:
 5. What is the curse of dimensionality and how does it affect KNN?
 6. When would you pick KNN over SVM? When would you pick SVM over KNN?
 7. How do you choose the best $k$? (Hint: not a formula)
-:::

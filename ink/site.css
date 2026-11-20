@@ -1,0 +1,882 @@
+/* The whole look of the study site. No framework underneath: every rule here styles markup that
+   ink/template.html or a chapter's own markdown produces.
+   Paper and ink: an off-white page, a white sheet, a narrow serif column, mono caps for labels,
+   one blue accent, hairlines instead of boxes, stitched seams between sections.
+   Figures are styled in ink/ink-kit.css; how to write a chapter is in ink/AUTHORING.md. */
+
+/* ---------- tokens ---------- */
+:root {
+  --paper: #f8f8f6;
+  --surface: #ffffff;
+  --ink: #161616;
+  --text-secondary: #3d3d3b;
+  --text-tertiary: #7b7b77;
+  --divider: rgba(22, 22, 22, 0.1);
+  --divider-strong: rgba(22, 22, 22, 0.2);
+  --brand: #2a4bd7;
+  --brand-deep: #1c359f;
+  --code-inline-bg: rgba(22, 22, 22, 0.05);
+
+  /* names the ink figures use */
+  --parchment: var(--surface);
+  --ivory: var(--surface);
+  --near-black: var(--ink);
+  --dark-warm: var(--text-secondary);
+  --stone: var(--text-tertiary);
+
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --serif: "Newsreader", Charter, Georgia, serif;
+
+  --toc: 15rem;
+  --ruler: 4.5rem;
+  --bar: 2.75rem;
+  --sheet: 54rem;
+  --measure: 34rem;
+  --wide: 46rem;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --paper: #101010;
+  --surface: #161616;
+  --ink: #ecebe6;
+  --text-secondary: #c8c6bf;
+  --text-tertiary: #8f8d86;
+  --divider: rgba(236, 235, 230, 0.12);
+  --divider-strong: rgba(236, 235, 230, 0.24);
+  --brand: #8ea4ff;
+  --brand-deep: #b3c1ff;
+  --code-inline-bg: rgba(236, 235, 230, 0.08);
+  color-scheme: dark;
+}
+
+/* ---------- base ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  /* the whole page grows with the window: 16px at a laptop width, about 20px on a very wide screen */
+  font-size: clamp(100%, 0.32vw + 11.4px, 125%);
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--bar) + 1rem);
+}
+body {
+  background: var(--paper);
+  color: var(--ink);
+  display: grid;
+  font-family: var(--serif);
+  font-optical-sizing: auto;
+  font-size: 1.0625rem;
+  /* contents | the sheet, centred in what is left | the ruler */
+  grid-template-columns: var(--toc) minmax(0, 1fr) var(--ruler);
+  line-height: 1.72;
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: inherit;
+}
+:focus-visible {
+  outline: 1px dashed var(--brand);
+  outline-offset: 3px;
+}
+.skip {
+  background: var(--surface);
+  left: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  position: absolute;
+  top: -4rem;
+  z-index: 30;
+}
+.skip:focus {
+  top: 0.5rem;
+}
+
+/* ---------- contents: the left-hand list of chapters ---------- */
+.toc {
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 0.95rem 1.5rem 3rem;
+  position: sticky;
+  scrollbar-width: none;
+  top: 0;
+}
+.toc::-webkit-scrollbar {
+  display: none;
+}
+.toc__brand {
+  color: var(--brand);
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  margin-bottom: 1.9rem;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.toc__parts {
+  counter-reset: part;
+}
+.toc__part {
+  counter-increment: part;
+  margin-top: 1.05rem;
+}
+.toc__label {
+  color: var(--text-secondary);
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.toc__label::before {
+  content: counter(part) ".  ";
+}
+.toc__part ol {
+  margin-top: 0.2rem;
+  padding-left: 1.05rem;
+}
+.toc__part a {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  padding-block: 0.22rem;
+  text-decoration: none;
+  transition: color 140ms ease-out;
+}
+.toc__part a::before {
+  color: var(--text-tertiary);
+  content: "\00b7\00a0\00a0";
+}
+.toc__part a:hover {
+  color: var(--ink);
+}
+.toc__part a[aria-current="page"] {
+  color: var(--brand);
+}
+
+/* ---------- the bar: where you are, and the way to the next chapter ---------- */
+.page {
+  margin-inline: auto;
+  max-width: var(--sheet);
+  min-width: 0;
+  width: 100%;
+}
+.bar {
+  align-items: center;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  border-bottom: 1px solid var(--divider);
+  border-inline: 1px solid var(--divider);
+  display: flex;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  gap: 0.15rem;
+  height: var(--bar);
+  letter-spacing: 0.14em;
+  padding-inline: 0.5rem 0.4rem;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 10;
+}
+.bar__step,
+.bar__theme,
+.bar__menu {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  height: var(--bar);
+  justify-content: center;
+  letter-spacing: inherit;
+  min-width: 2rem;
+  padding: 0;
+  text-decoration: none;
+  text-transform: inherit;
+  transition: color 140ms ease-out;
+}
+.bar__step {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  letter-spacing: 0;
+  padding-bottom: 0.15rem;
+}
+.bar__step:hover,
+.bar__theme:hover,
+.bar__menu:hover {
+  color: var(--ink);
+}
+.bar__step:active,
+.bar__theme:active,
+.bar__menu:active {
+  transform: scale(0.96);
+}
+.bar__step[aria-disabled="true"] {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.bar__menu {
+  display: none;
+  padding-inline: 0.6rem;
+}
+.bar__crumb {
+  color: var(--text-tertiary);
+  flex: 1;
+  margin: 0 0 0 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar__here {
+  color: var(--ink);
+}
+.bar__here:not(:empty)::before {
+  color: var(--text-tertiary);
+  content: "\00a0\00a0/\00a0\00a0";
+}
+.bar__theme span {
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  height: 0.72rem;
+  width: 0.72rem;
+}
+
+/* ---------- the sheet ---------- */
+.sheet {
+  background: var(--surface);
+  border-inline: 1px solid var(--divider);
+  display: block;
+  min-height: calc(100vh - var(--bar));
+  padding: 4.5rem clamp(1.25rem, 4vw, 3.5rem) 5rem;
+}
+.sheet > *,
+.sheet section > * {
+  margin-inline: auto;
+  max-width: var(--measure);
+}
+.sheet > section,
+.sheet section > section {
+  max-width: none;
+}
+.sheet .ink-figure,
+.sheet .cell,
+.sheet .cell-output-display,
+.sheet .quarto-figure {
+  max-width: var(--wide);
+}
+.sheet .cell > *:not(.cell-output-display) {
+  margin-inline: auto;
+  max-width: var(--measure);
+}
+
+/* title block */
+.head {
+  margin-bottom: 2.8rem;
+  text-align: center;
+}
+.sheet .eyebrow {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  margin: 0 0 1.35rem;
+  text-transform: uppercase;
+}
+.head h1 {
+  font-size: clamp(1.9rem, 3.3vw, 2.45rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  margin: 0 auto;
+  max-width: 20ch;
+  text-wrap: balance;
+}
+.head__sub {
+  color: var(--text-secondary);
+  font-size: 1.02rem;
+  line-height: 1.5;
+  margin: 1rem auto 0;
+  max-width: 36ch;
+  text-wrap: balance;
+}
+.head::after {
+  background: var(--divider-strong);
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 2rem auto 0;
+  width: 1.5rem;
+}
+
+/* prose */
+.sheet p {
+  font-size: 1.02rem;
+  margin-block: 1.15rem 0;
+  position: relative;
+  text-wrap: pretty;
+}
+.sheet h2 {
+  font-size: 1.14rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  margin-block: 1.5rem 0;
+}
+.sheet h3 {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  margin-block: 2.1rem 0;
+  text-transform: uppercase;
+}
+.sheet h4 {
+  font-size: 1rem;
+  font-style: italic;
+  font-weight: 500;
+  margin-block: 1.6rem 0;
+}
+.sheet strong {
+  font-weight: 600;
+}
+.sheet ul,
+.sheet ol {
+  font-size: 1.02rem;
+  margin-block: 1rem 0;
+  padding-left: 1.3rem;
+}
+.sheet li {
+  margin-top: 0.35rem;
+}
+.sheet li::marker {
+  color: var(--text-tertiary);
+}
+.sheet li > p {
+  margin-top: 0.35rem;
+}
+.sheet a {
+  text-decoration: underline dotted var(--divider-strong) 1px;
+  text-underline-offset: 0.22em;
+  transition: color 140ms ease-out, text-decoration-color 140ms ease-out;
+}
+.sheet a:hover {
+  color: var(--brand);
+  text-decoration-color: var(--brand);
+}
+.sheet blockquote {
+  border-left: 1px solid var(--brand);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-block: 1.4rem 0;
+  padding-left: 1rem;
+}
+.sheet hr {
+  border: 0;
+  border-top: 1px solid var(--divider);
+  margin-block: 2.4rem 0;
+}
+
+/* a note in the sheet's right-hand margin:  [Exam trap: ...]{.side} */
+.side {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 400;
+  left: calc(100% + 1.5rem);
+  letter-spacing: 0.05em;
+  line-height: 1.7;
+  position: absolute;
+  text-align: left;
+  text-transform: uppercase;
+  top: 0.3rem;
+  width: 7.8rem;
+}
+.side::before {
+  background: var(--brand);
+  content: "";
+  display: block;
+  height: 1px;
+  margin-bottom: 0.6rem;
+  width: 1.2rem;
+}
+
+/* maths */
+.sheet .math.display {
+  display: block;
+  font-size: 0.98rem;
+  margin-block: 1.9rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.2rem;
+}
+.katex {
+  font-size: 1.04em;
+}
+
+/* ---------- seams: a thread sewn above each section, one stitch at a time ---------- */
+.ink-seam {
+  --stitch: 11px;
+  background: currentColor;
+  color: var(--text-tertiary);
+  display: block;
+  height: 3px;
+  margin-top: 3.4rem;
+  opacity: 0.6;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='3'%3E%3Cpath d='M1.2 1.5h5.6' stroke='%23000' stroke-width='1.25' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / var(--stitch) 3px repeat-x;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='3'%3E%3Cpath d='M1.2 1.5h5.6' stroke='%23000' stroke-width='1.25' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / var(--stitch) 3px repeat-x;
+}
+.ink-seam[data-sewn="false"] {
+  clip-path: inset(0 100% 0 0);
+}
+
+/* ---------- figures: ink figures and R output share one frame ---------- */
+.ink-figure {
+  margin-block: 2.6rem;
+}
+.ink-figure__stage {
+  aspect-ratio: 640 / 450;
+  margin-inline: auto;
+  width: 100%;
+}
+.ink-figure__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.4rem;
+  justify-content: center;
+  margin-top: 0.8rem;
+}
+.ink-figure__step {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  font-style: italic;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.1rem 0.2rem;
+  transition: color 140ms ease-out, border-color 140ms ease-out;
+}
+.ink-figure__step b {
+  font-weight: 400;
+  margin-right: 0.3em;
+}
+.ink-figure__step:hover {
+  color: var(--ink);
+}
+.ink-figure__step:active {
+  transform: scale(0.98);
+}
+.ink-figure__step[aria-pressed="true"] {
+  border-bottom-color: var(--brand);
+  color: var(--brand);
+}
+.sheet figcaption,
+.sheet p.ink-figure__caption {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  line-height: 1.7;
+  margin: 0.9rem auto 0;
+  max-width: 34rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+.sheet .cell {
+  margin-block: 1.4rem 2.4rem;
+}
+.sheet .cell-output-display {
+  margin-top: 1.4rem;
+}
+.sheet figure {
+  margin: 0;
+}
+.sheet figure p {
+  margin: 0;
+}
+.sheet .cell-output-display img {
+  display: block;
+  height: auto;
+  margin-inline: auto;
+  max-width: 100%;
+  mix-blend-mode: multiply;
+}
+:root[data-theme="dark"] .sheet .cell-output-display img {
+  filter: invert(1) hue-rotate(180deg);
+  mix-blend-mode: screen;
+}
+
+/* ---------- code: the R, folded behind a ruled note ---------- */
+code,
+pre {
+  font-family: var(--mono);
+  font-variant-ligatures: none;
+}
+:not(pre) > code {
+  background: var(--code-inline-bg);
+  border-radius: 2px;
+  font-size: 0.8em;
+  padding: 0.08em 0.3em;
+}
+.sheet pre {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.7;
+  margin-block: 1.2rem 0;
+  overflow-x: auto;
+}
+.sheet details.code-fold {
+  border-left: 1px solid var(--divider-strong);
+  margin-top: 1.2rem;
+  padding-left: 1rem;
+}
+.sheet details.code-fold > summary {
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  list-style: none;
+  text-transform: uppercase;
+  transition: color 140ms ease-out;
+}
+.sheet details.code-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.sheet details.code-fold > summary::after {
+  content: "  +";
+}
+.sheet details.code-fold[open] > summary::after {
+  content: "  \2212";
+}
+.sheet details.code-fold > summary:hover {
+  color: var(--brand);
+}
+.sheet details.code-fold pre {
+  margin-top: 0.8rem;
+}
+/* printed output of a chunk, and plain fenced blocks such as the one-page summaries */
+.sheet .cell-output pre,
+.sheet > pre,
+.sheet section > pre {
+  border-left: 1px dashed var(--divider-strong);
+  padding-left: 1rem;
+}
+
+/* ---------- tables ---------- */
+.sheet table {
+  border-block: 1px solid var(--divider-strong);
+  border-collapse: collapse;
+  display: block;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin-block: 1.7rem 0;
+  overflow-x: auto;
+  width: 100%;
+}
+.sheet th {
+  border-bottom: 1px solid var(--divider-strong);
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  padding: 0.6rem 0.9rem 0.6rem 0;
+  text-transform: uppercase;
+  vertical-align: bottom;
+}
+.sheet td {
+  border-top: 1px solid var(--divider);
+  padding: 0.5rem 0.9rem 0.5rem 0;
+  vertical-align: top;
+}
+.sheet tbody tr:first-child td {
+  border-top: 0;
+}
+
+/* ---------- notes and reveals (ink/reveal.lua turns callouts into these) ---------- */
+.note,
+.reveal {
+  border-left: 1px solid var(--divider-strong);
+  margin-block: 1.4rem 0;
+  padding-left: 1rem;
+}
+.note-warning,
+.note-important {
+  border-left-color: var(--brand);
+}
+.sheet .note__title,
+.reveal > summary {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  margin: 0;
+  text-transform: uppercase;
+}
+.reveal > summary {
+  cursor: pointer;
+  list-style: none;
+  padding-block: 0.35rem;
+  transition: color 140ms ease-out;
+}
+.reveal > summary::-webkit-details-marker {
+  display: none;
+}
+.reveal > summary::after {
+  content: "  +";
+}
+.reveal[open] > summary::after {
+  content: "  \2212";
+}
+.reveal > summary:hover {
+  color: var(--brand);
+}
+.note p,
+.note li,
+.reveal p,
+.reveal li {
+  font-size: 0.96rem;
+}
+.note > p:nth-child(2),
+.reveal > summary + * {
+  margin-top: 0.5rem;
+}
+.sheet ul.task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.task-list input {
+  accent-color: var(--brand);
+  margin-right: 0.6em;
+}
+
+/* the closing sections of a chapter (run it, one page, check yourself) are reference, set a little smaller */
+.sheet section.reference p,
+.sheet section.reference li {
+  font-size: 0.96rem;
+}
+
+/* ---------- home: the list of chapters ---------- */
+.chapter-list {
+  counter-reset: part;
+}
+.chapter-list h3 {
+  border-top: 1px solid var(--divider);
+  counter-increment: part;
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
+}
+.chapter-list h3::before {
+  content: counter(part) ".  ";
+}
+.sheet .chapter-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sheet .chapter-list li {
+  color: var(--text-tertiary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-top: 0.5rem;
+}
+.sheet .chapter-list li a {
+  color: var(--ink);
+  display: block;
+  font-size: 1.06rem;
+  text-decoration: none;
+}
+.sheet .chapter-list li a:hover {
+  color: var(--brand);
+}
+
+/* ---------- foot ---------- */
+.foot {
+  border-top: 1px solid var(--divider);
+  margin-top: 5rem !important;
+  padding-top: 1.6rem;
+}
+.sheet .foot__next {
+  display: block;
+  text-decoration: none;
+}
+.foot__next span {
+  color: var(--text-tertiary);
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.foot__next b {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin-top: 0.3rem;
+}
+.foot__next b::after {
+  color: var(--brand);
+  content: "  \2192";
+}
+.foot__next[hidden] {
+  display: none;
+}
+.sheet .foot p {
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  line-height: 1.8;
+  margin-top: 2.2rem;
+  text-transform: uppercase;
+}
+
+/* ---------- the ruler: how far down the sheet you are ---------- */
+.ink-ruler {
+  bottom: 1.5rem;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  position: fixed;
+  right: 0.55rem;
+  top: 4.5rem;
+  width: 3.4rem;
+  z-index: 5;
+}
+.ink-ruler__ticks {
+  background:
+    repeating-linear-gradient(to bottom, currentColor 0 1px, transparent 1px 9px) right top / 5px 100% no-repeat,
+    repeating-linear-gradient(to bottom, currentColor 0 1px, transparent 1px 90px) right top / 11px 100% no-repeat;
+  inset: 0;
+  opacity: 0.45;
+  position: absolute;
+}
+.ink-ruler__mark {
+  align-items: center;
+  color: var(--brand);
+  display: flex;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  letter-spacing: 0.06em;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transform: translateY(-50%);
+  width: 100%;
+}
+.ink-ruler__mark::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  width: 14px;
+}
+
+/* ---------- narrower screens ---------- */
+@media (max-width: 1199.98px) {
+  .side {
+    border-left: 1px solid var(--brand);
+    display: block;
+    left: auto;
+    margin-top: 0.8rem;
+    padding-left: 0.8rem;
+    position: static;
+    width: auto;
+  }
+  .side::before {
+    content: none;
+  }
+}
+@media (max-width: 1199.98px) {
+  :root {
+    --ruler: 0rem;
+  }
+  .ink-ruler {
+    display: none;
+  }
+}
+@media (max-width: 999.98px) {
+  body {
+    display: block;
+  }
+  .bar,
+  .sheet {
+    border-inline: 0;
+  }
+  .bar__menu {
+    display: inline-flex;
+  }
+  .toc {
+    background: var(--surface);
+    border-right: 1px solid var(--divider);
+    bottom: 0;
+    left: 0;
+    max-width: 85vw;
+    padding-top: 1.2rem;
+    position: fixed;
+    transform: translateX(-100%);
+    transition: transform 240ms var(--ease-out), visibility 0s linear 240ms;
+    visibility: hidden;
+    width: 18rem;
+    z-index: 20;
+  }
+  .toc[data-open="true"] {
+    transform: none;
+    transition: transform 240ms var(--ease-out);
+    visibility: visible;
+  }
+  .toc__part a {
+    padding-block: 0.5rem;
+  }
+  .sheet {
+    padding-top: 2.8rem;
+  }
+  .ink-figure__scroll {
+    margin-inline: -1.25rem;
+    overflow-x: auto;
+    padding-inline: 1.25rem;
+    scrollbar-width: thin;
+  }
+}
+@media (max-width: 599.98px) {
+  .ink-figure__stage {
+    min-width: 33rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ink-seam[data-sewn="false"] {
+    clip-path: none;
+  }
+  .toc {
+    transition: none;
+  }
+}

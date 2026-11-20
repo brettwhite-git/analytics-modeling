@@ -3,126 +3,87 @@ project:
   output-dir: _site
   render:
     - "*.qmd"
+  resources:
+    - "ink/*.js"
+    - "ink/vendor/*.js"
+    - "ink/figures/*"
 
 website:
   title: "Analytics Modeling From Scratch"
   description: "Step-by-step analytics modeling walkthroughs for learners who want the formulas, code, and intuition together."
   site-url: "https://brettwhite-git.github.io/analytics-modeling/"
   repo-url: "https://github.com/brettwhite-git/analytics-modeling"
-  search:
-    location: navbar
-    type: overlay
-    keyboard-shortcut: ["k"]
-    limit: 50
-    collapse-after: 3
-    copy-button: false
-    show-item-context: tree
-  navbar:
-    title: "Analytics Modeling"
-    pinned: true
-    left:
-      - text: "Goals"
-        href: index.qmd#choose-by-goal
-      - text: "Topics"
-        href: index.qmd#topic-map
-      - text: "Practice"
-        href: index.qmd#featured-practice
-    tools:
-      - icon: github
-        href: "https://github.com/brettwhite-git/analytics-modeling"
-        aria-label: "GitHub"
-  sidebar:
-    style: docked
-    title: "Demo Library"
-    collapse-level: 1
-    contents:
-      - text: "Home"
-        icon: house-door
-        href: index.qmd
-      - section: "Classification"
-        contents:
-          - text: "SVM"
-            href: svm-from-scratch.qmd
-          - text: "KNN"
-            href: knn-from-scratch.qmd
-      - section: "Validation"
-        contents:
-          - text: "Cross-Validation"
-            href: cross-validation-from-scratch.qmd
-      - section: "Clustering"
-        contents:
-          - text: "K-Means"
-            href: kmeans-from-scratch.qmd
-      - section: "Change Detection"
-        contents:
-          - text: "CUSUM"
-            href: cusum-from-scratch.qmd
-      - section: "Time Series"
-        contents:
-          - text: "Time Series"
-            href: time-series-from-scratch.qmd
-      - section: "Regression"
-        contents:
-          - text: "Regression"
-            href: regression-from-scratch.qmd
-      - section: "Transformations"
-        contents:
-          - text: "PCA & Box-Cox"
-            href: pca-boxcox-from-scratch.qmd
-      - section: "Trees"
-        contents:
-          - text: "CART"
-            href: cart-from-scratch.qmd
-      - section: "Variable Selection"
-        contents:
-          - text: "Variable Selection"
-            href: variable-selection-from-scratch.qmd
-      - section: "Design of Experiments"
-        contents:
-          - text: "DOE"
-            href: doe-from-scratch.qmd
-      - section: "Simulation & Markov"
-        contents:
-          - text: "Simulation & Markov"
-            href: simulation-markov-from-scratch.qmd
-      - section: "Missing Data"
-        contents:
-          - text: "Missing Data"
-            href: missing-data-from-scratch.qmd
-      - section: "Optimization"
-        contents:
-          - text: "Optimization"
-            href: optimization-from-scratch.qmd
-      - section: "Advanced Topics"
-        contents:
-          - text: "Advanced Topics"
-            href: advanced-topics-from-scratch.qmd
-      - section: "Practice"
-        contents:
-          - text: "Comprehensive Quiz"
-            href: comprehensive-quiz.qmd
-          - text: "Binary Choice Drill"
-            href: binary-choice-drill.qmd
-          - text: "Confusion Matrix Drill"
-            href: confusion-matrix-drill.qmd
-  page-footer:
-    center: "Independent educational resource. Content is CC BY-NC 4.0; code is MIT licensed."
+  search: false
+
+# Quarto is the engine only: it runs the R, typesets the maths and highlights the code.
+# Every tag of the page comes from ink/template.html, and all styling from ink/site.css.
+filters:
+  - at: pre-ast
+    path: ink/reveal.lua
 
 format:
   html:
-    toc: true
-    toc-depth: 3
-    code-fold: false
-    theme:
-      light: cosmo
-      dark: darkly
+    template: ink/template.html
+    theme: none
+    minimal: true
+    section-divs: true
+    toc: false
+    code-fold: true
+    code-summary: "The R"
+    html-math-method: katex
+    highlight-style: none
     css:
-      - styles.css
-      - responsive-nav.css
-    grid:
-      body-width: 960px
-      sidebar-width: 280px
-      margin-width: 300px
+      - ink/site.css
+      - ink/ink-kit.css
 
-language:
-  search-text-placeholder: "Search"
+# The contents of the site. The template draws the left-hand contents from this list;
+# ink/ink.js uses the same markup for the breadcrumb and the previous / next links.
+ink-parts:
+  - title: "Classification"
+    chapters:
+      - { href: "svm-from-scratch.html", title: "Support vector machines" }
+      - { href: "knn-from-scratch.html", title: "K nearest neighbours" }
+  - title: "Validation"
+    chapters:
+      - { href: "cross-validation-from-scratch.html", title: "Cross-validation" }
+  - title: "Clustering"
+    chapters:
+      - { href: "kmeans-from-scratch.html", title: "K-means" }
+  - title: "Change detection"
+    chapters:
+      - { href: "cusum-from-scratch.html", title: "CUSUM" }
+  - title: "Time series"
+    chapters:
+      - { href: "time-series-from-scratch.html", title: "Smoothing, ARIMA and GARCH" }
+  - title: "Regression"
+    chapters:
+      - { href: "regression-from-scratch.html", title: "Linear and logistic regression" }
+  - title: "Transformations"
+    chapters:
+      - { href: "pca-boxcox-from-scratch.html", title: "PCA and Box-Cox" }
+  - title: "Trees"
+    chapters:
+      - { href: "cart-from-scratch.html", title: "CART" }
+  - title: "Variable selection"
+    chapters:
+      - { href: "variable-selection-from-scratch.html", title: "LASSO, ridge and stepwise" }
+  - title: "Design of experiments"
+    chapters:
+      - { href: "doe-from-scratch.html", title: "A/B tests, factorials and bandits" }
+  - title: "Simulation"
+    chapters:
+      - { href: "simulation-markov-from-scratch.html", title: "Queues and Markov chains" }
+  - title: "Missing data"
+    chapters:
+      - { href: "missing-data-from-scratch.html", title: "Imputation" }
+  - title: "Optimization"
+    chapters:
+      - { href: "optimization-from-scratch.html", title: "Linear and integer programs" }
+  - title: "Beyond the basics"
+    chapters:
+      - { href: "advanced-topics-from-scratch.html", title: "Advanced topics" }
+  - title: "Practice"
+    chapters:
+      - { href: "comprehensive-quiz.html", title: "Comprehensive quiz" }
+      - { href: "binary-choice-drill.html", title: "Binary choice drill" }
+      - { href: "confusion-matrix-drill.html", title: "Confusion matrix drill" }
