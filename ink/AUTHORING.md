@@ -47,6 +47,14 @@ Rules for the essay:
   Code is folded site-wide behind "The R"; do not add per-chunk fold options.
 - Callout boxes from the old page that carry real content become prose or a `.side` note. "Check yourself" may keep its list as plain markdown.
 
+## R plots
+
+Nothing R draws is shown as R drew it. Each chunk's plot is written as SVG (svglite), `ink/plots.lua` puts that SVG in
+the page, and `ink/ink-plot.js` redraws it in the browser with the site's pen: wobbled strokes, hatching for fills,
+stitched thread for dashed lines, a mark shape per series, labels in mono, colours from the site tokens. So write
+ordinary ggplot or base R; do not theme it. A dense shaded grid (a decision region) is merged into regions at build time
+and hatched as one area. `ink/prune.R` deletes the figure files afterwards, since the page already contains them.
+
 ## Figures in a .qmd
 
 ```

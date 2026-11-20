@@ -17,6 +17,12 @@
   --brand-deep: #1c359f;
   --code-inline-bg: rgba(22, 22, 22, 0.05);
 
+  /* series hues for redrawn R plots: the accent first, then four quiet others */
+  --plot-2: #b4552d;
+  --plot-3: #2f6f55;
+  --plot-4: #6b4aa0;
+  --plot-5: #8c1d18;
+
   /* names the ink figures use */
   --parchment: var(--surface);
   --ivory: var(--surface);
@@ -47,6 +53,10 @@
   --brand: #8ea4ff;
   --brand-deep: #b3c1ff;
   --code-inline-bg: rgba(236, 235, 230, 0.08);
+  --plot-2: #e3a07f;
+  --plot-3: #86c5a6;
+  --plot-4: #b9a0ea;
+  --plot-5: #ff9d94;
   color-scheme: dark;
 }
 
@@ -528,6 +538,54 @@ a {
 :root[data-theme="dark"] .sheet .cell-output-display img {
   filter: invert(1) hue-rotate(180deg);
   mix-blend-mode: screen;
+}
+
+/* ---------- R plots, redrawn by ink/ink-plot.js ---------- */
+.ink-plot {
+  margin: 1.4rem auto 0;
+}
+.ink-plot__stage svg {
+  display: block;
+  height: auto;
+  overflow: visible;
+  width: 100%;
+}
+/* R's own drawing is never shown: it is only the measurements the pen works from */
+.ink-plot__stage > svg:not([data-inked]) {
+  visibility: hidden;
+}
+.ink-plot__stage.is-flat > svg {
+  visibility: visible;
+}
+.ink-plot__svg .ip-ink { color: var(--ink); }
+.ink-plot__svg .ip-stone { color: var(--text-tertiary); }
+.ink-plot__svg .ip-faint { color: var(--divider-strong); }
+.ink-plot__svg .ip-s1 { color: var(--brand); }
+.ink-plot__svg .ip-s2 { color: var(--plot-2); }
+.ink-plot__svg .ip-s3 { color: var(--plot-3); }
+.ink-plot__svg .ip-s4 { color: var(--plot-4); }
+.ink-plot__svg .ip-s5 { color: var(--plot-5); }
+.ink-kit.ink-plot__svg .ip-stroke { opacity: var(--ip-op, 0.88); }
+.ink-kit.ink-plot__svg .ik-fade { --ik-op: var(--ip-op, 1); }
+.ink-kit.ink-plot__svg .ip-hatch { --ik-op: var(--ip-op, 0.4); }
+.ink-kit.ink-plot__svg .ip-grid { --ik-op: 0.55; }
+.ink-kit.ink-plot__svg .ip-thread { --ik-op: var(--ip-op, 0.7); }
+.ink-plot__svg .ip-text {
+  fill: var(--text-tertiary);
+  font-family: var(--mono);
+  font-weight: 500;
+  paint-order: stroke fill;
+  stroke: var(--surface);
+  stroke-linejoin: round;
+  stroke-width: 2.6px;
+  white-space: pre;
+}
+.ink-plot__svg .ip-text--strong {
+  fill: var(--ink);
+  font-weight: 600;
+}
+.ink-plot__svg .ip-text[class*="ip-s"] {
+  fill: currentColor;
 }
 
 /* ---------- code: the R, folded behind a ruled note ---------- */

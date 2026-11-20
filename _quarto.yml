@@ -3,6 +3,8 @@ project:
   output-dir: _site
   render:
     - "*.qmd"
+  post-render:
+    - ink/prune.R
   resources:
     - "ink/*.js"
     - "ink/vendor/*.js"
@@ -17,9 +19,18 @@ website:
 
 # Quarto is the engine only: it runs the R, typesets the maths and highlights the code.
 # Every tag of the page comes from ink/template.html, and all styling from ink/site.css.
+# R draws every plot twice: as SVG (which ink/plots.lua puts in the page and ink/ink-plot.js re-inks by hand)
+# and as PNG (the fallback for a plot too dense to redraw).
+knitr:
+  opts_chunk:
+    dev: [svglite, png]
+    dpi: 200
+
 filters:
   - at: pre-ast
     path: ink/reveal.lua
+  - at: pre-ast
+    path: ink/plots.lua
 
 format:
   html:
