@@ -47,52 +47,35 @@ format:
       - ink/site.css
       - ink/ink-kit.css
 
-# The contents of the site. The template draws the left-hand contents from this list;
-# ink/ink.js uses the same markup for the breadcrumb and the previous / next links.
+# The contents of the site: a few chapters, each a group of lessons, in the order to read them.
+# The template draws the left-hand contents from this list; ink/ink.js uses the same markup for the
+# breadcrumb, the lesson number and the previous / next links.
 ink-parts:
-  - title: "Classification"
+  - title: "Sorting and grouping"
     chapters:
       - { href: "svm-from-scratch.html", title: "Support vector machines" }
       - { href: "knn-from-scratch.html", title: "K nearest neighbours" }
-  - title: "Validation"
-    chapters:
       - { href: "cross-validation-from-scratch.html", title: "Cross-validation" }
-  - title: "Clustering"
-    chapters:
       - { href: "kmeans-from-scratch.html", title: "K-means" }
-  - title: "Change detection"
+  - title: "Data over time"
     chapters:
       - { href: "cusum-from-scratch.html", title: "CUSUM" }
-  - title: "Time series"
-    chapters:
       - { href: "time-series-from-scratch.html", title: "Smoothing, ARIMA and GARCH" }
-  - title: "Regression"
+  - title: "Predicting an outcome"
     chapters:
       - { href: "regression-from-scratch.html", title: "Linear and logistic regression" }
-  - title: "Transformations"
+      - { href: "variable-selection-from-scratch.html", title: "LASSO, ridge and stepwise" }
+      - { href: "cart-from-scratch.html", title: "CART" }
+  - title: "Preparing the data"
     chapters:
       - { href: "pca-boxcox-from-scratch.html", title: "PCA and Box-Cox" }
-  - title: "Trees"
-    chapters:
-      - { href: "cart-from-scratch.html", title: "CART" }
-  - title: "Variable selection"
-    chapters:
-      - { href: "variable-selection-from-scratch.html", title: "LASSO, ridge and stepwise" }
-  - title: "Design of experiments"
+      - { href: "missing-data-from-scratch.html", title: "Missing data" }
+  - title: "Experiments and decisions"
     chapters:
       - { href: "doe-from-scratch.html", title: "A/B tests, factorials and bandits" }
-  - title: "Simulation"
-    chapters:
       - { href: "simulation-markov-from-scratch.html", title: "Queues and Markov chains" }
-  - title: "Missing data"
-    chapters:
-      - { href: "missing-data-from-scratch.html", title: "Imputation" }
-  - title: "Optimization"
-    chapters:
       - { href: "optimization-from-scratch.html", title: "Linear and integer programs" }
-  - title: "Beyond the basics"
-    chapters:
-      - { href: "advanced-topics-from-scratch.html", title: "Advanced topics" }
+      - { href: "advanced-topics-from-scratch.html", title: "Beyond the basics" }
   - title: "Practice"
     chapters:
       - { href: "comprehensive-quiz.html", title: "Comprehensive quiz" }

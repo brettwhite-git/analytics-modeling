@@ -1,77 +1,60 @@
 ---
 title: "Analytics modeling, from scratch"
-subtitle: "Fourteen methods, each explained as a short essay with figures you can move."
+subtitle: "Fifteen lessons in five chapters, each a short essay with figures you can move."
 engine: knitr
 ---
 
-Every chapter starts from a question and builds one modeling idea from the ground up: the problem the method solves, the formula that carries it, and the judgment calls that matter when the math meets messy data. The figures are computed in your browser, so you can drag a point or slide a parameter and watch the answer change. The R that produces every plot is at the end of each chapter.
+Every lesson starts from a question and builds one modeling idea from the ground up: the problem the method solves, the formula that carries it, and the judgment calls that matter when the math meets messy data. The figures are computed in your browser, so you can drag a point or slide a parameter and watch the answer change. The R that produces every plot is at the end of each lesson.
 
 ## Chapters {#chapters}
 
 ::: {.chapter-list}
 
-### Classification
+### Sorting and grouping
+
+Putting points into classes when you know the labels, finding groups when you do not, and checking the result honestly.
 
 - [Support vector machines](svm-from-scratch.qmd) The widest street between two classes
 - [K nearest neighbours](knn-from-scratch.qmd) A majority vote among the closest points
-
-### Validation
-
 - [Cross-validation](cross-validation-from-scratch.qmd) Why testing on training data is cheating
-
-### Clustering
-
 - [K-means](kmeans-from-scratch.qmd) Finding groups nobody told you about
 
-### Change detection
+### Data over time
+
+Noticing that a process has changed, and forecasting where a series goes next.
 
 - [CUSUM](cusum-from-scratch.qmd) Catching the moment something changed
-
-### Time series
-
 - [Smoothing, ARIMA and GARCH](time-series-from-scratch.qmd) Level, trend, season and volatility
 
-### Regression
+### Predicting an outcome
+
+Connecting variables to a result, choosing which variables to keep, and the tree-shaped alternative.
 
 - [Linear and logistic regression](regression-from-scratch.qmd) Connecting variables to outcomes
-
-### Transformations
-
-- [PCA and Box-Cox](pca-boxcox-from-scratch.qmd) Reshaping data before you model it
-
-### Trees
-
+- [LASSO, ridge and stepwise](variable-selection-from-scratch.qmd) Fewer variables, on purpose
 - [CART](cart-from-scratch.qmd) If-then rules, grown and pruned
 
-### Variable selection
+### Preparing the data
 
-- [LASSO, ridge and stepwise](variable-selection-from-scratch.qmd) Fewer variables, on purpose
+Reshaping variables and filling holes before a model ever sees them.
 
-### Design of experiments
+- [PCA and Box-Cox](pca-boxcox-from-scratch.qmd) Reshaping data before you model it
+- [Missing data](missing-data-from-scratch.qmd) What to do about the holes
+
+### Experiments and decisions
+
+Collecting data deliberately, simulating what you cannot test, and choosing the best plan under limits.
 
 - [A/B tests, factorials and bandits](doe-from-scratch.qmd) Collecting data deliberately
-
-### Simulation
-
 - [Queues and Markov chains](simulation-markov-from-scratch.qmd) Randomness you can run
-
-### Missing data
-
-- [Imputation](missing-data-from-scratch.qmd) What to do about the holes
-
-### Optimization
-
 - [Linear and integer programs](optimization-from-scratch.qmd) Why formulation is the hard part
-
-### Beyond the basics
-
-- [Advanced topics](advanced-topics-from-scratch.qmd) Bayesian models, neural nets, boosting and more
+- [Beyond the basics](advanced-topics-from-scratch.qmd) Bayesian models, neural nets, boosting and more
 
 :::
 
 ## Practice {#practice}
 
-::: {.chapter-list}
+::: {.chapter-list .chapter-list--plain}
 
 - [Comprehensive quiz](comprehensive-quiz.qmd) Mixed concept checks with short explanations
 - [Binary choice drill](binary-choice-drill.qmd) Precise true-or-false statements for fast recall

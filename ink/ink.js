@@ -194,10 +194,12 @@
       var link = links[at], part = link.closest('.toc__part');
       var label = part.querySelector('.toc__label').textContent;
       var number = Array.prototype.indexOf.call(part.parentNode.children, part) + 1;
+      var lesson = Array.prototype.indexOf.call(part.querySelectorAll('a'), link) + 1;
       link.setAttribute('aria-current', 'page');
       setText('part', label);
       setText('here', link.textContent);
-      setText('eyebrow', number + ' \u00b7 ' + label);
+      // chapter.lesson, as in 3.2: the second lesson of the third chapter
+      setText('eyebrow', number + '.' + lesson + ' \u00b7 ' + label);
     }
     var prev = at > 0 ? links[at - 1] : null;
     var next = at < links.length - 1 ? links[at + 1] : null;     // from the home page (at = -1) this is the first chapter
