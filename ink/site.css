@@ -753,6 +753,12 @@ pre {
 .chapter-list h3::before {
   content: counter(part) ".  ";
 }
+.sheet .chapter-list > p,
+.sheet .chapter-list section > p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
 .sheet .chapter-list ul {
   list-style: none;
   margin: 0;
@@ -762,7 +768,7 @@ pre {
   color: var(--text-tertiary);
   font-size: 0.95rem;
   line-height: 1.5;
-  margin-top: 0.5rem;
+  margin-top: 0.7rem;
 }
 .sheet .chapter-list li a {
   color: var(--ink);
