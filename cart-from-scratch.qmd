@@ -325,6 +325,8 @@ Read it from the top. Someone with income 40 and debt 30: income is below 53, so
 
 Every cut is either up-and-down or across, so the piles are always rectangles. Press again: some rectangles split, and the pure ones stay as they are.
 
+You can also drag any borrower to a new place. Move just one and watch the questions: the whole tree can come out different.
+
 ### Now tell a computer
 
 The code keeps a list of piles. Each pile is a dict holding its borrowers and the rectangle it covers. `cut_again` goes through the piles once: a pure pile is kept as it is (`continue` skips straight to the next pile), and any other pile is cut in two by its own best question. Nothing here is new: it is `best_split` from above, used on one pile at a time.

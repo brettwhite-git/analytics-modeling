@@ -4,6 +4,9 @@
             or press "show me the widest" and watch the line glide to the best one (found by trying every angle)
    The handles are remembered (sessionStorage), so both copies of the figure on the page show the same line,
    and the page's Python gets the same line through window.InkPage.my_line.
+   In step 1 the reader can also drag the points (a working copy; POINTS and InkPage never change). Their own line
+   stays put and the strip, counts and stars follow the points; after "show me the widest" the widest strip is
+   found again, live, for wherever the points now are. A line moved that way is not remembered.
    Everything is computed from the points: sides by the sign of a*across + b*up + shift, distances by
    dividing that by the length of (a, b). Made-up points, fixed. Needs InkKit (ink/ink-kit.js). */
 (function () {
@@ -25,35 +28,37 @@
 
   function r2(v) { return Math.round(v * 100) / 100; }
 
-  /* the line through two handles, as (a, b, shift), turned whichever way round puts more points on their own side */
-  function lineOf(h) {
+  /* the line through two handles, as (a, b, shift), turned whichever way round puts more points on their own side.
+     `pts` is the figure's working copy of the points when the reader has moved some; the page always uses POINTS. */
+  function lineOf(h, pts) {
+    pts = pts || POINTS;
     var a = r2(h[1][1] - h[0][1]), b = r2(-(h[1][0] - h[0][0]));
     var s = r2(-(a * h[0][0] + b * h[0][1]));
     var wrong = 0;
-    POINTS.forEach(function (p, i) { if (KINDS[i] * (a * p[0] + b * p[1] + s) < 0) wrong++; });
-    if (wrong > POINTS.length / 2) { a = -a; b = -b; s = -s; }
+    pts.forEach(function (p, i) { if (KINDS[i] * (a * p[0] + b * p[1] + s) < 0) wrong++; });
+    if (wrong > pts.length / 2) { a = -a; b = -b; s = -s; }
     return [a + 0, b + 0, s + 0];
   }
   function score(l, p) { return l[0] * p[0] + l[1] * p[1] + l[2]; }
   function len(l) { return Math.sqrt(l[0] * l[0] + l[1] * l[1]) || 1e-9; }
 
   /* the widest strip there is: try every direction, keep the one with the biggest gap between the two kinds */
-  function widest() {
-    var best = { gap: -Infinity };
+  function widest(pts) {
+    var best = { gap: -Infinity }, n = pts.length;
     for (var i = 0; i < 1440; i++) {
       var th = i * Math.PI / 1440, n1 = Math.cos(th), n2 = Math.sin(th);
-      [1, -1].forEach(function (sg) {
+      for (var sg = 1; sg >= -1; sg -= 2) {
         var lo = -Infinity, hi = Infinity;
-        POINTS.forEach(function (p, j) {
-          var v = sg * (n1 * p[0] + n2 * p[1]);
-          if (KINDS[j] < 0) lo = Math.max(lo, v); else hi = Math.min(hi, v);
-        });
+        for (var j = 0; j < n; j++) {
+          var v = sg * (n1 * pts[j][0] + n2 * pts[j][1]);
+          if (KINDS[j] < 0) { if (v > lo) lo = v; } else if (v < hi) hi = v;
+        }
         if (hi - lo > best.gap) best = { gap: hi - lo, line: [sg * n1, sg * n2, -(lo + hi) / 2] };
-      });
+      }
     }
     return best;
   }
-  var BEST = widest();
+  var BEST = widest(POINTS);
 
   /* the two places where a line crosses the edge of the picture, or null */
   function clip(l) {
@@ -105,6 +110,8 @@
       var box = [[LO, LO], [HI, LO], [HI, HI], [LO, HI]];
       var handles = (remembered() || DEFAULT).map(function (h) { return h.slice(); });
       var bestSoFar = 0, busy = false;
+      var pts = POINTS.map(function (p) { return p.slice(); });     // the figure's own copy: this is what gets dragged
+      var atBest = false;                                            // the line is the widest one, found by the figure
 
       var ticks = [-4, -2, 0, 2, 4];
       k.root.axes({ x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'across', ylabel: 'up',
@@ -139,14 +146,76 @@
         return p;
       }
       var liveLayer = k.root.layer();
+      var trailPath = rawPath(liveLayer.node, 0.6, 0.35, '2 3', false);   // a faint thread from a moved point to its start
       var edgePath = rawPath(liveLayer.node, 0.9, 0.6, '4 4', false);
       var linePath = rawPath(liveLayer.node, 1.6, 0.9, null, false);
       var ringPath = rawPath(liveLayer.node, 1.4, 0.95, null, true);
 
-      /* ---- the points, drawn once ---- */
+      /* ---- the points, drawn once, moved with a transform ---- */
       var marks = k.root.group({ d: 150, stagger: 14 });
-      POINTS.forEach(function (p, i) { marks.mark(sx(p[0]), sy(p[1]), KINDS[i] > 0 ? '+' : 'tri', { r: 4 }); });
+      var markNodes = POINTS.map(function (p, i) { return marks.mark(sx(p[0]), sy(p[1]), KINDS[i] > 0 ? '+' : 'tri', { r: 4 }); });
       marks.node.style.pointerEvents = 'none';
+
+      /* ---- dragging the points (step 1): one hit area over the plot, under the handles, so a handle wins the press.
+         A press grabs the nearest point within reach. ---- */
+      var REACH = 12;
+      var pointHit = document.createElementNS(NS, 'rect');
+      pointHit.setAttribute('x', PLOT.x); pointHit.setAttribute('y', PLOT.y);
+      pointHit.setAttribute('width', PLOT.w); pointHit.setAttribute('height', PLOT.h);
+      pointHit.setAttribute('class', 'ik-hit');
+      pointHit.style.touchAction = 'none';
+      k.root.group({ steps: [1] }).node.appendChild(pointHit);
+      var held = -1, queued = false;
+      function nearestPoint(x, y) {
+        var best = -1, bd = REACH * REACH;
+        pts.forEach(function (p, i) {
+          var dx = sx(p[0]) - x, dy = sy(p[1]) - y, d = dx * dx + dy * dy;
+          if (d <= bd) { bd = d; best = i; }
+        });
+        return best;
+      }
+      function moved() { return pts.some(function (p, i) { return p[0] !== POINTS[i][0] || p[1] !== POINTS[i][1]; }); }
+      function placeMark(i) {
+        markNodes[i].setAttribute('transform', 'translate(' + (sx(pts[i][0]) - sx(POINTS[i][0])).toFixed(1) + ' ' +
+          (sy(pts[i][1]) - sy(POINTS[i][1])).toFixed(1) + ')');
+      }
+      function afterPointsMove() {
+        queued = false;
+        bestSoFar = 0;                     // "widest so far" was for other points
+        if (atBest) toBest();
+        paint();
+      }
+      pointHit.addEventListener('pointerdown', function (e) {
+        if (e.button || busy || k.step() !== 1) return;
+        var f = k.toFigure(e), i = nearestPoint(f.x, f.y);
+        if (i < 0) return;
+        e.preventDefault();
+        try { pointHit.setPointerCapture(e.pointerId); } catch (err) {}
+        held = i;
+        pointHit.style.cursor = 'grabbing';
+      });
+      pointHit.addEventListener('pointermove', function (e) {
+        var f = k.toFigure(e);
+        if (held < 0) { pointHit.style.cursor = nearestPoint(f.x, f.y) >= 0 ? 'grab' : ''; return; }
+        var x = k.clamp(f.x, PLOT.x + 6, PLOT.x + PLOT.w - 6), y = k.clamp(f.y, PLOT.y + 6, PLOT.y + PLOT.h - 6);
+        pts[held] = toData(x, y);
+        placeMark(held);
+        if (!queued) { queued = true; requestAnimationFrame(afterPointsMove); }
+      });
+      function letGo() { if (held >= 0) { held = -1; pointHit.style.cursor = ''; } }
+      pointHit.addEventListener('pointerup', letGo);
+      pointHit.addEventListener('pointercancel', letGo);
+
+      /* the figure's own widest line for wherever the points are now: handles set on it, not remembered */
+      function bestHandles(line) {
+        var seg = clip(line);
+        if (!seg) return null;
+        var t1 = [r2(seg[0][0] + (seg[1][0] - seg[0][0]) * 0.18), r2(seg[0][1] + (seg[1][1] - seg[0][1]) * 0.18)];
+        var t2 = [r2(seg[0][0] + (seg[1][0] - seg[0][0]) * 0.82), r2(seg[0][1] + (seg[1][1] - seg[0][1]) * 0.82)];
+        function far(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
+        return far(handles[0], t1) + far(handles[1], t2) <= far(handles[0], t2) + far(handles[1], t1) ? [t1, t2] : [t2, t1];
+      }
+      function toBest() { var h = bestHandles(widest(pts).line); if (h) handles = h; }
 
       /* ---- the two handles: drawn once at the origin and moved ---- */
       var handleNodes = [0, 1].map(function (j) {
@@ -163,7 +232,7 @@
             if (busy) return;
             var p = toData(x, y), other = handles[1 - j];
             if (Math.abs(p[0] - other[0]) + Math.abs(p[1] - other[1]) < 0.3) return;   // two handles on one spot make no line
-            handles[j] = p;
+            handles[j] = p; atBest = false;
             paint(); remember(handles);
           }
         });
@@ -199,8 +268,22 @@
       var h1b = g1.text(SIDE, 322, 'decide where it goes.', { kind: 'hand' });
       k.button(SIDE, 380, 'start again', function () {
         if (busy) return;
-        handles = DEFAULT.map(function (h) { return h.slice(); }); bestSoFar = 0; paint(); remember(handles);
+        handles = DEFAULT.map(function (h) { return h.slice(); }); bestSoFar = 0; atBest = false; paint(); remember(handles);
       });
+
+      /* once a point has moved: a way back, and a word that the page's numbers are for the original points */
+      var resetBtn = k.button(SIDE, 346, 'put the points back', function () {
+        if (busy) return;
+        pts = POINTS.map(function (p) { return p.slice(); });
+        held = -1;
+        pts.forEach(function (p, i) { placeMark(i); });
+        bestSoFar = 0;
+        if (atBest) toBest();
+        paint();
+      }, { steps: [1] });
+      var movedNote = k.root.group({ steps: [1], d: 0 });
+      movedNote.text(SIDE, 414, 'points moved: the numbers in', { kind: 'axis' });
+      movedNote.text(SIDE, 428, 'the text are for the originals', { kind: 'axis' });
 
       function ringD(list, r) {
         var d = '';
@@ -212,13 +295,21 @@
       }
 
       function paint() {
-        var step = k.step(), l = lineOf(handles), L = len(l);
+        var step = k.step(), l = lineOf(handles, pts), L = len(l);
         handleNodes.forEach(function (g, j) { g.node.setAttribute('transform', 'translate(' + px(handles[j]) + ')'); });
         var seg = clip(l);
         linePath.setAttribute('d', seg ? 'M' + px(seg[0]) + ' L' + px(seg[1]) : '');
 
+        var isMoved = moved(), trail = '';
+        resetBtn.node.style.display = movedNote.node.style.display = isMoved ? '' : 'none';
+        pts.forEach(function (p, i) {
+          var o = POINTS[i];
+          if (p[0] !== o[0] || p[1] !== o[1]) trail += 'M' + px(o) + ' L' + px(p) + ' ';
+        });
+        trailPath.setAttribute('d', trail);
+
         var wrong = [], nearP = Infinity, nearM = Infinity;
-        POINTS.forEach(function (p, i) {
+        pts.forEach(function (p, i) {
           var f = KINDS[i] * score(l, p);
           if (f < 0) wrong.push(p);
           var d = Math.abs(score(l, p)) / L;
@@ -236,7 +327,7 @@
         vPlus.set(nearP.toFixed(2)); vMinus.set(nearM.toFixed(2));
         if (!ok) {
           vWidth.set('–');
-          note1.set('first, fix the wrong side');
+          note1.set(atBest && isMoved ? 'no line splits them now' : 'first, fix the wrong side');
           ringPath.setAttribute('d', ringD(wrong, 8.5));
           edgePath.setAttribute('d', ''); clipPoly.setAttribute('points', '');
           h1.style.display = h1b.style.display = 'none';
@@ -251,7 +342,7 @@
         var d = '';
         [m, -m].forEach(function (off) { var e = clip([l[0], l[1], l[2] - off * L]); if (e) d += 'M' + px(e[0]) + ' L' + px(e[1]) + ' '; });
         edgePath.setAttribute('d', d);
-        var touching = POINTS.filter(function (p) { return Math.abs(score(l, p)) / L < m + 0.03; });
+        var touching = pts.filter(function (p) { return Math.abs(score(l, p)) / L < m + 0.03; });
         ringPath.setAttribute('d', ringD(touching, 9));
         h1.style.display = h1b.style.display = '';
       }
@@ -259,7 +350,8 @@
       /* glide the handles onto the widest line, so the reader watches the line tilt and slide into the gap */
       function glideToBest() {
         if (busy) return;
-        var seg = clip(BEST.line);
+        var isMoved = moved();
+        var seg = clip(isMoved ? widest(pts).line : BEST.line);
         if (!seg) return;
         var t1 = [seg[0][0] + (seg[1][0] - seg[0][0]) * 0.18, seg[0][1] + (seg[1][1] - seg[0][1]) * 0.18];
         var t2 = [seg[0][0] + (seg[1][0] - seg[0][0]) * 0.82, seg[0][1] + (seg[1][1] - seg[0][1]) * 0.82];
@@ -270,7 +362,8 @@
         k.animate(1400, function (t) {
           handles = from.map(function (f, j) { return [r2(f[0] + (to[j][0] - f[0]) * t), r2(f[1] + (to[j][1] - f[1]) * t)]; });
           paint();
-          if (t >= 1) { busy = false; remember(handles); }
+          // the widest line for the page's own points is the reader's to keep; one for moved points is not
+          if (t >= 1) { busy = false; atBest = true; if (!isMoved) remember(handles); }
         });
       }
 
@@ -279,11 +372,19 @@
         if (busy) return;
         var h = remembered();
         if (h && (h[0][0] !== handles[0][0] || h[0][1] !== handles[0][1] || h[1][0] !== handles[1][0] || h[1][1] !== handles[1][1])) {
-          handles = h.map(function (p) { return p.slice(); }); paint();
+          handles = h.map(function (p) { return p.slice(); }); atBest = false; paint();
         }
       });
 
-      k.onStep(function () { busy = false; paint(); });
+      k.onStep(function (s) {
+        busy = false;
+        if (s !== 1 && moved()) {          // points only move in step 1; any other step shows the page's own points
+          pts = POINTS.map(function (p) { return p.slice(); }); held = -1;
+          pts.forEach(function (p, i) { placeMark(i); });
+          if (atBest) toBest();
+        }
+        paint();
+      });
     }
   });
 })();

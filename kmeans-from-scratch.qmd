@@ -21,6 +21,8 @@ That is the only rule in this whole lesson: **a dot belongs to its nearest flag.
 
 Drag a flag and watch the dots near the edge of a group change sides. You did not draw the groups. They follow from where the flags stand.
 
+You can drag a dot too, once they are handed out. Pull one across to another group and it changes shape as soon as another flag is closer.
+
 ### Now tell a computer
 
 A computer cannot look at a picture. It needs the dots as numbers. Each dot is a pair, such as `(2.4, 7.3)`: 2.4 across and 7.3 up. The cell below fetches the same 38 dots you just saw, and the flags you planted.
@@ -129,6 +131,8 @@ A flag stands for the dots under it. Where should it stand?
 Press *move the flags*. Each flag glides to the middle of its group. Then look at the edges again: some dots are now closer to a different flag, so the rule is broken. Hand the dots out again. That changes the middles, so move the flags again.
 
 Two steps, taking turns: **hand out the dots, move the flags.**
+
+Between moves you can drag a dot. Pull one far out and press *move the flags*: its flag follows it, because a flag is only the middle of its dots.
 
 The middle is easy to work out by hand. Three dots at 2, 4 and 9 across: 2 + 4 + 9 = 15, divided by 3 is 5. Do the same for the "up" numbers and you have the spot.
 

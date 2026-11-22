@@ -146,6 +146,8 @@ Press *nudge once* a few times and watch the side column. In each round the comp
 
 Then press *nudge until it stops*. The line swings into place, and the chart shows the total falling round by round. Compare where it ends with *least possible*: the smallest total any straight line through these days can have. The nudging gets there, to within a hair.
 
+Once it has stopped, drag one dot far above the others and watch the best line swing toward it: one far-off dot pulls hard, because its miss is squared.
+
 The rule, in one line: **try a little each way, keep what helps, take smaller steps when nothing does.**
 
 Here it is in code. Three new words. `while step > 0.001:` repeats the lines under it for as long as the nudges are bigger than 0.001. `if` runs the lines under it only when its test is true. And `moved` remembers whether anything helped this round: it starts each round as `False` and becomes `True` when a move is kept.

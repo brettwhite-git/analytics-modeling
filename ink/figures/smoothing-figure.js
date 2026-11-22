@@ -8,6 +8,8 @@
           2 how far should you move? The same series and a noisier one (same hidden level, more noise), with
             the total miss at every setting and the best one marked.
           3 the same with a sudden jump in the level, and how many steps the estimate takes to catch up.
+   In steps 1 to 3 the reader can also drag any value up or down and watch the guesses and the totals react;
+   "put the points back" restores them. The drags live in a working copy, never in DATA.
    Everything is computed in the browser from seeded made-up data. The series, a noisier copy, a steadily rising
    series and the reader's setting are offered to the page's Python through window.InkPage.
    Needs InkKit (ink/ink-kit.js). */
@@ -226,20 +228,43 @@
         guess = 52; placeRing(); drawRound(); readout0();
       }
 
+      /* steps 1 to 3: the reader may drag any value up or down. A drag is kept as an offset for that step,
+         added to whichever series is shown; DATA itself is never touched, so InkPage gives the original values. */
+      var nudge = {}, nMoved = 0;
+      function work(base) {
+        if (!nMoved) return base;
+        return base.map(function (v, i) { return nudge[i] != null ? r1(k.clamp(v + nudge[i], Y0 + 0.5, Y1 - 0.5)) : v; });
+      }
+      /* move drawn-once marks with a transform, so they never re-wobble, and redraw the thin path through them */
+      function placeMarks(marks, path, base, v, faint) {
+        marks.forEach(function (m, i) {
+          var dy = Y(v[i]) - Y(base[i]);
+          if (dy) m.setAttribute('transform', 'translate(0 ' + dy.toFixed(1) + ')'); else m.removeAttribute('transform');
+        });
+        path.setAttribute('d', pts(v).map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' '));
+        faint.clear();
+        for (var j in nudge) {
+          var x = X(+j).toFixed(1);
+          faint.path('M' + x + ' ' + Y(base[j]).toFixed(1) + ' L' + x + ' ' + Y(v[j]).toFixed(1), { w: 0.6, op: 0.4 });
+        }
+      }
+
       /* ================= step 1: move part of the way ================= */
       var g1 = k.root.group({ steps: [1], d: 150, stagger: 8 });
-      stroke(g1, pts(series), { w: 0.6, op: 0.3, d: 0, dur: 900 });
-      series.forEach(function (v, i) { g1.mark(X(i), Y(v), 'o', { r: 3 }); });
+      var path1 = stroke(g1, pts(series), { w: 0.6, op: 0.3, d: 0, dur: 900 }).firstChild;
+      var marks1 = series.map(function (v, i) { return g1.mark(X(i), Y(v), 'o', { r: 3 }); });
+      var faint1 = k.root.layer({ steps: [1] });
       var line1 = k.root.layer({ steps: [1] });
       var a1 = remembered() || STEP0;
+      function cur1() { return work(series); }
 
       var side1 = k.root.group({ steps: [1], d: 300 });
       side1.text(SIDE, 96, 'total miss', { kind: 'label' });
       var vTotal1 = side1.text(SIDE + SW, 96, '', { kind: 'val', anchor: 'end' });
       side1.text(SIDE, 116, 'same as today', { kind: 'axis' });
-      side1.text(SIDE + SW, 116, blend(series, 1).total.toFixed(1), { kind: 'axis', anchor: 'end' });
+      var vSame1 = side1.text(SIDE + SW, 116, blend(series, 1).total.toFixed(1), { kind: 'axis', anchor: 'end' });
       side1.text(SIDE, 134, 'average so far', { kind: 'axis' });
-      side1.text(SIDE + SW, 134, averageTotal(series).toFixed(1), { kind: 'axis', anchor: 'end' });
+      var vAvg1 = side1.text(SIDE + SW, 134, averageTotal(series).toFixed(1), { kind: 'axis', anchor: 'end' });
       side1.line(SIDE, 148, SIDE + SW, 148, { w: 0.6, op: 0.45, rough: 0.3 });
       var vStepLabel = side1.text(SIDE, 170, '', { kind: 'label' });
       var vWas = side1.text(SIDE, 190, '', { kind: 'code' });
@@ -261,16 +286,20 @@
         return out;
       }
       function draw1() {
-        var b = blend(series, a1);
+        var v = cur1(), b = blend(v, a1);
+        placeMarks(marks1, path1, series, v, faint1);
         line1.clear();
         line1.polyline(guessLine(b.g, N), { w: 1.7, accent: true });
         line1.circle(X(N), Y(b.g[N]), 4.5, { accent: true, w: 1.4 });
         vTotal1.set(b.total.toFixed(1));
-        lastMove(series, a1, N - 1, b.g);
+        vSame1.set(blend(v, 1).total.toFixed(1));
+        vAvg1.set(averageTotal(v).toFixed(1));
+        lastMove(v, a1, N - 1, b.g);
       }
       var playing = 0;
       function play1() {
         if (busy) return;
+        var series = cur1();                         // the values as they stand, moved or not
         var b = blend(series, a1), token = ++playing, i = 1, running = 0;
         busy = true;
         (function next() {
@@ -306,7 +335,8 @@
 
       /* ================= steps 2 and 3: how far should you move? ================= */
       var noisyOn = false, a2 = STEP0;
-      function data23() { return k.step() === 3 ? JUMPED : noisyOn ? DATA.noisy : series; }
+      function base23() { return k.step() === 3 ? JUMPED : noisyOn ? DATA.noisy : series; }
+      function data23() { return work(base23()); }
       function levelAt(i, jump) { return DATA.level[i] + (jump && i >= JUMP_AT ? JUMP : 0); }
       [false, true].forEach(function (jump) {
         var g = k.root.group({ steps: [jump ? 3 : 2], d: 200 });
@@ -319,6 +349,7 @@
         }
       });
       var obs23 = k.root.layer({ steps: [2, 3] });
+      var faint23 = k.root.layer({ steps: [2, 3] });
       var line23 = k.root.layer({ steps: [2, 3] });
       var side23 = k.root.group({ steps: [2, 3], d: 300 });
       side23.text(SIDE, 92, 'total miss', { kind: 'label' });
@@ -343,7 +374,7 @@
       side23.text(CX, CB + 20, '0', { kind: 'axis', anchor: 'middle' });
       side23.text(CX + CW, CB + 20, '1', { kind: 'axis', anchor: 'middle' });
       var curve23 = k.root.layer({ steps: [2, 3] }), dot23 = k.root.layer({ steps: [2, 3] });
-      var grid = [], lo = 0, hi = 1, best = STEP0, shownData = null;
+      var grid = [], lo = 0, hi = 1, best = STEP0, shownData = null, marks23 = [], path23 = null;
       function cx(a) { return CX + a * CW; }
       function cy(e) { return CB - (e - lo) / ((hi - lo) || 1) * (CB - CT); }
 
@@ -365,25 +396,28 @@
         }
       }
       function redraw23(force) {
-        var v = data23();
-        if (v !== shownData || force) {
-          shownData = v;
-          var p = pts(v);
+        var base = base23(), v = work(base);
+        // the marks are drawn once per series; moved values only shift them (see placeMarks)
+        if (base !== shownData || force) {
+          shownData = base;
+          var p = pts(base);
           obs23.clear();
-          obs23.polyline(p, { w: 0.6, op: 0.3 });
-          p.forEach(function (q) { obs23.mark(q[0], q[1], 'o', { r: 3 }); });
-          grid = []; lo = Infinity; hi = -Infinity;
-          SETTINGS.forEach(function (a) {
-            var e = blend(v, a).total;
-            grid.push([a, e]);
-            if (e < lo - 1e-9) { lo = e; best = a; }
-            if (e > hi) hi = e;
-          });
-          curve23.clear();
-          curve23.polyline(grid.map(function (g) { return [cx(g[0]), cy(g[1])]; }), { w: 1.1 });
-          curve23.line(cx(best), CB + 2, cx(best), CB + 10, { w: 1.1, rough: 0.2 });
-          curve23.text(cx(best), CB + 34, 'best', { kind: 'axis', anchor: 'middle' });
+          path23 = obs23.polyline(p, { w: 0.6, op: 0.3 });
+          marks23 = p.map(function (q) { return obs23.mark(q[0], q[1], 'o', { r: 3 }); });
         }
+        placeMarks(marks23, path23, base, v, faint23);
+        // the miss at every setting is recomputed from the values as they stand, so a moved value shows here too
+        grid = []; lo = Infinity; hi = -Infinity;
+        SETTINGS.forEach(function (a) {
+          var e = blend(v, a).total;
+          grid.push([a, e]);
+          if (e < lo - 1e-9) { lo = e; best = a; }
+          if (e > hi) hi = e;
+        });
+        curve23.clear();
+        curve23.polyline(grid.map(function (g) { return [cx(g[0]), cy(g[1])]; }), { w: 1.1 });
+        curve23.path('M' + cx(best).toFixed(1) + ' ' + (CB + 2) + ' L' + cx(best).toFixed(1) + ' ' + (CB + 10), { w: 1.1 });
+        curve23.text(cx(best), CB + 34, 'best', { kind: 'axis', anchor: 'middle' });
         redrawLine23();
       }
       k.slider({
@@ -391,14 +425,81 @@
         format: function (v) { return v.toFixed(2); },
         onChange: function (v) { a2 = v; redrawLine23(); }
       });
-      k.root.group({ steps: [2] }).callout('c', 'more noise, smaller step', SIDE, 360, { d: 400 });
-      g3.callout('d', 'a real change', SIDE, 352, { d: 300 });
-      g3.text(SIDE, 386, 'a big step notices,', { kind: 'hand', d: 700 });
-      g3.text(SIDE, 408, 'a small step lags.', { kind: 'hand', d: 1100 });
+      var callC = k.root.group({ steps: [2] }).callout('c', 'more noise, smaller step', SIDE, 360, { d: 400 });
+      var callD = g3.callout('d', 'a real change', SIDE, 352, { d: 300 });
+      var hand3a = g3.text(SIDE, 386, 'a big step notices,', { kind: 'hand', d: 700 });
+      var hand3b = g3.text(SIDE, 408, 'a small step lags.', { kind: 'hand', d: 1100 });
+
+      /* ================= steps 1 to 3: drag the values themselves ================= */
+      // one hit area over the plot finds the nearest value; nothing else on the plot takes a press in these steps
+      var hitP = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hitP.setAttribute('x', PLOT.x); hitP.setAttribute('y', PLOT.y); hitP.setAttribute('width', PLOT.w); hitP.setAttribute('height', PLOT.h);
+      hitP.setAttribute('class', 'ik-hit');
+      hitP.style.touchAction = 'none'; hitP.style.pointerEvents = 'none';
+      k.root.node.appendChild(hitP);
+      k.root.node.appendChild(ringG.node);           // the reader's guess ring stays on top of everything
+      var held = -1, frame = 0;
+      function shownNow() { return k.step() === 1 ? cur1() : data23(); }
+      function baseNow() { return k.step() === 1 ? series : base23(); }
+      function nearestValue(p) {
+        var v = shownNow(), pick = -1, bd = 11 * 11;
+        for (var i = 0; i < N; i++) {
+          var dx = X(i) - p.x, dy = Y(v[i]) - p.y, d = dx * dx + dy * dy;
+          if (d <= bd) { bd = d; pick = i; }
+        }
+        return pick;
+      }
+      function refreshPoints() {
+        frame = 0;
+        if (k.step() === 1) draw1(); else if (k.step() > 1) redraw23(false);
+        syncMoved();
+      }
+      hitP.addEventListener('pointerdown', function (e) {
+        if (e.button || k.step() === 0) return;
+        var i = nearestValue(k.toFigure(e));
+        if (i < 0) return;
+        e.preventDefault();
+        try { hitP.setPointerCapture(e.pointerId); } catch (err) {}
+        held = i; hitP.style.cursor = 'grabbing';
+        playing++; busy = false;                     // a drag stops "play it step by step"
+      });
+      hitP.addEventListener('pointermove', function (e) {
+        var p = k.toFigure(e);
+        if (held < 0) { hitP.style.cursor = nearestValue(p) >= 0 ? 'grab' : ''; return; }
+        var d = r1(k.clamp(toValue(p.y), Y0 + 0.5, Y1 - 0.5) - baseNow()[held]);
+        if (Math.abs(d) < 0.05) delete nudge[held]; else nudge[held] = d;
+        nMoved = Object.keys(nudge).length;
+        if (!frame) frame = requestAnimationFrame(refreshPoints);
+      });
+      function letGo() {
+        if (held < 0) return;
+        held = -1; hitP.style.cursor = 'grab';
+        if (frame) { cancelAnimationFrame(frame); refreshPoints(); }
+      }
+      hitP.addEventListener('pointerup', letGo);
+      hitP.addEventListener('pointercancel', letGo);
+
+      /* once a value has moved: an honest note, and the way back. Nothing is saved; a reload restores them. */
+      var movedG = k.root.group({ steps: [1, 2, 3], d: 0 });
+      movedG.text(SIDE, 358, 'points moved: the numbers', { kind: 'axis' });
+      movedG.text(SIDE, 372, 'in the text are for the', { kind: 'axis' });
+      movedG.text(SIDE, 386, 'original points.', { kind: 'axis' });
+      var bBack = k.button(SIDE, 416, 'put the points back', function () {
+        nudge = {}; nMoved = 0; playing++; busy = false; refreshPoints();
+      }, { steps: [1, 2, 3] });
+      function syncMoved() {
+        var on = nMoved > 0;
+        movedG.node.style.display = bBack.node.style.display = on ? '' : 'none';
+        callC.style.display = callD.style.display = hand3a.style.display = hand3b.style.display = on ? 'none' : '';
+      }
 
       k.onStep(function (step) {
         playing++; busy = false;
         hit.style.pointerEvents = step === 0 ? 'auto' : 'none';
+        hitP.style.pointerEvents = step === 0 ? 'none' : 'auto';
+        held = -1;
+        if (step === 0) { nudge = {}; nMoved = 0; }
+        syncMoved();
         if (step === 0) start0();
         else if (step === 1) { a1 = remembered() || a1; draw1(); }
         else redraw23(true);

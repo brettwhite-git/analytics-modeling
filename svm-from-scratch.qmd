@@ -165,6 +165,8 @@ The rule: **of all the lines that split the kinds, take the one with the widest 
 
 Only the starred points touch the strip. Move any other point a little, without pushing it into the strip, and the widest line does not change at all. A handful of points decide everything.
 
+You can try this in Fig. 2: the points can be dragged too. After *show me the widest*, drag a starred point into the strip and watch the line move to find the new widest one, then drag a point far from the strip and watch nothing happen.
+
 ### How far is a point from a line?
 
 The strip is measured in distance, and the score is not quite a distance yet. Try one by hand. Take a = 0, b = 2 and shift = 0. Every point's score is 2 × up, so the scores are 0 along the across axis: that is the line. The point (1, 3) sits 3 above it. Its score is 2 × 3 = 6, twice too big, because b is 2.

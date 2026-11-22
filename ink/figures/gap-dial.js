@@ -2,7 +2,8 @@
    to give mistakes: turn it up and the strip gets wider, but more points end up inside it (or across the line).
    Adapted from svm-figure.js: the line is fitted for real in the browser, by many small corrections whose size
    shrinks as it goes (deterministic), so the strip, the counts and the starred points are computed, not posed.
-   One step: slide the dial, drag any point and watch whether the line cares.
+   One step: slide the dial, drag any point and watch whether the line cares. Points are dragged on a working
+   copy (a press grabs the nearest point; arrow keys move a focused one); TANGLED and InkPage never change.
    Also offers these points to the page's Python as tangled_points and tangled_kinds.
    Made-up points, fixed. Needs InkKit (ink/ink-kit.js). */
 (function () {
@@ -100,21 +101,67 @@
       var linePath = rawPath(k.root.node, 1.6, 0.9);
       var ringPath = rawPath(k.root.node, 1.4, 0.95, null, true);
 
-      /* the points: drawn once, moved by dragging */
+      var trailPath = rawPath(k.root.node, 0.6, 0.35, '2 3');   // a faint thread from a moved point to where it started
+
+      /* the points: drawn once, moved with a transform. `pts` is the figure's own copy; TANGLED never changes. */
+      var BOUNDS = { x0: PLOT.x + 6, y0: PLOT.y + 6, x1: PLOT.x + PLOT.w - 6, y1: PLOT.y + PLOT.h - 6 };
       var marks = k.root.group({ d: 150, stagger: 14 });
+      var queued = false;
+      function schedule() { if (!queued) { queued = true; requestAnimationFrame(function () { queued = false; paint(); }); } }
+      function setPoint(i, x, y) {
+        pts[i] = [LO + (x - PLOT.x) / PLOT.w * (HI - LO), LO + (PLOT.y + PLOT.h - y) / PLOT.h * (HI - LO)];
+        markNodes[i].setAttribute('transform', 'translate(' + (x - sx(TANGLED[i][0])).toFixed(1) + ' ' + (y - sy(TANGLED[i][1])).toFixed(1) + ')');
+        schedule();
+      }
+      var markNodes = [], keyDrags = [];
       pts.forEach(function (p, i) {
         var x0 = sx(p[0]), y0 = sy(p[1]);
         var node = marks.mark(x0, y0, KINDS[i] > 0 ? '+' : 'tri', { r: 4 });
-        k.draggable(node, {
+        markNodes.push(node);
+        // the keyboard route: each point can be focused and moved with the arrow keys (the pointer goes to the hit area below)
+        keyDrags.push(k.draggable(node, {
           x: x0, y: y0, label: 'A ' + (KINDS[i] > 0 ? 'cross' : 'triangle') + '. Arrow keys move it.',
-          bounds: { x0: PLOT.x + 6, y0: PLOT.y + 6, x1: PLOT.x + PLOT.w - 6, y1: PLOT.y + PLOT.h - 6 },
-          onMove: function (x, y) {
-            p[0] = LO + (x - PLOT.x) / PLOT.w * (HI - LO); p[1] = LO + (PLOT.y + PLOT.h - y) / PLOT.h * (HI - LO);
-            node.setAttribute('transform', 'translate(' + (x - x0).toFixed(1) + ' ' + (y - y0).toFixed(1) + ')');
-            paint();
-          }
-        });
+          bounds: BOUNDS,
+          onMove: function (x, y) { setPoint(i, x, y); }
+        }));
       });
+
+      /* one hit area over the plot, on top of the points: a press grabs the nearest point within reach */
+      var REACH = 12;
+      var pointHit = document.createElementNS(NS, 'rect');
+      pointHit.setAttribute('x', PLOT.x); pointHit.setAttribute('y', PLOT.y);
+      pointHit.setAttribute('width', PLOT.w); pointHit.setAttribute('height', PLOT.h);
+      pointHit.setAttribute('class', 'ik-hit');
+      pointHit.style.touchAction = 'none';
+      k.root.node.appendChild(pointHit);
+      var held = -1;
+      function nearestPoint(x, y) {
+        var best = -1, bd = REACH * REACH;
+        pts.forEach(function (p, i) {
+          var dx = sx(p[0]) - x, dy = sy(p[1]) - y, d = dx * dx + dy * dy;
+          if (d <= bd) { bd = d; best = i; }
+        });
+        return best;
+      }
+      pointHit.addEventListener('pointerdown', function (e) {
+        if (e.button) return;
+        var f = k.toFigure(e), i = nearestPoint(f.x, f.y);
+        if (i < 0) return;
+        e.preventDefault();
+        try { pointHit.setPointerCapture(e.pointerId); } catch (err) {}
+        held = i; pointHit.style.cursor = 'grabbing';
+      });
+      pointHit.addEventListener('pointermove', function (e) {
+        var f = k.toFigure(e);
+        if (held < 0) { pointHit.style.cursor = nearestPoint(f.x, f.y) >= 0 ? 'grab' : ''; return; }
+        var x = k.clamp(f.x, BOUNDS.x0, BOUNDS.x1), y = k.clamp(f.y, BOUNDS.y0, BOUNDS.y1);
+        setPoint(held, x, y);
+        keyDrags[held].set(x, y);
+      });
+      function letGo() { if (held >= 0) { held = -1; pointHit.style.cursor = ''; } }
+      pointHit.addEventListener('pointerup', letGo);
+      pointHit.addEventListener('pointercancel', letGo);
+      function moved() { return pts.some(function (p, i) { return p[0] !== TANGLED[i][0] || p[1] !== TANGLED[i][1]; }); }
 
       var side = k.root.group({ d: 250 });
       side.text(SIDE, 60, 'strip width', { kind: 'label' });
@@ -138,7 +185,26 @@
       k.root.group({ d: 900 }).text(SIDE, 310, 'starred: inside the', { kind: 'hand' });
       k.root.group({ d: 1100 }).text(SIDE, 332, 'strip or touching it.', { kind: 'hand' });
 
+      /* once a point has moved: a way back, and a word that the page's numbers are for the original points */
+      var resetBtn = k.button(SIDE, 376, 'put the points back', function () {
+        held = -1;
+        pts = TANGLED.map(function (p) { return p.slice(); });
+        markNodes.forEach(function (n, i) { n.removeAttribute('transform'); keyDrags[i].set(sx(TANGLED[i][0]), sy(TANGLED[i][1])); });
+        paint();
+      });
+      var movedNote = k.root.group({ d: 0 });
+      movedNote.text(SIDE, 414, 'points moved: the numbers in', { kind: 'axis' });
+      movedNote.text(SIDE, 428, 'the text are for the originals', { kind: 'axis' });
+
       function paint() {
+        var isMoved = moved(), trail = '';
+        resetBtn.node.style.display = movedNote.node.style.display = isMoved ? '' : 'none';
+        pts.forEach(function (p, i) {
+          var o = TANGLED[i];
+          if (p[0] !== o[0] || p[1] !== o[1]) trail += 'M' + px(o) + ' L' + px(p) + ' ';
+        });
+        trailPath.setAttribute('d', trail);
+
         var l = fit(pts, room), L = Math.sqrt(l[0] * l[0] + l[1] * l[1]) || 1e-9;
         var seg = clip(l);
         linePath.setAttribute('d', seg ? 'M' + px(seg[0]) + ' L' + px(seg[1]) : '');

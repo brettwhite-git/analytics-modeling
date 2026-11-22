@@ -6,6 +6,10 @@
    The new point and the guess are remembered (sessionStorage) and shared by every copy of the figure on the page,
    and offered to the page's Python as `new_point`, with the plants as `points` and their kinds as `kinds`.
    Everything is computed: squared distance (across times across plus up times up), the k smallest, a count.
+   In steps 1 and 2 the plants can be dragged too (the nearest one within reach of the press; the ? wins when the
+   press is on it): the threads, the vote and the map follow. That moves a copy kept by this figure only; `points`
+   stays the original plants, and a note and "put the points back" show while any plant is out of place.
+   Step 0 asks for a guess first, so the plants stay put there (going back to it puts them back).
    Made-up points, fixed seed. Needs InkKit (ink/ink-kit.js). */
 (function () {
   'use strict';
@@ -35,9 +39,9 @@
   var POINTS = DATA.pts, KINDS = DATA.kinds, N = POINTS.length;
 
   function d2(p, q) { var a = p[0] - q[0], b = p[1] - q[1]; return a * a + b * b; }
-  /* the k nearest, nearest first (ties go to the earlier point, as the page's Python does) */
-  function nearest(q, k) {
-    var order = POINTS.map(function (p, i) { return { i: i, d: d2(p, q) }; });
+  /* the k nearest of the plants `pts`, nearest first (ties go to the earlier point, as the page's Python does) */
+  function nearest(pts, q, k) {
+    var order = pts.map(function (p, i) { return { i: i, d: d2(p, q) }; });
     order.sort(function (a, b) { return a.d - b.d || a.i - b.i; });
     return order.slice(0, k);
   }
@@ -79,6 +83,8 @@
       function fromY(y) { return r1((PLOT.y + PLOT.h - y) / PLOT.h * DOM); }
       var state = remembered();
       var k1 = 5, k2 = 5, grow = 1, busy = false;
+      // this figure's own copy of the plants, the one the reader drags; POINTS (what the page's Python reads) never moves
+      var pts = POINTS.map(function (p) { return p.slice(); });
 
       var ticks = [0, 2, 4, 6, 8, 10];
       k.root.axes({ x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'leaf length', ylabel: 'leaf width',
@@ -114,7 +120,7 @@
       var cache = {};
       function mapFor(kk) {
         if (cache[kk]) return cache[kk];
-        return (cache[kk] = spots.map(function (s) { return winner(count(nearest(s, kk))); }));
+        return (cache[kk] = spots.map(function (s) { return winner(count(nearest(pts, s, kk))); }));
       }
       function drawMap() {
         var m = mapFor(k2), d = '', gx, gy, i;
@@ -175,12 +181,12 @@
         return 'M' + (x - r).toFixed(1) + ' ' + y.toFixed(1) + 'a' + r + ' ' + r + ' 0 1 0 ' + (2 * r) + ' 0a' + r + ' ' + r + ' 0 1 0 ' + (-2 * r) + ' 0';
       }
       function drawThreads() {
-        var q = state.p, near = nearest(q, k1), qx = sx(q[0]), qy = sy(q[1]), d = '', r = '';
+        var q = state.p, near = nearest(pts, q, k1), qx = sx(q[0]), qy = sy(q[1]), d = '', r = '';
         // grow: 0..1 sews the threads out one after another, nearest first
         near.forEach(function (e, n) {
           var t = Math.max(0, Math.min(1, grow * near.length - n));
           if (t <= 0) return;
-          var px = sx(POINTS[e.i][0]), py = sy(POINTS[e.i][1]);
+          var px = sx(pts[e.i][0]), py = sy(pts[e.i][1]);
           d += 'M' + qx.toFixed(1) + ' ' + qy.toFixed(1) + 'L' + (qx + (px - qx) * t).toFixed(1) + ' ' + (qy + (py - qy) * t).toFixed(1);
           if (t >= 1) r += circleD(px, py, 8);
         });
@@ -189,10 +195,92 @@
         reach.setAttribute('d', grow >= 1 ? circleD(qx, qy, far) : '');
       }
 
-      /* ---- the plants: drawn once ---- */
+      /* ---- the plants: drawn once where they started, each in its own group that a drag slides with a transform ---- */
+      // a moved plant keeps a faint hairline back to where it started
+      var ghost = k.root.layer({ steps: [1, 2] });
+      var ghostPath = document.createElementNS(NS, 'path');
+      ghostPath.setAttribute('fill', 'none'); ghostPath.setAttribute('stroke', 'currentColor');
+      ghostPath.setAttribute('stroke-width', '0.6'); ghostPath.setAttribute('opacity', '0.22');
+      ghost.node.appendChild(ghostPath);
       var marks = k.root.group({ d: 150, stagger: 14 });
-      POINTS.forEach(function (p, i) { marks.mark(sx(p[0]), sy(p[1]), SHAPES[KINDS[i]], { r: 3.8 }); });
+      var plant = POINTS.map(function (p, i) {
+        var g = marks.group({ d: 150 + i * 14 });
+        g.mark(sx(p[0]), sy(p[1]), SHAPES[KINDS[i]], { r: 3.8 });
+        return g.node;
+      });
       marks.node.style.pointerEvents = 'none';
+      var moved = false;
+      function placePlant(i) {
+        var dx = sx(pts[i][0]) - sx(POINTS[i][0]), dy = sy(pts[i][1]) - sy(POINTS[i][1]);
+        if (dx || dy) plant[i].setAttribute('transform', 'translate(' + dx.toFixed(1) + ' ' + dy.toFixed(1) + ')');
+        else plant[i].removeAttribute('transform');
+      }
+      function drawGhosts() {
+        var d = '';
+        pts.forEach(function (p, i) {
+          var o = POINTS[i];
+          if (p[0] === o[0] && p[1] === o[1]) return;
+          d += 'M' + sx(o[0]).toFixed(1) + ' ' + sy(o[1]).toFixed(1) + 'L' + sx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1);
+        });
+        ghostPath.setAttribute('d', d);
+      }
+
+      /* ---- dragging a plant (steps 1 and 2): one hit area over the plot, below the ?, picks the nearest plant ---- */
+      var REACH = 11;                              // how far from a plant a press still takes it, in drawing units
+      var BOX = { x0: PLOT.x + 4, y0: PLOT.y + 4, x1: PLOT.x + PLOT.w - 4, y1: PLOT.y + PLOT.h - 4 };
+      var hitG = k.root.group({ steps: [1, 2] });
+      var plotHit = document.createElementNS(NS, 'rect');
+      plotHit.setAttribute('x', PLOT.x - 6); plotHit.setAttribute('y', PLOT.y - 6);
+      plotHit.setAttribute('width', PLOT.w + 12); plotHit.setAttribute('height', PLOT.h + 12);
+      plotHit.setAttribute('class', 'ik-hit');
+      plotHit.style.touchAction = 'none';
+      hitG.node.appendChild(plotHit);
+      function plantAt(p) {
+        var best = -1, bd = REACH * REACH;
+        pts.forEach(function (q, i) {
+          var a = sx(q[0]) - p.x, b = sy(q[1]) - p.y, dd = a * a + b * b;
+          if (dd <= bd) { bd = dd; best = i; }
+        });
+        return best;
+      }
+      var held = null, queued = false;
+      function later() {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(function () { queued = false; refresh(); });
+      }
+      plotHit.addEventListener('pointerdown', function (e) {
+        if (e.button || busy || held || k.step() === 0) return;
+        var p = k.toFigure(e), i = plantAt(p);
+        if (i < 0) return;
+        e.preventDefault();
+        try { plotHit.setPointerCapture(e.pointerId); } catch (err) {}
+        held = { id: e.pointerId, i: i, ox: sx(pts[i][0]) - p.x, oy: sy(pts[i][1]) - p.y };
+        marks.node.appendChild(plant[i]);          // the held plant rides above the rest
+        plant[i].classList.add('ik-drag', 'is-held');
+        plotHit.style.cursor = 'grabbing';
+      });
+      plotHit.addEventListener('pointermove', function (e) {
+        var p = k.toFigure(e);
+        if (!held) { plotHit.style.cursor = !busy && plantAt(p) >= 0 ? 'grab' : ''; return; }
+        if (e.pointerId !== held.id) return;
+        var x = k.clamp(p.x + held.ox, BOX.x0, BOX.x1), y = k.clamp(p.y + held.oy, BOX.y0, BOX.y1);
+        var v = [fromX(x), fromY(y)], i = held.i;
+        if (v[0] === pts[i][0] && v[1] === pts[i][1]) return;   // a press that has not moved changes nothing
+        pts[i] = v;
+        placePlant(i); drawGhosts(); cache = {};
+        showMoved(true);
+        later();
+      });
+      function letGo(e) {
+        if (!held || e.pointerId !== held.id) return;
+        plant[held.i].classList.remove('ik-drag', 'is-held');
+        try { plotHit.releasePointerCapture(held.id); } catch (err) {}
+        held = null;
+        plotHit.style.cursor = '';
+      }
+      plotHit.addEventListener('pointerup', letGo);
+      plotHit.addEventListener('pointercancel', letGo);
 
       /* ---- the new point: the one accent, drawn at the origin and moved ---- */
       var star = k.root.group({ d: 0, stagger: 0 });
@@ -278,6 +366,25 @@
       var h2a = h2.text(SIDE, 320, '', { kind: 'hand' });
       var h2b = h2.text(SIDE, 342, '', { kind: 'hand' });
 
+      // steps 1 and 2, once a plant has moved: an honest note and the way back
+      var gMoved = k.root.group({ steps: [1, 2], d: 0 });
+      gMoved.text(SIDE, 384, 'points moved: the numbers', { kind: 'axis' });
+      gMoved.text(SIDE, 397, 'in the text are for the', { kind: 'axis' });
+      gMoved.text(SIDE, 410, 'original points', { kind: 'axis' });
+      var back = k.button(SIDE, 434, 'put the points back', function () { putBack(); refresh(); }, { steps: [1, 2], d: 0 });
+      function showMoved(v) {
+        moved = v;
+        gMoved.node.style.display = back.node.style.display = v ? '' : 'none';
+      }
+      function putBack() {
+        if (held) { plant[held.i].classList.remove('ik-drag', 'is-held'); held = null; }
+        pts = POINTS.map(function (p) { return p.slice(); });
+        plant.forEach(function (n, i) { placePlant(i); marks.node.appendChild(n); });
+        drawGhosts(); cache = {};
+        showMoved(false);
+      }
+      showMoved(false);
+
       function says(c) { return NAMES[winner(c)]; }
       function refresh() {
         var st = k.step();
@@ -285,14 +392,14 @@
         vSaid0.set(said); vSaid1.set(said);
         h0a.style.display = h0b.style.display = state.guess == null ? 'none' : '';
         if (st === 1) {
-          var c = count(nearest(state.p, k1));
+          var c = count(nearest(pts, state.p, k1));
           vC1.set(String(c[0])); vX1.set(String(c[1])); vSays1.set(says(c));
           if (state.guess == null) { h1a.set('the nearest ' + k1); h1b.set('decide.'); }
           else if (winner(c) === state.guess) { h1a.set('the vote agrees'); h1b.set('with you.'); }
           else { h1a.set('the vote says'); h1b.set('otherwise.'); }
           drawThreads();
         } else if (st === 2) {
-          vSays2.set(says(count(nearest(state.p, k2))));
+          vSays2.set(says(count(nearest(pts, state.p, k2))));
           if (k2 === 1) { h2a.set('every stray point'); h2b.set('gets an island.'); }
           else if (k2 >= N - 4) { h2a.set('the bigger group'); h2b.set('wins everywhere.'); }
           else { h2a.set(''); h2b.set(''); }
@@ -313,6 +420,7 @@
 
       k.onStep(function (step) {
         busy = false;
+        if (step === 0 && moved) putBack();        // the guess is asked of the plants as they really are
         state = remembered();
         placeStar(); drag.set(sx(state.p[0]), sy(state.p[1]));
         grow = 1;

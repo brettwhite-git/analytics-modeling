@@ -4,6 +4,9 @@
           1 the nudge: from the reader's line, try each number a little up and down, keep what lowers the
           total, halve the nudge when nothing helps, stop when the nudges are tiny (animated, with a chart).
           2 points that bend: a straight line, x squared alone, or x and x squared together (buttons).
+   In every step the reader can also drag the points. Step 0 keeps the reader's line and resizes the squares;
+   step 1 refits a settled line live (or restarts the nudging from a line still on its way); step 2 refits all
+   three curves live. The figure drags its own copies, so InkPage always gives the original points.
    The line the reader drew is remembered (sessionStorage) and offered to the page's Python through
    window.InkPage, with the points, so the code works on exactly what the reader did. The nudge here is the
    same loop, in the same order, as the lesson's Python, so the totals agree. The least possible total and the
@@ -114,9 +117,14 @@
       var sx = k.scale(0, DOM, PLOT.x, PLOT.x + PLOT.w), sy = k.scale(0, DOM, PLOT.y + PLOT.h, PLOT.y);
       var bx = k.scale(BX[0], BX[1], PLOT.x, PLOT.x + PLOT.w);
       var unit = PLOT.h / DOM;                        // pixels per data unit, vertically
-      var ls = fitLS(POINTS, [ONE, X]);
-      var best = { tilt: ls(1) - ls(0), height: ls(0) };
-      var bestTotal = total(POINTS, best.tilt, best.height);
+      /* the figure's own copies of the points, which the reader may drag. POINTS and BENT are never touched:
+         they are what the page's Python reads, and what the numbers in the text were worked out from */
+      var pts = POINTS.map(function (p) { return p.slice(); });
+      var bpts = BENT.map(function (p) { return p.slice(); });
+      var movedLin = false, movedBent = false;
+      function bestLine(ps) { var f = fitLS(ps, [ONE, X]); return { tilt: f(1) - f(0), height: f(0) }; }
+      var best = bestLine(pts);
+      var bestTotal = total(pts, best.tilt, best.height);
       var cur = { tilt: GUESS.tilt, height: GUESS.height }, picked = -1;
 
       function raw(layer, d, w, op, accent) {
@@ -164,7 +172,7 @@
       }
       function drawSquares(layer, l, heavy) {
         var boxes = '', hatch = '', strong = '';
-        POINTS.forEach(function (p, i) {
+        pts.forEach(function (p, i) {
           var s = square(p, l);
           if (s.h < 1.5) return;
           hatch += hatchD(s);
@@ -195,11 +203,107 @@
 
       /* ---- the points ---- */
       var marks = k.root.group({ steps: [0, 1], d: 150, stagger: 22 });
-      POINTS.forEach(function (p) { marks.mark(sx(p[0]), sy(p[1]), 'o'); });
+      var markNodes = POINTS.map(function (p) { return marks.mark(sx(p[0]), sy(p[1]), 'o'); });
       marks.node.style.pointerEvents = 'none';
       var marks2 = k.root.group({ steps: [2], d: 150, stagger: 18 });
-      BENT.forEach(function (p) { marks2.mark(bx(p[0]), sy(p[1]), 'o'); });
+      var markNodes2 = BENT.map(function (p) { return marks2.mark(bx(p[0]), sy(p[1]), 'o'); });
       marks2.node.style.pointerEvents = 'none';
+
+      /* ---- dragging the points: one catcher over the plot finds the nearest point. It sits under the line's
+         handles and the buttons, so those still win. A press that does not move is a click. ---- */
+      var catcher = document.createElementNS(NS, 'rect');
+      catcher.setAttribute('x', PLOT.x - 10); catcher.setAttribute('y', PLOT.y - 10);
+      catcher.setAttribute('width', PLOT.w + 20); catcher.setAttribute('height', PLOT.h + 20);
+      catcher.setAttribute('class', 'ik-hit');
+      catcher.style.touchAction = 'none';
+      k.root.node.appendChild(catcher);
+      function story() {                              // the points, their x scale and marks, for this step
+        return k.step() === 2 ? { ps: bpts, orig: BENT, xs: bx, d0: BX[0], d1: BX[1], nodes: markNodes2 }
+          : { ps: pts, orig: POINTS, xs: sx, d0: 0, d1: DOM, nodes: markNodes };
+      }
+      function nearest(f) {
+        var st = story(), box = k.svg.getBoundingClientRect(), scale = box.width ? box.width / k.W : 1;
+        var reach = Math.max(12, 10 / scale), bestI = -1, bestD = reach * reach;
+        st.ps.forEach(function (p, i) {
+          var dx = st.xs(p[0]) - f.x, dy = sy(p[1]) - f.y, d2 = dx * dx + dy * dy;
+          if (d2 <= bestD) { bestD = d2; bestI = i; }
+        });
+        return bestI;
+      }
+      function placeMark(st, i) {
+        var p = st.ps[i], o = st.orig[i];
+        st.nodes[i].setAttribute('transform', 'translate(' + (st.xs(p[0]) - st.xs(o[0])).toFixed(1) + ' ' + (sy(p[1]) - sy(o[1])).toFixed(1) + ')');
+      }
+      var held = null, frame = 0;
+      function pointsMoved(first) {                   // what each step recomputes when a point has moved
+        var s = k.step();
+        if (s === 0) redraw0();
+        else if (s === 1) moved1(first);
+        else refit2();
+        showMoved();
+      }
+      catcher.addEventListener('pointerdown', function (e) {
+        if (e.button || (k.step() === 1 && busy)) return;
+        var f = k.toFigure(e), i = nearest(f);
+        if (i < 0) return;
+        e.preventDefault();
+        try { catcher.setPointerCapture(e.pointerId); } catch (err) {}
+        held = { i: i, x: f.x, y: f.y, moved: false, first: true };
+        catcher.style.cursor = 'grabbing';
+      });
+      catcher.addEventListener('pointermove', function (e) {
+        var f = k.toFigure(e);
+        if (!held) { catcher.style.cursor = nearest(f) >= 0 ? (k.step() === 0 ? 'pointer' : 'grab') : ''; return; }
+        // Fig. 1 is the reader's own fit: moving the points onto their line would only game the total, so there a
+        // press only picks a point
+        if (k.step() === 0) return;
+        if (!held.moved && Math.abs(f.x - held.x) + Math.abs(f.y - held.y) < 3) return;
+        held.moved = true; held.fx = f.x; held.fy = f.y;
+        if (frame) return;
+        frame = requestAnimationFrame(function () {
+          frame = 0;
+          if (!held) return;
+          var st = story(), x = k.clamp(held.fx, PLOT.x, PLOT.x + PLOT.w), y = k.clamp(held.fy, PLOT.y, PLOT.y + PLOT.h);
+          var p = st.ps[held.i];
+          p[0] = r2(st.d0 + (x - PLOT.x) / PLOT.w * (st.d1 - st.d0));
+          p[1] = r2((PLOT.y + PLOT.h - y) / PLOT.h * DOM);
+          if (st.ps === pts) { movedLin = true; if (k.step() === 0) picked = held.i; } else movedBent = true;
+          placeMark(st, held.i);
+          pointsMoved(held.first); held.first = false;
+        });
+      });
+      function release() {
+        if (!held) return;
+        var h = held; held = null;
+        catcher.style.cursor = '';
+        if (!h.moved && k.step() === 0) { picked = h.i; redraw0(); }   // a press with no movement: what a click did
+      }
+      catcher.addEventListener('pointerup', release);
+      catcher.addEventListener('pointercancel', release);
+
+      /* ---- the way back, and the honest note ---- */
+      var movedNote = k.root.layer();
+      function showMoved() {
+        var on = k.step() === 2 ? movedBent : movedLin;
+        movedNote.clear();
+        bBack.node.style.display = on ? '' : 'none';
+        if (!on) return;
+        ['points moved: the numbers', 'in the text are for the', 'original points'].forEach(function (s, i) {
+          movedNote.text(SIDE, 414 + i * 13, s, { kind: 'axis' });
+        });
+      }
+      function putBack() {
+        pts = POINTS.map(function (p) { return p.slice(); });
+        bpts = BENT.map(function (p) { return p.slice(); });
+        movedLin = movedBent = false;
+        markNodes.concat(markNodes2).forEach(function (n) { n.removeAttribute('transform'); });
+        var s = k.step();
+        if (s === 0) redraw0();
+        else if (s === 1) enter1();
+        else refit2();
+        showMoved();
+      }
+      var bBack = k.button(PLOT.x, 441, 'put the points back', putBack);
 
       /* ---- the side column, steps 0 and 1 ---- */
       var side = k.root.group({ steps: [0, 1], d: 250 });
@@ -212,7 +316,7 @@
       var vTotal = side.text(RIGHT, 114, '', { kind: 'val', anchor: 'end' });
       function readout() {
         vTilt.set(cur.tilt.toFixed(2)); vHeight.set(cur.height.toFixed(2));
-        vTotal.set(total(POINTS, cur.tilt, cur.height).toFixed(2));
+        vTotal.set(total(pts, cur.tilt, cur.height).toFixed(2));
       }
 
       /* ---- step 0: two handles hold the line; click a point for its own sum ---- */
@@ -229,7 +333,7 @@
       hand0.text(SIDE, 352, 'as small as you can.', { kind: 'hand' });
       function pointSum() {
         if (picked < 0) { rows0.forEach(function (r) { r.set('–'); }); return; }
-        var p = POINTS[picked], says = predict(p[0], cur.tilt, cur.height), miss = p[1] - says;
+        var p = pts[picked], says = predict(p[0], cur.tilt, cur.height), miss = p[1] - says;
         rows0[0].set(says.toFixed(2)); rows0[1].set(p[1].toFixed(2));
         rows0[2].set(miss.toFixed(2)); rows0[3].set((miss * miss).toFixed(2));
       }
@@ -245,11 +349,10 @@
       POINTS.forEach(function (p, i) {
         var c = document.createElementNS(NS, 'circle');
         c.setAttribute('cx', sx(p[0])); c.setAttribute('cy', sy(p[1])); c.setAttribute('r', 11);
-        c.setAttribute('class', 'ik-hit'); c.style.cursor = 'pointer';
+        c.setAttribute('class', 'ik-hit'); c.style.pointerEvents = 'none';   // the pointer goes to the catcher
         c.setAttribute('tabindex', 0); c.setAttribute('role', 'button');
         c.setAttribute('aria-label', 'Day ' + (i + 1) + ': ' + p[0] + ' hours of sun, ' + p[1] + ' tens of ice creams');
         function pick() { if (k.step() === 0) { picked = i; redraw0(); } }
-        c.addEventListener('click', pick);
         c.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
         hits.node.appendChild(c);
       });
@@ -288,9 +391,11 @@
       /* ---- step 1: the nudge ---- */
       var g1 = k.root.group({ steps: [1], d: 300 });
       g1.text(SIDE, 134, 'least possible', { kind: 'label' });
-      g1.text(RIGHT, 134, bestTotal.toFixed(2), { kind: 'val', anchor: 'end' });
+      var vBest = g1.text(RIGHT, 134, bestTotal.toFixed(2), { kind: 'val', anchor: 'end' });
+      function rebest() { best = bestLine(pts); bestTotal = total(pts, best.tilt, best.height); vBest.set(bestTotal.toFixed(2)); }
       g1.line(SIDE, 146, RIGHT, 146, { w: 0.6, op: 0.45, rough: 0.3 });
       var nudge = { tilt: 0, height: 0, step: 0.5 }, rounds = 0, history = [], busy = false, settled = false, cancel = null;
+      var refitted = false, runId = 0;                // refitted: the settled line was refitted to moved points
       var note1 = g1.text(SIDE, 276, '', { kind: 'axis' });
       var callB = k.root.group({ steps: [1], d: 500 });
       callB.callout('b', 'nothing helps any more', SIDE, 298);
@@ -307,7 +412,7 @@
         raw(chart, d, 1.2, 0.85);
       }
       function label1() {
-        note1.set(settled ? 'stopped after ' + rounds + ' rounds' : 'round ' + rounds + ', nudge ' + nudge.step.toFixed(3));
+        note1.set(refitted ? 'the best line, refitted' : settled ? 'stopped after ' + rounds + ' rounds' : 'round ' + rounds + ', nudge ' + nudge.step.toFixed(3));
         callB.node.style.display = settled ? '' : 'none';
         bOnce.node.style.display = bRun.node.style.display = settled ? 'none' : '';
       }
@@ -321,18 +426,34 @@
       function enter1() {
         if (cancel) cancel();
         var m = mine();
-        nudge = { tilt: m.tilt, height: m.height, step: 0.5 }; rounds = 0; settled = false; busy = false;
+        runId++;
+        nudge = { tilt: m.tilt, height: m.height, step: 0.5 }; rounds = 0; settled = false; busy = false; refitted = false;
         cur = { tilt: m.tilt, height: m.height };
-        history = [total(POINTS, cur.tilt, cur.height)];
+        rebest();
+        history = [total(pts, cur.tilt, cur.height)];
+        redraw1(); drawChart(); label1();
+      }
+      /* a point moved in step 1. A settled line is the best line, so it is refitted live and swings with the
+         points. A line still on its way stays where it is, and the nudging starts over from it on the new points. */
+      function moved1(first) {
+        if (first) runId++;                           // stop a running "nudge until it stops"
+        rebest();
+        if (settled) {
+          cur = { tilt: best.tilt, height: best.height };
+          nudge.tilt = cur.tilt; nudge.height = cur.height; refitted = true;
+        } else {
+          nudge = { tilt: cur.tilt, height: cur.height, step: 0.5 }; rounds = 0;
+        }
+        history = [total(pts, cur.tilt, cur.height)];
         redraw1(); drawChart(); label1();
       }
       function oneRound(ms, done) {
         if (settled) { if (done) done(); return; }
         var from = { tilt: nudge.tilt, height: nudge.height };
-        var moved = nudgeRound(POINTS, nudge);
+        var moved = nudgeRound(pts, nudge);
         rounds++;
         if (nudge.step <= 0.001) settled = true;      // the same test as the Python's `while step > 0.001`
-        history.push(total(POINTS, nudge.tilt, nudge.height));
+        history.push(total(pts, nudge.tilt, nudge.height));
         function finish() { cur = { tilt: nudge.tilt, height: nudge.height }; busy = false; redraw1(); drawChart(); label1(); if (done) done(); }
         if (!moved) { finish(); return; }
         busy = true;
@@ -345,7 +466,8 @@
       var bOnce = k.button(SIDE, 176, 'nudge once', function () { if (!busy) oneRound(380); }, { steps: [1] });
       var bRun = k.button(SIDE, 212, 'nudge until it stops', function () {
         if (busy) return;
-        (function loop() { if (settled || k.step() !== 1) return; oneRound(110, function () { setTimeout(loop, 20); }); })();
+        var id = ++runId;
+        (function loop() { if (settled || k.step() !== 1 || id !== runId) return; oneRound(110, function () { setTimeout(loop, 20); }); })();
       }, { steps: [1] });
       k.button(SIDE, 248, 'back to your line', function () { enter1(); }, { steps: [1] });
 
@@ -355,21 +477,31 @@
 
       /* ---- step 2: points that bend, and three ways to fit them ---- */
       var fits = [
-        { name: 'x only', f: fitLS(BENT, [ONE, X]), note: 'misses in a pattern' },
-        { name: 'x squared only', f: fitLS(BENT, [ONE, X2]), note: 'still a pattern' },
-        { name: 'x and x squared', f: fitLS(BENT, [ONE, X, X2]), note: 'no pattern left' }
+        { name: 'x only', cols: [ONE, X], note: 'misses in a pattern' },
+        { name: 'x squared only', cols: [ONE, X2], note: 'still a pattern' },
+        { name: 'x and x squared', cols: [ONE, X, X2], note: 'no pattern left' }
       ];
-      var maxRes = 0, chosen = 0;
-      fits.forEach(function (ft) {
-        ft.total = sseOf(BENT, ft.f);
-        BENT.forEach(function (p) { maxRes = Math.max(maxRes, Math.abs(p[1] - ft.f(p[0]))); });
-      });
+      var maxRes = 0, maxRes0 = 0, chosen = 0;
+      function fitAll() {                             // all three fits, from the points as they are now
+        maxRes = maxRes0;
+        fits.forEach(function (ft) {
+          ft.f = fitLS(bpts, ft.cols);
+          ft.total = sseOf(bpts, ft.f);
+          bpts.forEach(function (p) { maxRes = Math.max(maxRes, Math.abs(p[1] - ft.f(p[0]))); });
+        });
+      }
+      fitAll(); maxRes0 = maxRes;                     // the misses chart keeps at least its first scale
       var ROWS = [70, 100, 130], MINI = { y: 214, h: 26 };
       var mx = k.scale(BX[0], BX[1], SIDE + 2, RIGHT - 2);
       var g2 = k.root.group({ steps: [2], d: 300 });
       g2.text(SIDE, 44, 'give it', { kind: 'axis' });
       g2.text(RIGHT, 44, 'total', { kind: 'axis', anchor: 'end' });
-      fits.forEach(function (ft, i) { g2.text(RIGHT, ROWS[i], ft.total.toFixed(1), { kind: 'val', anchor: 'end' }); });
+      var vFits = fits.map(function (ft, i) { return g2.text(RIGHT, ROWS[i], ft.total.toFixed(1), { kind: 'val', anchor: 'end' }); });
+      function refit2() {
+        fitAll();
+        fits.forEach(function (ft, i) { vFits[i].set(ft.total.toFixed(1)); });
+        redraw2();
+      }
       g2.line(SIDE, 148, RIGHT, 148, { w: 0.6, op: 0.45, rough: 0.3 });
       g2.text(SIDE, 172, 'misses, along x', { kind: 'label' });
       g2.line(SIDE, MINI.y, RIGHT, MINI.y, { w: 0.6, op: 0.55, rough: 0.2 });
@@ -380,7 +512,7 @@
       function redraw2() {
         var ft = fits[chosen], d = '', seg = '', i, pen = false;
         live2.clear(); marker2.clear();
-        BENT.forEach(function (p) { seg += 'M' + bx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1) + ' V' + sy(ft.f(p[0])).toFixed(1) + ' '; });
+        bpts.forEach(function (p) { seg += 'M' + bx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1) + ' V' + sy(ft.f(p[0])).toFixed(1) + ' '; });
         raw(live2, seg, 0.7, 0.6);
         for (i = 0; i <= 120; i++) {
           var x = BX[0] + i / 120 * (BX[1] - BX[0]), y = ft.f(x);
@@ -388,7 +520,7 @@
         }
         raw(live2, d, 1.6, 0.9);
         var dots = '';
-        BENT.forEach(function (p) {
+        bpts.forEach(function (p) {
           var cx = mx(p[0]), cy = MINI.y - (p[1] - ft.f(p[0])) / maxRes * MINI.h;
           dots += 'M' + (cx - 0.01).toFixed(2) + ' ' + cy.toFixed(1) + ' L' + cx.toFixed(2) + ' ' + cy.toFixed(1) + ' ';
         });
@@ -414,6 +546,8 @@
           placeEnds(); redraw0();
         } else if (step === 1) enter1();
         else redraw2();
+        held = null;
+        showMoved();
       });
     }
   });
