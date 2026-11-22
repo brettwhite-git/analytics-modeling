@@ -17,6 +17,8 @@ Here are twenty made-up customers of the café. Each dot is one customer: across
 
 Threads grow from the customer you chose to the three dots closest to it. Look at who they reach: customers who visit about as often and spend about as much. Click the lone dot near the bottom and the threads have to reach much further.
 
+You can also drag a customer. Drag one up close to the customer you chose and watch it join the nearest three.
+
 That is the idea of the whole lesson: **things that are alike sit close together.** "Close" is a number, written in the column beside the plot. The next section is how to work it out.
 
 ### Now tell a computer

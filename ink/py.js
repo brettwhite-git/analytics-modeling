@@ -222,7 +222,7 @@
     var stage = null;
     if (drawKey) { stage = el('div', 'py-cell__stage'); host.appendChild(stage); }
 
-    var cell = { host: host, area: area, status: status, runBtn: runBtn, stage: stage, drawKey: drawKey, svg: null,
+    var cell = { code: solution != null ? solution : start, host: host, area: area, status: status, runBtn: runBtn, stage: stage, drawKey: drawKey, svg: null,
       gutter: gutter, bar: bar, paint: paint, result: result, sewing: sewing, rows: [], playing: null,
       start: start, solution: solution, aside: host.hasAttribute('data-aside'),
       needs: (host.getAttribute('data-needs') || '').split(/[\s,]+/).filter(Boolean) };
@@ -267,12 +267,24 @@
   }
   function tally(n) { return n > 1 ? n + '×' : ''; }
 
+  /* what a cell's code will draw, read from the code itself, so the empty picture can be sketched ahead */
+  function sketchHint(code) {
+    code = code || '';
+    var has = ['points', 'labels', 'lines', 'accent', 'stars', 'segments', 'bars', 'hlines', 'vlines'].filter(function (key) {
+      return new RegExp('["\']' + key + '["\']').test(code);
+    });
+    if (/\bframes\b/.test(code)) has.push('frames');
+    function named(key) { var m = new RegExp('["\']' + key + '["\']\\s*:\\s*["\']([^"\']{1,40})["\']').exec(code); return m ? m[1] : ''; }
+    return { has: has.length ? has : null, xlabel: named('xlabel'), ylabel: named('ylabel') };
+  }
+
   function figureFor(cell) {
     if (!cell.drawKey || cell.svg) return Promise.resolve();
     var ready = (window.ShowcaseFigures && window.ShowcaseFigures[cell.drawKey]) ? Promise.resolve() : script(BASE + 'figures/' + cell.drawKey + '.js');
     return ready.then(function () {
       window.ShowcaseFigures[cell.drawKey].mount(cell.stage, { reducedMotion: reduced, step: 0 });
       cell.svg = cell.stage.querySelector('svg');
+      if (cell.svg && cell.svg.inkShell) cell.svg.inkShell(sketchHint(cell.code));
     });
   }
 

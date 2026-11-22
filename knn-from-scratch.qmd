@@ -49,7 +49,7 @@ Threads run from the new plant to its 5 nearest neighbours, nearest first. The d
 
 That is the whole rule: **look at the few known points nearest to the new one, and go with the majority.**
 
-Now move the slider. With 1 neighbour, only the very nearest plant decides. With the plant where it starts, that nearest one is a stray cross sitting among the circles, so the answer flips to *cross*. Drag the new plant around too, and watch which threads change.
+Now move the slider. With 1 neighbour, only the very nearest plant decides. With the plant where it starts, that nearest one is a stray cross sitting among the circles, so the answer flips to *cross*. Drag the new plant around too, and watch which threads change. You can drag the known plants as well: pull a cross in close to the question mark and watch it take a thread and a vote.
 
 The slider only stops at odd numbers. With two kinds and an odd number of votes, one kind always has more, so there is never a tie.
 
@@ -264,7 +264,7 @@ What happens if only 1 neighbour votes? And if all 29 do?
 ::: {.ink-figure data-figure="neighbours-lab" data-step="2" data-caption="Fig. 3 · the vote at every spot on the page: hatched where crosses win"}
 :::
 
-This picture asks the vote at every spot on the page, not just at your new plant. The line is the border, where the vote tips from one kind to the other. Press *slide from 1 to 29* and watch it.
+This picture asks the vote at every spot on the page, not just at your new plant. The line is the border, where the vote tips from one kind to the other. Press *slide from 1 to 29* and watch it. Then set the slider to 1 and drag a stray cross deeper into the circles: its island goes with it.
 
 At 1, the border bends around every stray plant and gives each one its own island. It would be different with a different 29 plants. Between about 5 and 15 it settles into a calmer line between the two groups. Near 29, the border has nowhere left to go: the bigger group wins everywhere.
 

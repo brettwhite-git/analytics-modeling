@@ -28,7 +28,29 @@
         side.text(SIDE, 94 + i * 20, name, { kind: 'label' });
         return side.text(SIDE + 158, 94 + i * 20, '–', { kind: 'val', anchor: 'end' });
       });
-      var note = side.text(SIDE, 196, 'run a cell to draw', { kind: 'axis' });
+      var note = side.text(SIDE, 196, 'press Run to draw', { kind: 'axis' });
+
+      /* before the first run: the page's own points in pencil, three flags still to be placed */
+      var shell = k.root.layer(), shellOn = true;
+      (function sketch() {
+        var pts = [];
+        try { pts = (window.InkPage && window.InkPage.points && window.InkPage.points()) || []; } catch (err) { pts = []; }
+        pts.forEach(function (p) { if (p && isFinite(p[0]) && isFinite(p[1])) shell.mark(sx(+p[0]), sy(+p[1]), 'o', { r: 3.4, op: 0.28 }); });
+        [[2.5, 7.5], [7.5, 7], [5, 2.5]].forEach(function (f) { shell.circle(sx(f[0]), sy(f[1]), 11, { w: 1, op: 0.4, accent: true }); });
+        var cx = PLOT.x + PLOT.w * 0.5, cy = PLOT.y + PLOT.h * 0.52;
+        shell.paper(cx - 112, cy - 26, 224, 48);
+        shell.text(cx, cy, 'your code groups these', { kind: 'hand', anchor: 'middle' });
+        shell.text(cx, cy + 17, 'a sketch until you press Run', { kind: 'axis', anchor: 'middle', op: 0.75 });
+      })();
+      function dropShell() {
+        if (!shellOn) return;
+        shellOn = false;
+        var node = shell.node;
+        if (k.reduced) { shell.clear(); return; }
+        node.style.transition = 'opacity 320ms ease-out';
+        node.style.opacity = '0';
+        setTimeout(function () { shell.clear(); node.style.opacity = ''; node.style.transition = ''; }, 340);
+      }
 
       function nearest(points, flags) {
         return points.map(function (p) {
@@ -67,6 +89,7 @@
       /* called by ink/py.js after a cell runs */
       k.svg.inkUpdate = function (state) {
         var token = ++playing;
+        dropShell();
         var points = state.points || [], flags = state.flags || null, labels = state.labels || null, history = state.history || null;
         rows[0].set(points.length ? String(points.length) : '–');
         rows[1].set(flags ? String(flags.length) : '–');

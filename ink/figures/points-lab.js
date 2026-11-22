@@ -7,6 +7,9 @@
             (value - smallest) / (largest - smallest) on both axes; after that the coins no longer matter.
           2 eight numbers on a line. Drag the middle; the column tallies the pull from each side and the
             average squared gap, and each gap is drawn as a square. Balanced, the middle is the average.
+   In step 0 the customers can also be dragged: the distances and the nearest three follow live. A press
+   that does not move still chooses. The figure drags its own copy: what the Python gets never changes.
+   Steps 1 and 2 keep the original numbers, which their text works by hand.
    The chosen customer is shared between the figures on the page (sessionStorage) and offered to the page's
    Python with the points: `from page import points, chosen`.
    Everything shown is computed from the same numbers that are drawn. Made-up data. Needs InkKit. */
@@ -59,18 +62,19 @@
     seed: 23,
     draw: function (k) {
       var chosen = remembered(), coin = 1, scaled = false, busy = false;
+      var pts = POINTS.map(function (p) { return p.slice(); });   // the figure's own copy, dragged in step 0
       var cur = [];                                  // where each point is drawn now, in figure pixels
       var near = [];                                 // the three nearest, [squared distance, index]
 
       /* ---- where a point goes, and what numbers it has, in the current units ---- */
-      function values(i) { return scaled ? SCALED[i] : [POINTS[i][0], POINTS[i][1] * coin]; }
+      function values(i) { return scaled ? SCALED[i] : [pts[i][0], pts[i][1] * coin]; }
       function target(i) {
         if (scaled) {
           var s = SCALED[i];
           return [PLOT.x + (s[0] + 0.05) / 1.1 * PLOT.w, BOTTOM - (s[1] + 0.05) / 1.1 * PLOT.h];
         }
         var D = 10 * coin;                           // one unit per pixel on both axes: the page shows true distance
-        return [PLOT.x + POINTS[i][0] / D * PLOT.w, BOTTOM - POINTS[i][1] * coin / D * PLOT.h];
+        return [PLOT.x + pts[i][0] / D * PLOT.w, BOTTOM - pts[i][1] * coin / D * PLOT.h];
       }
       function d2(i, j) { var a = values(i), b = values(j); return (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]); }
       function nearest3() {
@@ -147,12 +151,62 @@
       hit.setAttribute('class', 'ik-hit'); hit.style.cursor = 'pointer';
       chart.node.appendChild(hit);
       hit.addEventListener('click', function (e) {
+        if (dragged) { dragged = false; return; }    // that press was a drag, not a choice
         if (busy || k.step() > 1) return;
         var p = k.toFigure(e), best = -1, bd = 22 * 22;
         cur.forEach(function (c, i) { var d = (c[0] - p.x) * (c[0] - p.x) + (c[1] - p.y) * (c[1] - p.y); if (d < bd) { bd = d; best = i; } });
         if (best < 0 || best === chosen) return;
         choose(best, true);
       });
+
+      /* ---- step 0: drag a customer. The press picks the nearest dot in reach; it only counts as a drag once
+         the pointer has moved a few pixels, so a press that does not move is still a click that chooses ---- */
+      var REACH = 12, held = -1, dragged = false, down = null, at = null, queued = false;
+      function nearestDot(p, reach) {
+        var best = -1, bd = reach * reach;
+        cur.forEach(function (c, i) { var d = (c[0] - p.x) * (c[0] - p.x) + (c[1] - p.y) * (c[1] - p.y); if (d < bd) { bd = d; best = i; } });
+        return best;
+      }
+      function canDrag() { return k.step() === 0 && !busy; }
+      function anyMoved() { return pts.some(function (p, i) { return p[0] !== POINTS[i][0] || p[1] !== POINTS[i][1]; }); }
+      function applyDrag() {
+        queued = false;
+        if (held < 0 || !at) return;
+        var x = Math.min(PLOT.x + PLOT.w - 4, Math.max(PLOT.x + 4, at.x)), y = Math.min(BOTTOM - 4, Math.max(PLOT.y + 4, at.y));
+        // step 0 draws 10 units across the plot on both axes, in dollars
+        pts[held] = [Math.round((x - PLOT.x) / PLOT.w * 1000) / 100, Math.round((BOTTOM - y) / PLOT.h * 1000) / 100];
+        cur[held] = target(held);
+        near = nearest3(); place(); readout(); drawThreads(); showMoved();
+      }
+      hit.addEventListener('pointerdown', function (e) {
+        dragged = false;
+        if (e.button || !canDrag()) return;
+        var p = k.toFigure(e), i = nearestDot(p, REACH);
+        if (i < 0) return;
+        e.preventDefault();
+        try { hit.setPointerCapture(e.pointerId); } catch (err) {}
+        held = i; down = p; at = null;
+      });
+      hit.addEventListener('pointermove', function (e) {
+        var p = k.toFigure(e);
+        if (held < 0) { hit.style.cursor = canDrag() && nearestDot(p, REACH) >= 0 ? 'grab' : 'pointer'; return; }
+        if (!dragged && (p.x - down.x) * (p.x - down.x) + (p.y - down.y) * (p.y - down.y) < 9) return;
+        dragged = true; at = p; hit.style.cursor = 'grabbing';
+        if (!queued) { queued = true; requestAnimationFrame(applyDrag); }
+      });
+      function letGo() {
+        if (held < 0) return;
+        if (queued) applyDrag();
+        held = -1; hit.style.cursor = 'grab';
+      }
+      hit.addEventListener('pointerup', letGo);
+      hit.addEventListener('pointercancel', function () { letGo(); dragged = false; });
+      function putBack() {
+        held = -1;
+        pts.forEach(function (p, i) { p[0] = POINTS[i][0]; p[1] = POINTS[i][1]; });
+        showMoved();
+      }
+
       function choose(i, mine) {
         chosen = i; near = nearest3(); place(); readout();
         if (mine) remember(i);
@@ -180,8 +234,9 @@
       function readout() {
         var v = values(chosen);
         vWho.set('no. ' + chosen);
-        vVis.set(scaled ? v[0].toFixed(2) : POINTS[chosen][0].toFixed(1));
-        vSp.set(scaled ? v[1].toFixed(2) : coin === 1 ? '$' + POINTS[chosen][1].toFixed(2) : String(Math.round(POINTS[chosen][1] * coin * 100) / 100));
+        var visits = pts[chosen][0];
+        vVis.set(scaled ? v[0].toFixed(2) : visits.toFixed(Math.abs(visits * 10 - Math.round(visits * 10)) < 1e-9 ? 1 : 2));
+        vSp.set(scaled ? v[1].toFixed(2) : coin === 1 ? '$' + pts[chosen][1].toFixed(2) : String(Math.round(pts[chosen][1] * coin * 100) / 100));
         near.forEach(function (n, r) { vNear[r][0].set('no. ' + n[1]); vNear[r][1].set(num(Math.sqrt(n[0]))); });
         var a = values(chosen), b = values(near[0][1]);
         var across = (a[0] - b[0]) * (a[0] - b[0]), up = (a[1] - b[1]) * (a[1] - b[1]);
@@ -192,6 +247,18 @@
       k.root.group({ steps: [0], d: 600 }).callout('a', 'click any customer', SIDE, 320);
       k.root.group({ steps: [0], d: 700 }).text(SIDE, 350, 'the threads go to', { kind: 'hand' });
       k.root.group({ steps: [0], d: 700 }).text(SIDE, 372, 'its nearest three.', { kind: 'hand' });
+
+      /* once a customer has been dragged: a way back, and an honest note */
+      var bBack = k.button(SIDE, 404, 'put the dots back', function () {
+        if (busy || held >= 0) return;
+        putBack();
+        cur = POINTS.map(function (p, i) { return target(i); });
+        near = nearest3(); place(); readout(); drawThreads();
+      }, { steps: [0] });
+      var movedNote = k.root.group({ steps: [0], d: 0 });
+      movedNote.text(SIDE, 428, 'dots moved: the text is', { kind: 'axis' });
+      movedNote.text(SIDE, 442, 'about the original dots', { kind: 'axis' });
+      function showMoved() { bBack.node.style.display = movedNote.node.style.display = anyMoved() ? '' : 'none'; }
 
       /* ---- step 1: change the units, then put both on one scale ---- */
       function glide(ms, done) {
@@ -228,6 +295,8 @@
       k.root.group({ steps: [1], d: 600 }).callout('b', 'same customers, new units', SIDE, 418);
 
       function enterCustomers(step) {
+        putBack();                                   // every step starts on the original customers
+        hit.style.touchAction = step === 0 ? 'none' : '';
         chosen = remembered();
         if (step === 0) { coin = 1; scaled = false; }
         else { coin = COINS[slider.value]; scaled = false; first = null; }
@@ -323,7 +392,7 @@
       k.onStep(function (step) {
         busy = false;
         if (step <= 1) enterCustomers(step);
-        else { hit.style.pointerEvents = 'none'; mid = 3; draw2(); }
+        else { putBack(); hit.style.pointerEvents = 'none'; mid = 3; draw2(); }
       });
     }
   });

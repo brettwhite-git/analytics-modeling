@@ -47,7 +47,73 @@
       side.text(SIDE, 60, 'from your code', { kind: 'label' });
       side.line(SIDE, 72, SIDE + 158, 72, { w: 0.6, op: 0.45, rough: 0.3 });
       var noteNodes = [0, 1, 2, 3, 4].map(function (i) { return side.text(SIDE, 96 + i * 20, '', { kind: 'axis' }); });
-      noteNodes[0].set('run a cell to draw');
+
+      /* ---------- before the first run: a pencil sketch of the picture to come ----------
+         ink/py.js reads the cell's code and says what it will draw (points, a line, bars, rings, threads, a film,
+         the axis names). The sketch is faint, says it is a sketch, and fades out when the real picture arrives. */
+      var shell = k.root.layer(), shellOn = true;
+      var KINDS = {
+        points: 'the points', labels: 'one mark shape per kind', lines: 'a line through them', accent: 'a curve in blue',
+        stars: 'a ring on the one that matters', segments: 'threads between pairs', bars: 'bars standing on zero',
+        hlines: 'a level line across', vlines: 'a level line down', frames: 'a short film, picture by picture'
+      };
+      function sketch(hint) {
+        hint = hint || {};
+        var has = hint.has || ['points', 'lines'], seen = {};
+        has.forEach(function (h) { seen[h] = true; });
+        if (!seen.points && !seen.bars && !seen.lines && !seen.accent) seen.points = true;
+        shell.clear();
+        var X = function (u) { return PLOT.x + u * PLOT.w; }, Y = function (v) { return PLOT.y + PLOT.h - v * PLOT.h; };
+        var pencil = { w: 0.8, op: 0.22, rough: 0.6 };
+        // a faint frame, with the axis names the code gives
+        shell.line(PLOT.x, PLOT.y, PLOT.x, PLOT.y + PLOT.h, pencil);
+        shell.line(PLOT.x, PLOT.y + PLOT.h, PLOT.x + PLOT.w, PLOT.y + PLOT.h, pencil);
+        if (hint.xlabel) shell.text(PLOT.x + PLOT.w, PLOT.y + PLOT.h + 26, hint.xlabel, { kind: 'label', anchor: 'end', op: 0.5 });
+        if (hint.ylabel) shell.text(PLOT.x, PLOT.y - 12, hint.ylabel, { kind: 'label', op: 0.5 });
+        var rand = k.rng(73), pts = [];
+        for (var i = 0; i < 16; i++) { var u = 0.08 + 0.84 * (i / 15) + (rand() - 0.5) * 0.05; pts.push([u, 0.18 + 0.55 * u + (rand() - 0.5) * 0.26]); }
+        if (seen.bars) {
+          for (var b = 0; b < 7; b++) {
+            var bx = X(0.1 + b * 0.12), bh = (0.25 + 0.5 * Math.abs(Math.sin(b * 1.3 + 0.4))) * PLOT.h;
+            var box = [[bx - 9, PLOT.y + PLOT.h], [bx - 9, PLOT.y + PLOT.h - bh], [bx + 9, PLOT.y + PLOT.h - bh], [bx + 9, PLOT.y + PLOT.h]];
+            shell.poly(box, { w: 0.8, op: 0.22, rough: 0.5 });
+            shell.hatch(box, { op: 0.16, gap: 6 });
+          }
+        }
+        if (seen.points) pts.forEach(function (p, j) { shell.mark(X(p[0]), Y(p[1]), seen.labels && j % 2 ? '+' : 'o', { r: 3.4, op: 0.3 }); });
+        if (seen.segments) [1, 10, 14].forEach(function (j) { shell.thread([[X(pts[5][0]), Y(pts[5][1])], [X(pts[j][0]), Y(pts[j][1])]], { op: 0.3 }); });
+        if (seen.lines) {
+          shell.line(X(0.04), Y(0.19), X(0.96), Y(0.74), { w: 1.2, op: 0.3, rough: 0.8 });
+          if (seen.frames) [-0.12, -0.24].forEach(function (dy, n) { shell.line(X(0.04), Y(0.19 - dy * 1.4), X(0.96), Y(0.74 + dy), { w: 0.8, op: 0.13 - n * 0.04, rough: 0.8 }); });
+        }
+        if (seen.accent) shell.curve([[X(0.04), Y(0.62)], [X(0.35), Y(0.3)], [X(0.65), Y(0.42)], [X(0.96), Y(0.2)]], { w: 1.2, op: 0.35, accent: true });
+        if (seen.hlines) shell.thread([[PLOT.x, Y(0.82)], [PLOT.x + PLOT.w, Y(0.82)]], { op: 0.3 });
+        if (seen.vlines) shell.thread([[X(0.62), PLOT.y], [X(0.62), PLOT.y + PLOT.h]], { op: 0.3 });
+        if (seen.stars) shell.circle(X(pts[5][0]), Y(pts[5][1]), 16, { w: 1, op: 0.35, accent: true });
+
+        // the hand note: where the picture will come from
+        var cx = PLOT.x + PLOT.w * 0.5;
+        shell.paper(cx - 112, PLOT.y + PLOT.h * 0.82 - 26, 224, 48);
+        shell.text(cx, PLOT.y + PLOT.h * 0.82, 'your code draws here', { kind: 'hand', anchor: 'middle' });
+        shell.text(cx, PLOT.y + PLOT.h * 0.82 + 17, 'a sketch until you press Run', { kind: 'axis', anchor: 'middle', op: 0.75 });
+
+        // the side column: what this cell's picture will hold
+        var list = Object.keys(KINDS).filter(function (key) { return seen[key]; }).map(function (key) { return KINDS[key]; });
+        noteNodes[0].set('press Run to draw');
+        for (var n = 1; n < 5; n++) noteNodes[n].set(list[n - 1] ? '· ' + list[n - 1] : '');
+      }
+      function dropShell() {
+        if (!shellOn) return;
+        shellOn = false;
+        var node = shell.node;
+        if (k.reduced) { shell.clear(); return; }
+        node.style.transition = 'opacity 320ms ease-out';
+        node.style.opacity = '0';
+        setTimeout(function () { shell.clear(); node.style.opacity = ''; node.style.transition = ''; }, 340);
+      }
+      sketch();
+      /* called by ink/py.js with what the cell's code will draw */
+      k.svg.inkShell = function (hint) { if (shellOn) sketch(hint); };
 
       // lines and threads that run off the plot are cut at its edge, not bent along it
       var NS = 'http://www.w3.org/2000/svg', clipId = 'pyplot-clip-' + Math.random().toString(36).slice(2, 8);
@@ -79,6 +145,7 @@
 
       function paint(pic) {
         pic = pic || {};
+        dropShell();
         var lim = limits(pic);
         var sx = k.scale(lim.x[0], lim.x[1], PLOT.x, PLOT.x + PLOT.w), sy = k.scale(lim.y[0], lim.y[1], PLOT.y + PLOT.h, PLOT.y);
         last = { pic: pic, sx: sx, sy: sy }; clearHover();

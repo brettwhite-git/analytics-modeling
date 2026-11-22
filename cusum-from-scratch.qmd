@@ -278,6 +278,8 @@ So there is no best setting. It depends on what each mistake costs. Watching a n
 
 The second button under Fig. 4 changes the size of the rise itself: drag the new level in the top chart, or use its slider. A small rise that lasts is exactly what this score is for, but the smaller it is, the longer the evidence takes to pile up.
 
+You can also drag any day's dot in the top chart up or down. Pull one quiet day before day 31 up to the top and see whether it rings a false alarm, then pull several days after day 30 down a little and watch the alarm come later.
+
 ### Now tell a computer
 
 The cell below fetches the allowance and the alarm line you set in Fig. 4. It is the fixed score from before, with an alarm added. The score is rounded to two places each day, as you would on paper: without that, a score of exactly 2.5 could be stored as 2.5000000000000004 and ring an alarm it should not.

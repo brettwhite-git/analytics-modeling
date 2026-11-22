@@ -41,6 +41,8 @@ The line is the guess made for each day before that day was seen. The gap betwee
 
 Slide *how far to move* and watch the total miss.
 
+You can also drag any dot up or down, here and in Fig. 3. Pull one far above the rest and watch the line of guesses: with a big step it leaps toward the dot, with a small one it barely moves.
+
 ::: {.ask}
 Push the slider all the way to 1. Which rule from Fig. 1 have you built?
 

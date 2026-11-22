@@ -257,6 +257,8 @@ The thin line crosses the best ruler at a right angle. Measure the spread along 
 
 Press *keep one number*. Every person slides along their thread onto the best ruler. Two numbers per person have become one, and the short threads you watched disappear are all that was lost.
 
+You can also drag any person to a new place. Drag one far above the cloud, or far to its right, and watch the best ruler turn toward them.
+
 ::: {.py-cell data-draw="py-plot"}
 ```python
 first = ruler_at(best_angle)

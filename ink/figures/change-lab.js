@@ -5,6 +5,8 @@
           2 the plain score sinks on quiet days; switch on "never below zero" and "an allowance" and watch it change
           3 an alarm line: drag it up or down (or slide it), slide the allowance, read how late the alarm is and how many false ones
           4 the same, with the size of the rise: drag the new level in the top chart, or use its slider
+   In steps 3 and 4 the reader can also drag any day's dot up or down and watch the score and the alarm react;
+   "put the points back" restores them. The drags live in a working copy, never in OUTPUT.
    Every number is computed here from the same seeded series, which is offered to the page's Python through
    window.InkPage (output, normal, my_allowance, my_threshold). After any alarm the score starts again at zero.
    Made-up data. Needs InkKit (ink/ink-kit.js). */
@@ -128,9 +130,28 @@
       /* ---- the measurements: dots, redrawn only when the layout or the series changes ---- */
       var dotsLayer = k.root.layer();
       var series = OUTPUT, shift = SHIFT;
+      /* steps 3 and 4: the reader may drag any day up or down. A drag is kept as an offset for that day, added to
+         whatever series is shown (so it survives a change in the size of the rise). OUTPUT itself is never
+         touched, so InkPage.output always gives the original fifty days. */
+      var nudge = {}, nMoved = 0;
+      function baseSeries() { return shift === SHIFT ? OUTPUT : makeSeries(shift); }
+      function clampV(v) { return Math.max(VLO + 0.1, Math.min(VHI - 0.1, v)); }
+      function currentSeries() {
+        var b = baseSeries();
+        if (!nMoved) return b;
+        return b.map(function (v, i) { return nudge[i] != null ? r1(clampV(v + nudge[i])) : v; });
+      }
       function drawDots() {
         var box = k.step() === 0 ? TALL : TOP;
         dotsLayer.clear();
+        if (nMoved) {
+          // a faint stroke from where each moved day started to where it is now
+          var base = baseSeries();
+          for (var j in nudge) {
+            var x = tx(+j + 1).toFixed(1);
+            dotsLayer.path('M' + x + ' ' + yv(base[j], box).toFixed(1) + ' L' + x + ' ' + yv(series[j], box).toFixed(1), { w: 0.6, op: 0.4 });
+          }
+        }
         dotsLayer.polyline(series.map(function (v, i) { return [tx(i + 1), yv(v, box)]; }), { w: 0.6, op: 0.25 });
         series.forEach(function (v, i) { dotsLayer.dot(tx(i + 1), yv(v, box), box === TALL ? 2.1 : 1.8, { op: 0.85 }); });
         if (k.step() === 4) placeRise();
@@ -325,6 +346,49 @@
       g3.line(SIDE, 152, SIDE + 158, 152, { w: 0.6, op: 0.45, rough: 0.3 });
       var l3 = k.root.layer({ steps: [3, 4] });
 
+      /* the days themselves, grabbed in the top chart. One hit area finds the nearest day; it sits under the
+         alarm line and the new-level handle, so a press on either of those still grabs the handle. */
+      var hitP = raw('rect', { x: X0, y: TOP.y, width: PW, height: TOP.h, 'class': 'ik-hit' }, k.root.node);
+      hitP.style.touchAction = 'none';
+      hitP.style.pointerEvents = 'none';
+      var heldDay = -1, frame = 0;
+      function nearestDay(p) {
+        var best = -1, bd = 11 * 11;
+        for (var i = 0; i < N; i++) {
+          var dx = tx(i + 1) - p.x, dy = yv(series[i], TOP) - p.y, d = dx * dx + dy * dy;
+          if (d <= bd) { bd = d; best = i; }
+        }
+        return best;
+      }
+      function valueAt(y) { return r1(clampV(VLO + (TOP.y + TOP.h - y) / TOP.h * (VHI - VLO))); }
+      function refreshPoints() {
+        frame = 0;
+        series = currentSeries(); drawDots(); redraw3(); syncMoved();
+      }
+      hitP.addEventListener('pointerdown', function (e) {
+        if (e.button || k.step() < 3) return;
+        var i = nearestDay(k.toFigure(e));
+        if (i < 0) return;
+        e.preventDefault();
+        try { hitP.setPointerCapture(e.pointerId); } catch (err) {}
+        heldDay = i; hitP.style.cursor = 'grabbing';
+      });
+      hitP.addEventListener('pointermove', function (e) {
+        var p = k.toFigure(e);
+        if (heldDay < 0) { hitP.style.cursor = nearestDay(p) >= 0 ? 'grab' : ''; return; }
+        var d = r1(valueAt(p.y) - baseSeries()[heldDay]);
+        if (Math.abs(d) < 0.05) delete nudge[heldDay]; else nudge[heldDay] = d;
+        nMoved = Object.keys(nudge).length;
+        if (!frame) frame = requestAnimationFrame(refreshPoints);
+      });
+      function letGo() {
+        if (heldDay < 0) return;
+        heldDay = -1; hitP.style.cursor = 'grab';
+        if (frame) { cancelAnimationFrame(frame); refreshPoints(); }
+      }
+      hitP.addEventListener('pointerup', letGo);
+      hitP.addEventListener('pointercancel', letGo);
+
       /* the alarm line itself: drawn once, moved with a transform, and grabbed to set the threshold */
       var alarmG = k.root.group({ steps: [3, 4], d: 0 });
       alarmG.line(X0, 0, X0 + PW, 0, { w: 1.1, op: 0.75, rough: 0.3 });
@@ -375,7 +439,7 @@
         riseG.node.setAttribute('transform', 'translate(0 ' + y.toFixed(1) + ')');
         riseDrag.set(X0 + PW, y);
       }
-      function setShift(v) { shift = v; series = makeSeries(v); drawDots(); redraw3(); }
+      function setShift(v) { shift = v; series = currentSeries(); drawDots(); redraw3(); }
 
       function redraw3() {
         var m = watch(series, C, T), i;
@@ -422,13 +486,31 @@
       g4.text(SIDE, 366, 'takes longer', { kind: 'hand', d: 900 });
       g4.text(SIDE, 388, 'to catch.', { kind: 'hand', d: 1100 });
 
+      /* once a day has moved: an honest note, and the way back. Nothing is saved; a reload restores the days. */
+      var movedG = k.root.group({ steps: [3, 4], d: 0 });
+      movedG.text(SIDE, 330, 'points moved: the numbers', { kind: 'axis' });
+      movedG.text(SIDE, 344, 'in the text are for the', { kind: 'axis' });
+      movedG.text(SIDE, 358, 'original points.', { kind: 'axis' });
+      var bBack = k.button(SIDE, 392, 'put the points back', function () {
+        nudge = {}; nMoved = 0; refreshPoints();
+      }, { steps: [3, 4] });
+      function syncMoved() {
+        var on = nMoved > 0;
+        movedG.node.style.display = bBack.node.style.display = on ? '' : 'none';
+        g4.node.style.display = on ? 'none' : '';
+      }
+
       window.addEventListener('ink:change-guess', function () { if (k.step() >= 3) redraw3(); });
 
       k.onStep(function (step) {
         stop();
         hit0.style.pointerEvents = 'none';
+        if (step < 3) { nudge = {}; nMoved = 0; }
+        hitP.style.pointerEvents = step >= 3 ? 'auto' : 'none';
+        heldDay = -1;
+        syncMoved();
         shift = step === 4 ? shiftSlider.value : SHIFT;
-        series = shift === SHIFT ? OUTPUT : makeSeries(shift);
+        series = currentSeries();
         drawDots();
         if (step === 0) enter0();
         else if (step === 1) enter1();
