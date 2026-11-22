@@ -1,107 +1,393 @@
 ---
-title: "Why is there a line when the server can keep up?"
-subtitle: "On average the machine is faster than the work arriving at it. A few probability distributions, a simulation and a chain with no memory explain the queue anyway."
+title: "Why is there a line when the till can keep up?"
+subtitle: "You will play a till by hand with a die first, then teach a computer to play it thousands of times. All you need is arithmetic and the average."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="queue-figure" data-step="0" data-caption="Fig. 1 · one server, customers arriving at random · made-up system"}
+A shop has one till. It can serve one customer a minute. Customers come in about one every two minutes. On paper the till has time to spare: it is idle half the time.
+
+Some questions like this are too tangled to work out with a formula, but easy to act out. So you are going to act it out: roll a die for the customers, follow a simple rule, and count what happens. Then you will get a computer to do the same thing many times over.
+
+## Is there ever a line?
+
+::: {.ask data-veil="true"}
+The till serves one customer a minute. On average, one customer arrives every two minutes. Is anyone ever left waiting?
+
+- **No. The till is twice as fast as the customers.** That is what the averages say. But an average is made of minutes, and the minutes are not all alike. Play a few and see.
+- **Yes, now and then.** Play a few minutes and see when it happens, and why.
+- **Yes, and the line keeps growing.** It would, if customers came faster than the till can serve. Here they come at half its speed. Play a few minutes and watch whether the line can clear.
 :::
 
-Wafers arrive at a semiconductor machine every 20 seconds on average, and the machine takes 19 seconds on average to process one. Work with those two averages alone and the queue is always empty: each wafer is finished a second before the next one turns up.
-
-Now let the arrivals and the processing times vary around the same two means. The average queue grows to about 19 wafers. Nothing about the averages changed. Only the randomness did, and to reason about it you need a small kit: a handful of probability distributions, a way to check that one fits, a simulation for when the algebra runs out, and a chain of states for the long run.
-
-## Fit a distribution first
-
-Most modelling is a matter of throwing data at a model. This module inverts that. When the only thing you know about a data point is its value, a well-matched probability distribution can solve the problem with no feature engineering at all.
-
-A startup wanted to resell empty season-ticket seats as upgrades. A long feature list looked inevitable: ticket-holder demographics, weather, team record, opponent, day of the week. Then the team noticed that fans tend to arrive at about the same relative position in the crowd every game, and that the deviation is approximately normal. A single distribution replaced the whole feature pipeline. The rule of thumb: before engineering features, fit a distribution. If it fits, you may be done.
-
-The counting distributions all grow from one seed. A **Bernoulli** trial is a single weighted coin flip. Chain $n$ of them together and count the successes, and you have the **binomial**. Ask instead how many trials it takes to reach the first success, and you have the **geometric**.
-
-| The event | Distribution |
-|:----------|:-------------|
-| A single yes/no trial | Bernoulli |
-| Count of successes in $n$ trials | Binomial |
-| Trials until the first success | Geometric |
-| Arrivals in a fixed window | Poisson |
-| Time between arrivals (memoryless) | Exponential |
-| Time to failure (age-dependent) | Weibull ($k \ne 1$) |
-
-The binomial converges to the normal distribution as $n$ grows, which is why the normal is so useful: it is the large-$n$ limit of so many counting processes.
-
-The geometric is your "how many trials until X" tool, and it doubles as a diagnostic. To find out whether at-bats really are independent, identical Bernoulli trials, check whether the number of at-bats until a broken bat fits a geometric distribution. If it does, you do not need to model the weather, the pitcher, the pitch type or the batter. The independence assumption is already good enough. [Exam trap: in the geometric distribution, $p$ is the probability of the thing you are waiting for. Sometimes that is a good outcome (a job offer), sometimes a bad one (a defective unit). Define it explicitly every time.]{.side}
-
-## Arrivals, gaps and memory
-
-Suppose customers arrive at an average rate of $\lambda$ per minute and the arrivals are independent. Then the **count in a fixed window** is Poisson, and the **time between one arrival and the next** is exponential with mean $1/\lambda$. They are the same distribution in disguise: one in count units, the other in time units.
-
-The exponential has one peculiar property. Given that you have already waited $s$ units, the distribution of the remaining time is still exponential with the same rate:
-
-$$P(X > s + t \mid X > s) = P(X > t)$$
-
-Past history is irrelevant. That is what **memoryless** means, and it is the single property that makes the mathematics of a queue tractable.
-
-Plenty of things do have a memory. Tires are more likely to fail the more miles they have been driven, so the time to failure depends on history and cannot be exponential. The **Weibull** distribution is the tool for that. It is like the geometric, but continuous in time, and its shape parameter $k$ says whether the failure rate shrinks, stays flat or grows with age. [Weibull with $k = 1$ reduces to the exponential. Software reporting a best-fit Weibull with $k = 1.002$ is probably just fitting noise.]{.side}
-
-| Shape | Failure rate | Reading |
-|:-----:|:-------------|:--------|
-| $k < 1$ | Decreasing hazard | Weak parts fail first |
-| $k = 1$ | Constant | The exponential, memoryless |
-| $k > 1$ | Increasing hazard | Wear-out: the tires |
-
-## Checking the fit by eye
-
-Before you lean on a distribution, check that the data agree with it. A statistical test collapses the fit to a single number. A **QQ plot** shows you where a distribution diverges from the data, which matters enormously if the tails are the point of your project.
-
-The plot sets the quantiles of your sample against the quantiles the theoretical distribution says you should see. If the two match, the points fall on the 45° line. Where they drift off tells you the story: an upper tail heavier than normal, a lower tail that is compressed, and so on. Exponential data plotted against exponential quantiles is nearly straight. The same data plotted against normal quantiles is clearly bad, especially in the tails.
-
-## Why averages are not enough
-
-Back to the machine. Give it Poisson arrivals at rate $\lambda$ and exponential service at rate $\mu$, and it is the simplest queue there is, written M/M/1: memoryless arrivals, memoryless service, one server. The figure uses rounder numbers than the wafers. Service takes one minute on average, so $\mu = 1$, and customers arrive at $\lambda = 0.5$ a minute. The server is busy half the time.
-
-::: {.ink-figure data-figure="queue-figure" data-step="1" data-caption="Fig. 2 · the first four hours of a simulated run, with the long-run averages beside it · made-up system"}
+::: {.ink-figure data-figure="chance-till" data-step="0" data-caption="Fig. 1 · the lunch hour at one till, played a minute at a time · made-up rolls"}
 :::
 
-The run is simulated in your browser: draw a random gap before each arrival, draw a random service time, make each customer wait for the one in front, and count who is present. Even at half load there is usually someone there, and now and then a cluster of arrivals builds a short line. Because both distributions are memoryless, this queue also has a closed-form answer, and the simulation lands on it. With $\rho = \lambda / \mu$ for the share of time the server is busy, the average number in the system and the average time each customer spends in it are
+Here is the rule for one minute. Roll the die. On a 1, 2, 3 or 4, nobody comes in. On a 5, one person comes in. On a 6, two people come in together. They join the line. Then the till serves one person, if anyone is there. Whoever is left is waiting.
+
+Check the rule gives one customer every two minutes. Over six rolls, one of each face, that is 0 + 0 + 0 + 0 + 1 + 2 = **3** people in 6 minutes. Three in six is one every two.
+
+Press *next minute* a few times. The first roll of this hour is a 6: two people come in, the till serves one, and **one is left waiting**. Then press *run the hour* and watch the chart below fill in, one minute at a time.
+
+So yes: there is a line, now and then, even though the till is idle half the time.
+
+## Why is there a line at all?
+
+The till was never too slow on average. It was too slow at particular moments: whenever two people came in at once, or a 5 came straight after a 6.
+
+::: {.ink-figure data-figure="chance-till" data-step="1" data-caption="Fig. 2 · the same 30 people an hour, arriving evenly and arriving by the die · made-up rolls"}
+:::
+
+The top row has people arriving like clockwork, one every other minute. Each one walks up to an empty till, so nobody ever waits. The bottom row has the same number of people in the hour, but arriving by the die. Press *deal another hour* a few times. The count of people stays near 30, but the line comes and goes, because chance arrivals come in bunches.
+
+That is the whole idea: **an average hides the bunches, and the bunches make the line.** To see the line, you have to play the minutes one by one, by rule. That is what a computer is good at.
+
+## Can a computer play the hour?
+
+A computer needs the rule written out exactly. Start with one minute, and a way of rolling a die.
+
+`import random` brings in Python's own die: `random.randint(1, 6)` gives a whole number from 1 to 6, each as likely as the others. The numbers only look random. They come from a recipe, and `random.seed(1)` picks where the recipe starts, so you get the same "random" rolls every time you run the cell.
+
+`def` gives a set of steps a name, so you can use them again, and `return` hands back the answer. `if` runs its indented lines only when the test is true. `==` asks "is it equal?"; a single `=` stores a value under a name.
+
+::: {.ask}
+Before you run it: how would you check this code is right?
+
+- **Run it and see if the number looks sensible.** A sensible-looking number can still be wrong, and you would have no way of telling.
+- **Give it a minute I already played by hand.** Yes. Nobody waiting, then a roll of 6: two come in, one is served, one is left. If the code says anything but 1, it is wrong.
+:::
+
+Replace the blank and press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell}
+```python
+import random
+random.seed(1)                        # the same "random" rolls every time
+
+def people(roll):
+    if roll == 6:
+        return 2                      # a six: two people come in together
+    if roll == ____:                  # which roll brings one person?
+        return 1
+    return 0                          # 1, 2, 3 or 4: nobody
+
+def one_minute(waiting, roll):
+    waiting = waiting + people(roll)  # newcomers join the line
+    if waiting > 0:
+        waiting = waiting - 1         # the till serves one person
+    return waiting                    # how many are left waiting
+
+print(one_minute(0, 6))               # by hand: 1 is left waiting
+print(one_minute(1, 3))               # by hand: nobody comes, the one waiting is served: 0
+
+roll = random.randint(1, 6)           # now let the computer roll
+print("rolled", roll, "so waiting:", one_minute(0, roll))
+```
+::: {.py-solution}
+```python
+import random
+random.seed(1)                        # the same "random" rolls every time
+
+def people(roll):
+    if roll == 6:
+        return 2                      # a six: two people come in together
+    if roll == 5:                     # a five: one person
+        return 1
+    return 0                          # 1, 2, 3 or 4: nobody
+
+def one_minute(waiting, roll):
+    waiting = waiting + people(roll)  # newcomers join the line
+    if waiting > 0:
+        waiting = waiting - 1         # the till serves one person
+    return waiting                    # how many are left waiting
+
+print(one_minute(0, 6))               # by hand: 1 is left waiting
+print(one_minute(1, 3))               # by hand: nobody comes, the one waiting is served: 0
+
+roll = random.randint(1, 6)           # now let the computer roll
+print("rolled", roll, "so waiting:", one_minute(0, roll))
+```
+:::
+:::
+
+Now the hour. A `for` loop runs its indented lines once for each minute, 0 to 59, and carries `waiting` over from one minute to the next, just as you did. The cell fetches the 60 rolls of the hour you played in Fig. 1, so the computer plays exactly your hour. A list, written with square brackets, holds many values in order; `append` adds one to the end.
+
+Each minute also leaves a picture behind, in `frames`. A picture is written between curly brackets as named values, such as `"ylim": (0, 5)`; the drawing under the cell reads them. `list(line)` takes a copy of the points so far, so each picture keeps the line as it was at that minute, and `str` turns a number into text so it can be joined to words with `+`.
+
+Press Run and watch the marker go round the loop, sixty times. The picture under the cell draws itself as it goes.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import hour_rolls           # the 60 rolls of the hour in Fig. 1
+
+waiting = 0
+history = []                          # how many were waiting after each minute
+line = [(0, 0)]                       # the same thing, as points to draw
+frames = []                           # one picture per minute
+for minute in range(60):
+    waiting = one_minute(waiting, hour_rolls[minute])
+    history.append(waiting)
+    line.append((minute + 1, waiting))
+    frames.append({"lines": [list(line)], "stars": [(minute + 1, waiting)],
+                   "xlim": (0, 60), "ylim": (0, 5),
+                   "xlabel": "minute", "ylabel": "waiting",
+                   "notes": ["minute " + str(minute + 1), "waiting " + str(waiting)]})
+
+print("average waiting:", round(sum(history) / 60, 2))
+```
+:::
+
+`sum(history)` adds up the list: the number waiting after each minute, all added together. Divided by 60, that is the average line over the hour. Compare it with the *average waiting* beside Fig. 1 once you have played the whole hour. Same rolls, same rule: they should agree.
+
+## What happens when it gets busier?
+
+At this till the line is short: a third of a person, on average. Now suppose the shop gets busier, while the till stays the same.
+
+::: {.ask data-veil="true"}
+At 45% busy, the till has a short line. At 90% busy, twice as many customers come in. Is the average line about twice as long?
+
+- **Yes, about twice.** Twice the people, twice the line: it sounds fair. Slide the figure to 45% and then to 90%, and compare.
+- **Less than twice.** The till is still not full at 90%, so it seems it should cope. Slide the figure and see.
+- **Much more than twice.** Slide the figure to 45% and then 90%, and see by how much.
+:::
+
+::: {.ink-figure data-figure="queue-figure" data-step="0" data-steps="0:one day|1:every setting" data-caption="Fig. 3 · the same till, made busier · made-up rolls"}
+:::
+
+The slider sets how many people come in per minute, on average. At 50% it is exactly your die. To make it busier, the figure lets one person in, and two people in, a little more often, in the same proportions as the die. Because the till serves one a minute, the number per minute is also the share of the time the till is busy.
+
+Slide it up slowly. At 50% the line is mostly empty. At 80% it is often a few people. At 90% and 95% it sometimes runs to ten or more. Past 100%, more people come than the till can serve, and the line just keeps growing.
+
+Now press *every setting*. Each dot is the average line over 200,000 simulated minutes at one setting. Going from 45% to 90% busy does not double the line. It makes it about eleven times longer. The line does not grow steadily with the load. **It explodes as the till nears full**, because a busy till has no spare minutes to clear a bunch before the next one comes.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write $\lambda$ (read "lambda") for the number of arrivals per minute and $\mu$ (read "mu") for the number the till can serve per minute. The share of time the till is busy is
+
+$$\rho = \frac{\lambda}{\mu}$$
+
+read "rho". For one particular kind of till there is an exact answer: the one where the gaps between arrivals *and* the serving times both vary at random in a way that has no memory (more on that below). For that till, the average number in the shop $L$ and the average time each customer spends there $W$ are
 
 $$L = \frac{\rho}{1 - \rho} \qquad\qquad W = \frac{1}{\mu - \lambda}$$
 
-At $\rho = 0.5$ that is one customer and two minutes. The wafer machine runs at $\rho = 19/20 = 0.95$, and $0.95 / 0.05 = 19$: the queue from the opening paragraph.
+At $\rho = 0.5$ that is one customer and two minutes. Wafers arriving at a machine every 20 seconds on average, and taking 19 seconds on average, give $\rho = 19/20 = 0.95$, and $0.95 / 0.05 = 19$ wafers in the system, from a machine that is faster than its work.
 
-::: {.ink-figure data-figure="queue-figure" data-step="2" data-steps="2:slide λ|3:the curve" data-caption="Fig. 3 · the first day of the same run, re-simulated as you move the arrival rate · made-up system"}
+Your die till serves in exactly one minute, so it has less randomness and shorter lines than the formula, but the same shape: as $\rho$ approaches 1, the $1 - \rho$ underneath goes to zero and the line goes up without limit. For tills that do not fit the formula, which is most real ones, simulation is the way to get an answer.
 :::
 
-Slide the arrival rate up and watch what the denominator does. Going from half busy to 90% busy takes the average from 1 to 9. At 95% it is 19. The line does not grow in proportion to the load. It explodes as $\rho$ approaches 1, and at $\rho \ge 1$ work arrives at least as fast as it can be done, so there is no average to settle on. [Exam trap: "arrivals average every 20 seconds and service takes 19, so the queue is small" is wrong. Variability in the gaps and the service times creates a substantial queue even when $\lambda < \mu$.]{.side}
+## Would another hour give the same answer?
 
-The closed form exists only because of memorylessness: a queue with closed-form mathematics is M/M/1, and it needs the exponential. A queue with arbitrary complexity is a job for simulation, which exists precisely because averages cannot predict how a queue behaves once randomness enters. Notice that the simulated figures sit near the formula, not on it. A simulation is a sample. Run it again with different random draws and the averages move, so you judge a simulated system by several runs and their spread, never by one.
+The hour you played had an average line of about a third. Is that *the* answer for this till? Here is a whole hour as a single step, with the computer rolling the die. `random.seed(seed)` starts the rolls at a chosen point, so a different seed gives a different hour.
 
-## A chain with no memory
+::: {.py-cell}
+```python
+def run_hour(seed):
+    random.seed(seed)                 # which hour of rolls to use
+    waiting = 0
+    total = 0
+    for minute in range(60):
+        waiting = one_minute(waiting, random.randint(1, 6))
+        total = total + waiting       # add up the line, minute by minute
+    return total / 60                 # the average line over the hour
 
-The same idea, that the next step depends only on where you are now, describes systems that hop between states. A **Markov chain** has a finite set of states and a transition matrix $P$, where $P_{ij}$ is the probability of moving from state $i$ to state $j$ in one step. Each row is a "from" state, so each row adds up to 1.
-
-::: {.ink-figure data-figure="markov-figure" data-step="1" data-steps="0:the question|1:one day at a time" data-caption="Fig. 4 · three kinds of weather and the chance of moving between them · illustration"}
+print("one hour, seed 1:", round(run_hour(1), 2))
+```
 :::
 
-If today is certainly sunny, the starting distribution is $\pi = (1, 0, 0)$. Tomorrow's distribution is $\pi P$: for each state, add up every way of arriving in it, weighted by the chance of being where you would have to come from. Do that $k$ times and the distribution after $k$ steps is
+### How does it break?
 
-$$\pi P^k$$
+If that number were *the* answer for this till, another hour would give it again. The last line of this cell checks: `assert` stops the program with an error if what follows it is not true.
 
-Keep stepping and the bars stop moving. The **steady-state** distribution $\pi^*$ is the one that a further step does not change:
-
-$$\pi^* P = \pi^* \qquad \text{with} \qquad \sum_i \pi^*_i = 1$$
-
-::: {.ink-figure data-figure="markov-figure" data-step="2" data-steps="1:one day at a time|2:other starts" data-caption="Fig. 5 · the steady state, found by repeated multiplication · illustration"}
+::: {.py-cell data-aside="true"}
+```python
+first = run_hour(1)
+second = run_hour(6)                  # same till, same rule, another hour
+print("seed 1:", round(first, 2), "  seed 6:", round(second, 2))
+assert first == second, "the same till gave two different answers"
+```
 :::
 
-Start from a different state and the chain comes back to the same vector: in the long run it forgets where it began. Mathematically, $\pi^*$ is the left eigenvector of $P$ with eigenvalue 1. You can find it by eigen-decomposition, by multiplying until nothing changes, or by walking the chain at random for a long time and recording the fraction of visits to each state. They agree. [Exam trap: Markov chains need irreducibility. A steady state may not exist if states cannot reach each other.]{.side}
+It stops with `AssertionError`. Same till, same rule, and two different averages, one more than twice the other. Nothing is wrong with the code. One run is one story: one hour, with its own luck.
 
-Real weather is not actually a good Markov example, because real weather is highly history-dependent. The chains earn their place elsewhere: PageRank, the LRMC college basketball rankings, urban sprawl, long-run disease modelling. In those cases the system is not literally memoryless in the short term, but over long horizons the assumption washes out and the steady state still gives useful rankings.
+::: {.ask}
+Two hours, two answers. Which one is the answer for this till?
 
-PageRank is the cleanest case. Treat the web as a graph in which each page is a state, and make the transition probability from page $i$ to page $j$ proportional to whether $i$ links to $j$. The steady-state distribution tells you how often a random walker lands on each page, which was Google's original ranking signal.
+- **The first one.** It came first, but that is all. Another seed would have given yet another number.
+- **The bigger one, to be safe.** Safe sometimes matters, but a single hour cannot tell you how big "big" gets. It might have been an unusually quiet hour.
+- **Neither on its own. Run many hours and look at all of them.** Yes. Many hours give you both the usual answer (their average) and how much one hour can differ from it.
+:::
 
-## Run it yourself {.reference}
+So run a hundred hours, each from its own seed, and keep every average. The picture puts one dot for each hour, and a level line at the average of all of them.
 
+::: {.py-cell data-draw="py-plot"}
+```python
+averages = []
+points = []
+for seed in range(100):
+    a = run_hour(seed)
+    averages.append(a)
+    points.append((seed, a))          # one dot per hour
+
+overall = sum(averages) / len(averages)
+ordered = sorted(averages)            # smallest to largest
+print("average over 100 hours:", round(overall, 2))
+print("quietest hour:", round(ordered[0], 2), "  busiest:", round(ordered[-1], 2))
+print("90 of the 100 hours were between", round(ordered[5], 2), "and", round(ordered[94], 2))
+
+picture = {"points": points, "hlines": [overall], "ylim": (0, 2),
+           "xlabel": "hour (seed)", "ylabel": "average waiting",
+           "notes": ["100 hours", "average " + str(round(overall, 2))]}
+```
+:::
+
+`len` counts the items in a list. `sorted` puts the list in order, smallest first, so `ordered[0]` is the quietest hour and `ordered[-1]`, the last one, the busiest. Leaving out the five lowest and the five highest says where most hours fall.
+
+That is how a simulation is reported: **the average over many runs, and how much one run varies.** One hour can have three times the usual line, another hardly any. The average of a hundred hours is far steadier than any one of them, and more runs make it steadier still.
+
+## What if tomorrow only depends on today?
+
+A different kind of chance. Each day is sunny, cloudy or rainy, and tomorrow's weather is decided by today's alone, with fixed chances. After a sunny day, it is sunny again with chance 0.70, cloudy with 0.20 and rainy with 0.10. Each kind of weather has its three arrows out, and they add up to 1, because tomorrow has to be something.
+
+::: {.ink-figure data-figure="markov-figure" data-step="0" data-caption="Fig. 4 · three kinds of weather and the chance of each tomorrow · made-up chances"}
+:::
+
+Today is certainly sunny, so the bars start at 1, 0 and 0. Press *next day*. Tomorrow is sunny with chance 0.70, cloudy 0.20, rainy 0.10: the arrows out of *sunny*.
+
+Press it again. Now you do not know what the weather is, so for each kind of weather you add up every way of arriving in it. For sunny on day 2:
+
+- it was sunny (0.70) and stayed sunny (0.70): 0.70 × 0.70 = 0.49
+- it was cloudy (0.20) and turned sunny (0.30): 0.20 × 0.30 = 0.06
+- it was rainy (0.10) and turned sunny (0.20): 0.10 × 0.20 = 0.02
+
+0.49 + 0.06 + 0.02 = **0.57**, the number written out beside Fig. 4. Keep pressing. The bars move less and less each day.
+
+Here is one day's step in code: three sums, written out just as you did them, inside a `def`. It hands back three numbers at once, and `sun, cloud, rain = ...` stores them under three names in one go. `range(1, 16)` counts from 1 up to 15, one number per day. One chance is missing: what is the chance a rainy day is followed by another?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def next_day(sun, cloud, rain):
+    new_sun   = sun * 0.70 + cloud * 0.30 + rain * 0.20   # every way into "sunny"
+    new_cloud = sun * 0.20 + cloud * 0.40 + rain * 0.45   # every way into "cloudy"
+    new_rain  = sun * 0.10 + cloud * 0.30 + rain * ____   # every way into "rainy"
+    return new_sun, new_cloud, new_rain
+
+sun, cloud, rain = 1.0, 0.0, 0.0      # day 0: certainly sunny
+frames = []
+for day in range(1, 16):
+    sun, cloud, rain = next_day(sun, cloud, rain)
+    frames.append({"bars": [(1, sun), (2, cloud), (3, rain)], "xlim": (0.4, 3.6), "ylim": (0, 1),
+                   "xlabel": "sunny, cloudy, rainy", "ylabel": "chance",
+                   "notes": ["day " + str(day), "sunny " + str(round(sun, 3)),
+                             "cloudy " + str(round(cloud, 3)), "rainy " + str(round(rain, 3))]})
+
+print("day 15:", round(sun, 3), round(cloud, 3), round(rain, 3))
+```
+::: {.py-solution}
+```python
+def next_day(sun, cloud, rain):
+    new_sun   = sun * 0.70 + cloud * 0.30 + rain * 0.20   # every way into "sunny"
+    new_cloud = sun * 0.20 + cloud * 0.40 + rain * 0.45   # every way into "cloudy"
+    new_rain  = sun * 0.10 + cloud * 0.30 + rain * 0.35   # every way into "rainy"
+    return new_sun, new_cloud, new_rain
+
+sun, cloud, rain = 1.0, 0.0, 0.0      # day 0: certainly sunny
+frames = []
+for day in range(1, 16):
+    sun, cloud, rain = next_day(sun, cloud, rain)
+    frames.append({"bars": [(1, sun), (2, cloud), (3, rain)], "xlim": (0.4, 3.6), "ylim": (0, 1),
+                   "xlabel": "sunny, cloudy, rainy", "ylabel": "chance",
+                   "notes": ["day " + str(day), "sunny " + str(round(sun, 3)),
+                             "cloudy " + str(round(cloud, 3)), "rainy " + str(round(rain, 3))]})
+
+print("day 15:", round(sun, 3), round(cloud, 3), round(rain, 3))
+```
+:::
+:::
+
+The three bars settle. After two weeks, a day is sunny with chance about 0.46, cloudy 0.32 and rainy 0.22, and another day forward changes nothing you can see.
+
+### Does it matter where you start?
+
+A sunny start leans towards sunny weather for a few days. Does a rainy start lean towards rain for ever? Press *start rainy*, then *start sunny*, then *start cloudy*. Each start runs twenty days and leaves its line on the small chart.
+
+::: {.ink-figure data-figure="markov-figure" data-step="1" data-caption="Fig. 5 · three starts, the same twenty days · made-up chances"}
+:::
+
+Every start ends on the same shares. After a week or so, the chain has forgotten where it began. The same check in code, from a rainy start:
+
+::: {.py-cell data-draw="py-plot"}
+```python
+sun, cloud, rain = 0.0, 0.0, 1.0      # day 0: certainly rainy
+frames = []
+for day in range(1, 16):
+    sun, cloud, rain = next_day(sun, cloud, rain)
+    frames.append({"bars": [(1, sun), (2, cloud), (3, rain)], "xlim": (0.4, 3.6), "ylim": (0, 1),
+                   "xlabel": "sunny, cloudy, rainy", "ylabel": "chance",
+                   "notes": ["from rainy", "day " + str(day), "sunny " + str(round(sun, 3))]})
+
+print("day 15 from a rainy start:", round(sun, 3), round(cloud, 3), round(rain, 3))
+```
+:::
+
+Compare it with the sunny start: the same three numbers. These long-run shares say what fraction of all days, over a long time, are sunny, cloudy and rainy. You could also find them by acting it out: roll for the weather day after day for a hundred thousand days and count. The R at the bottom of the page does exactly that, and gets the same shares.
+
+Two things to know. It only settles to one answer if every kind of weather can, sooner or later, lead to every other. If some could never be reached, there might be no single long run. And real weather is not a good example of this: it remembers much more than yesterday. The idea earns its keep elsewhere. Treat each web page as a "state" and each link as an arrow, and the long-run share of a random clicker's time on each page is a ranking of the pages. That was the first idea behind Google's search.
+
+## What other kinds of chance are there?
+
+The die was the only chance you needed today. A few other patterns come up so often that they have names of their own, and each is a question you could also answer by acting it out with the die:
+
+| The question | With the die | What you would see |
+|:--|:--|:--|
+| How many, out of a fixed number of tries? | How many of 60 minutes roll a 6? | About 10, but any hour could give 5 or 15 |
+| How many tries until the first one? | How many minutes until the first 6? | Could be 1, could be 20; 6 on average |
+| How many in a stretch of time, when they come at random? | How many people come in an hour? | Around 30, more or less |
+| How long between one and the next? | Minutes from one person to the next | Mostly short gaps, now and then a long one |
+
+When you wait for "the first one", be clear what you are waiting for. It might be a good thing (a job offer) or a bad one (a broken part). The counting is the same, but you have to say which.
+
+The die has **no memory**. After ten minutes without a 6, the chance of a 6 next minute is still 1 in 6. It is never "due". Plenty of things do have a memory: a tyre is more likely to fail the more miles it has done, so its time to failure depends on its age. There is a separate pattern for things that wear out like that, and for things that fail early if they fail at all.
+
+Sometimes one of these patterns fitted to the data is the whole job, with no other model needed. To check that data really fit one, sort the data and set each value against the value the pattern says you should see in that place. If they agree, the points fall on a straight line. Where they bend away, often in the extremes, the pattern stops describing your data.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+A single yes-or-no roll with chance $p$ of "yes" is a Bernoulli trial. The number of yeses in $n$ independent tries is binomial, with average $np$; for 60 minutes and $p = 1/6$ that is 10. As $n$ grows, the binomial takes on the bell shape of the normal distribution, which is one reason the normal turns up so often. The number of tries up to and including the first yes is geometric, with average $1/p$; for $p = 1/6$ that is 6.
+
+If arrivals come independently at an average rate $\lambda$, the number in a stretch of time is Poisson, and the gap between one and the next is exponential with average $1/\lambda$. They are two views of the same arrivals: one counts, the other measures time.
+
+No memory means that having already waited $s$ does not change the chance of waiting $t$ more:
+
+$$P(X > s + t \mid X > s) = P(X > t)$$
+
+Read the bar $\mid$ as "given that". The exponential is the only waiting time with this property. Things that wear out are described by the Weibull, whose shape number $k$ says whether failures get less likely with age ($k < 1$, weak parts fail first), stay the same ($k = 1$, which is the exponential again) or get more likely ($k > 1$, wear-out).
+
+For the weather, write today's three chances as a row $\pi$ and the table of arrows as $P$, with one row per "today" and one column per "tomorrow". One day forward is $\pi P$, $k$ days is $\pi P^k$, and the long-run shares $\pi^*$ are the ones one more day does not change: $\pi^* P = \pi^*$, with the three adding up to 1.
+:::
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Acting out chance by rule, many times, and counting | Simulation (often called Monte Carlo simulation) |
+| Fixing where the rolls start, so a run can be repeated | A random seed |
+| The till and its line | A single-server queue |
+| How busy the till is | Utilisation, $\rho$ |
+| Running many hours and looking at the spread | Replications |
+| Weather where tomorrow depends only on today | A Markov chain |
+| The table of chances from today to tomorrow | The transition matrix |
+| The shares every start settles to | The steady state |
+| One yes-or-no roll | A Bernoulli trial |
+| How many out of a fixed number | The binomial distribution |
+| Tries until the first one | The geometric distribution |
+| How many in a stretch of time | The Poisson distribution |
+| The gap between one and the next | The exponential distribution |
+| The die never being "due" | Memorylessness |
+| Things that wear out | The Weibull distribution |
+| Setting data against a pattern to see if it fits | A QQ plot |
+| The till with a formula for its line | The M/M/1 queue |
+
+You did not need the names to do it. A library such as SimPy runs queues like your till, with many tills, breaks and priorities, by doing the same thing: stepping through events by rule and counting. NumPy can roll millions of dice at once, and SciPy knows the patterns in the table, so you can draw from them or fit them to data.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 The plots and numbers below are produced by R. Where the page shows code, it sits under "The R".
 
 Binomial counts for two values of $p$, then the geometric: its probabilities and its survival curve.
@@ -360,38 +646,4 @@ page_rank <- rank_raw / sum(rank_raw)
 names(page_rank) <- paste0("Page", 1:5)
 sort(round(page_rank, 4), decreasing = TRUE)
 ```
-
-## On one page {.reference}
-
-| Situation | Distribution / tool |
-|---|---|
-| Single yes/no trial | Bernoulli |
-| Count of successes in $n$ trials | Binomial |
-| Trials until first success | Geometric |
-| Arrivals in a fixed window | Poisson |
-| Time between arrivals (memoryless) | Exponential |
-| Time to failure (age-dependent) | Weibull ($k \ne 1$) |
-| Visual distribution fit | QQ plot |
-| Queue with closed-form math | M/M/1 (needs exponential) |
-| Queue with arbitrary complexity | Simulation |
-| Long-run rankings over a transition graph | Markov chain steady state |
-
-Common pitfalls:
-
-1. **Averages ≠ queues.** Variability makes lines even when $\lambda < \mu$.
-2. **Geometric $p$ direction.** Define $p$ as the thing you're waiting for, not always "success."
-3. **Exponential only when memoryless.** If history matters, use Weibull.
-4. **Weibull k = 1 reduces to exponential.** Software reporting "best fit Weibull $k = 1.002$" is probably just fitting noise.
-5. **Markov chains need irreducibility.** A steady state may not exist if states can't reach each other.
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. Tires are more likely to fail the more miles they've been driven. Is this memoryless? Which distribution fits?
-2. Real weather is not actually a good Markov example, because it is highly history-dependent. Why bother with Markov chains at all?
-3. Arrivals average one every 20 seconds and service takes 19 seconds. Why is the queue not small?
-4. Customers arrive at rate $\lambda$. Which distribution describes the count in a fixed window, and which the gap between two arrivals?
-5. In a geometric distribution, what exactly is $p$ the probability of?
-6. What does a QQ plot show you that a single test statistic does not?
-7. When might a Markov chain have no steady state?
+:::

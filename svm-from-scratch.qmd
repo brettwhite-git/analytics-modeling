@@ -1,72 +1,449 @@
 ---
-title: "How does a support vector machine draw the line?"
-subtitle: "Two groups of points, one straight line, and a rule for choosing it that depends on almost none of the data."
+title: "Where should the line between two kinds go?"
+subtitle: "You will draw the line by hand first, then teach a computer to find the best one. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="svm-figure" data-step="0" data-caption="Fig. 1 · every one of these lines separates the two classes · made-up points"}
+Here are 24 past loan applications. Each point is one application, placed by two measurements, *across* and *up*. Crosses were paid back; triangles were not. A new application arrives tomorrow, and you have to say which kind it is most like.
+
+The simplest rule is one straight line: everything on one side is a cross, everything on the other a triangle. What nobody tells you is that there are endless lines that do this, and they disagree about the points near the gap. You need a reason to pick one.
+
+## Where would you draw the line?
+
+Drag the two dots to move the line. A ring marks every point that is on the wrong side of it.
+
+::: {.ink-figure data-figure="gap-line" data-step="0" data-caption="Fig. 1 · 24 made-up applications, and your line"}
 :::
 
-You have points that already carry a label, say loan applications marked approve or deny, and each one has two measurements. You want a rule for the next application, which arrives without a label. The simplest rule is a straight line: one side is approve, the other is deny.
+Keep going until the count says 0. There is only one rule so far: **one side of the line is crosses, the other side is triangles.**
 
-The trouble is that there is rarely one such line. If the two groups can be separated at all, they can be separated in infinitely many ways, and each line would label a new point near the gap differently. You need a reason to prefer one.
+Notice how much freedom you still had once the count reached 0. You could tilt the line, or slide it, and it stayed at 0. That freedom is the problem this lesson solves.
 
-## The widest street
+One thing was done for you. Both measurements have already been scaled, as in the neighbours lesson, so that each runs from about −4 to 4. This method measures distances, so a measurement written in big units would drown out the other one. Scale first, always.
 
-The support vector machine breaks the tie with one idea. Of all the lines that separate the classes, take the one that stays as far as possible from the nearest point on either side. Picture the line as the centre of a street, and widen the street until it touches a point. The width of that street is the **margin**.
+### Which side is a point on?
 
-::: {.ink-figure data-figure="svm-figure" data-step="1" data-caption="Fig. 2 · the margin, and the points that hold it up"}
+A computer cannot see a line. It needs one as numbers, and three are enough. Call them *a*, *b* and the *shift*. For any point, work out its **score**:
+
+> a × across + b × up + shift
+
+Points on the line score exactly 0. Points on one side score above 0, points on the other side below 0. The sign is the side.
+
+Try it by hand with a = 1, b = 2 and shift = −3. The point (3, 1) scores 1 × 3 + 2 × 1 − 3 = **2**: above zero, so it is on the plus side. The point (0, 1) scores 0 + 2 − 3 = **−1**: the minus side. And (1, 1) scores 1 + 2 − 3 = 0: right on the line.
+
+The cell below fetches the 24 points, their kinds, and the line you just dragged, as its three numbers. Each kind is a number: 1 for a cross, −1 for a triangle. Using 1 and −1 instead of names pays off in a moment. Press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, kinds, my_line   # the points above, their kinds, and your line
+
+print(len(points), "points. The first is", points[0], "and its kind is", kinds[0])
+print("Your line: a =", my_line[0], " b =", my_line[1], " shift =", my_line[2])
+
+# --- for drawing only: you can skip from here to the last line ---
+def line_points(line):
+    a, b, shift = line
+    out = []
+    if a == 0 and b == 0:
+        return out                                   # no line at all
+    for i in range(161):
+        t = -4 + i * 0.05                            # walk from -4 to 4 in small steps
+        if abs(b) >= abs(a):
+            x, y = t, -(a * t + shift) / b           # a flat line: step across, work out up
+        else:
+            x, y = -(b * t + shift) / a, t           # a steep line: step up, work out across
+        if -4 <= x <= 4 and -4 <= y <= 4:
+            out.append((x, y))
+    return out
+
+def draw(points, kinds, line, edge, stars):
+    a, b, shift = line
+    pic = {"points": points, "labels": kinds, "lines": [line_points(line)],
+           "stars": stars, "segments": [], "xlim": (-4, 4), "ylim": (-4, 4)}
+    if edge > 0:
+        for e in (edge, -edge):                      # the strip's edges: where the score is edge, and -edge
+            side = line_points((a, b, shift - e))
+            if side:
+                pic["segments"].append((side[0], side[-1]))
+    return pic
+
+picture = draw(points, kinds, my_line, 0, [])
+```
 :::
 
-The points the street touches are the **support vectors**. Move any other point, short of pushing it into the street, and the line does not change at all. The whole model is held up by a handful of observations, which is where the name comes from.
+A list such as `points` is many values in a row, and `points[0]` is the first of them. The picture under the cell is drawn from those numbers: the same points, the same line. The middle of the cell only makes pictures, and you can skip it.
 
-The line itself is written
+::: {.ask}
+Before you write the score as code: how would you check the code is right?
 
-$$\mathbf{w} \cdot \mathbf{x} + b = 0$$
+- **Run it on the 24 points.** You would get 24 numbers and no way of telling whether any of them is correct.
+- **Try the points I just did by hand.** Yes. You know (3, 1) scores 2 and (0, 1) scores −1. If the code says anything else, it is wrong, and you know straight away.
+:::
 
-where $\mathbf{x}$ is a point, $\mathbf{w}$ is a vector of weights and $b$ is an intercept. To classify a new point you plug it in and read the sign: positive is one class, negative is the other. The weight vector is perpendicular to the line, so changing $\mathbf{w}$ rotates the line and changing $b$ slides it sideways. [In more than two dimensions the line becomes a plane, then a hyperplane. The equation does not change.]{.side}
+Here is the score. One piece is missing. Replace the blank and press Run.
 
-## The formula
+::: {.py-cell}
+```python
+def score(line, p):
+    a, b, shift = line                # the line's three numbers, unpacked into three names
+    return a * p[0] + b * p[1] + ____
 
-Scale $\mathbf{w}$ and $b$ so that the support vectors sit exactly at $\mathbf{w} \cdot \mathbf{x} + b = \pm 1$. Then the width of the street is
+print(score((1, 2, -3), (3, 1)))      # by hand this was 2
+print(score((1, 2, -3), (0, 1)))      # by hand this was -1
+```
+::: {.py-solution}
+```python
+def score(line, p):
+    a, b, shift = line                # the line's three numbers, unpacked into three names
+    return a * p[0] + b * p[1] + shift
+
+print(score((1, 2, -3), (3, 1)))      # by hand this was 2
+print(score((1, 2, -3), (0, 1)))      # by hand this was -1
+```
+:::
+:::
+
+`def` gives a set of steps a name, and `return` hands back the answer. From now on `score(line, p)` means "the score of point p for this line". `p[0]` is the first number of the pair, across, and `p[1]` the second, up.
+
+### Which points are on the wrong side?
+
+Now the 1 and −1 earn their keep. A point is on its own side when its score has the same sign as its kind. Multiply the two: kind × score comes out positive when they agree (plus times plus, or minus times minus) and negative when they do not.
+
+A triangle (kind −1) that scores −1: (−1) × (−1) = 1, positive, so it is on its own side. A cross (kind 1) that scores −1: 1 × (−1) = −1, negative, so it is on the wrong side.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def wrong_side(line, points, kinds):
+    wrong = []                               # an empty list, filled in as we go
+    for p, k in zip(points, kinds):          # each point together with its kind
+        if ____ < 0:                         # kind times score: negative means the wrong side
+            wrong.append(p)                  # add this point to the list
+    return wrong
+
+wrong = wrong_side(my_line, points, kinds)
+print(len(wrong), "on the wrong side")
+picture = draw(points, kinds, my_line, 0, wrong)
+```
+::: {.py-solution}
+```python
+def wrong_side(line, points, kinds):
+    wrong = []                               # an empty list, filled in as we go
+    for p, k in zip(points, kinds):          # each point together with its kind
+        if k * score(line, p) < 0:           # kind times score: negative means the wrong side
+            wrong.append(p)                  # add this point to the list
+    return wrong
+
+wrong = wrong_side(my_line, points, kinds)
+print(len(wrong), "on the wrong side")
+picture = draw(points, kinds, my_line, 0, wrong)
+```
+:::
+:::
+
+`for` repeats the lines under it once for every point, and `zip` walks the points and the kinds side by side, so each time round `p` is a point and `k` its kind. `if` runs the line under it only when the test is true. The stars in the picture are the points your code found. Compare the count with the one in Fig. 1: same line, same points, so they should agree.
+
+## Is your line a good one?
+
+Many lines get every point right. They are not equally good.
+
+::: {.ask data-veil="true"}
+Several lines put all 24 points on their own side. Which would you trust with tomorrow's application?
+
+- **Any of them. They all score 0 wrong.** On these 24, yes. But a new application near the gap lands on different sides of different lines. A line that grazes the crosses will call a cross that is slightly off its usual spot a triangle.
+- **The one that hugs the crosses.** Then the smallest wobble in a new cross puts it on the wrong side. Hugging either kind leaves no room for error on that side.
+- **The one with the most room on both sides.** Yes. A line that keeps as far as it can from the nearest point of each kind leaves the most room for new points that land a little off.
+:::
+
+::: {.ink-figure data-figure="gap-line" data-step="1" data-caption="Fig. 2 · the empty strip around your line"}
+:::
+
+This is the same line as in Fig. 1. The hatched strip runs out from the line, the same distance on both sides, until it touches the nearest point. Nothing is inside it. The side column gives the distance to the nearest cross and to the nearest triangle, and the strip's width.
+
+Drag the dots to make the strip as wide as you can. You will find two things. The line has to sit in the middle, the same distance from both kinds, or one side wastes room. And it has to tilt to fit the gap. Then press *show me the widest* and watch the line glide to the best one there is.
+
+The rule: **of all the lines that split the kinds, take the one with the widest empty strip.**
+
+Only the starred points touch the strip. Move any other point a little, without pushing it into the strip, and the widest line does not change at all. A handful of points decide everything.
+
+### How far is a point from a line?
+
+The strip is measured in distance, and the score is not quite a distance yet. Try one by hand. Take a = 0, b = 2 and shift = 0. Every point's score is 2 × up, so the scores are 0 along the across axis: that is the line. The point (1, 3) sits 3 above it. Its score is 2 × 3 = 6, twice too big, because b is 2.
+
+To fix it, divide by the **length** of (a, b), the same sum as the distance in the neighbours lesson: the square root of 0 × 0 + 2 × 2, which is 2. And 6 ÷ 2 = **3**.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import math                                  # brings in math.sqrt, the square root
+
+def distance(line, p):
+    a, b, shift = line
+    length = math.sqrt(a * a + b * b)        # the length of (a, b)
+    return abs(score(line, p)) / ____        # abs drops a minus sign: a distance is never negative
+
+print(distance((0, 2, 0), (1, 3)))           # by hand this was 3
+
+nearest = 100                                # bigger than any distance on this page
+for p in points:
+    if distance(my_line, p) < nearest:
+        nearest = distance(my_line, p)       # a closer point: remember how close
+
+touching = [p for p in points if distance(my_line, p) < nearest + 0.01]
+print("nearest point:", round(nearest, 2), "  width of the empty strip:", round(2 * nearest, 2))
+
+a, b, shift = my_line
+picture = draw(points, kinds, my_line, nearest * math.sqrt(a * a + b * b), touching)
+```
+::: {.py-solution}
+```python
+import math                                  # brings in math.sqrt, the square root
+
+def distance(line, p):
+    a, b, shift = line
+    length = math.sqrt(a * a + b * b)        # the length of (a, b)
+    return abs(score(line, p)) / length      # abs drops a minus sign: a distance is never negative
+
+print(distance((0, 2, 0), (1, 3)))           # by hand this was 3
+
+nearest = 100                                # bigger than any distance on this page
+for p in points:
+    if distance(my_line, p) < nearest:
+        nearest = distance(my_line, p)       # a closer point: remember how close
+
+touching = [p for p in points if distance(my_line, p) < nearest + 0.01]
+print("nearest point:", round(nearest, 2), "  width of the empty strip:", round(2 * nearest, 2))
+
+a, b, shift = my_line
+picture = draw(points, kinds, my_line, nearest * math.sqrt(a * a + b * b), touching)
+```
+:::
+:::
+
+The line starting `touching =` is a short way to build a list: every point whose distance is within a hair of the nearest. The picture draws the strip's two edges and stars those points. Compare the width it prints with *strip width* in Fig. 2. If your line still has a point on the wrong side, the strip is not empty, and Fig. 2 shows a dash instead.
+
+## Can the computer find the widest strip?
+
+You found a wide strip by dragging and looking. A computer has to get there by small corrections, like the nudges in the earlier lessons. It uses a fixed rule for the strip: its edges are where the score is 1 and −1. Every point should sit outside, on its own side, which means kind × score of at least 1.
+
+Two moves, then. The first is the **nudge**. When a point is on the wrong side or inside the strip, push the line away from it: add 0.1 × kind × across to *a*, 0.1 × kind × up to *b*, and 0.1 × kind to the shift. By hand, with a nudge of size 0.1: the line (0, 0, 0) gives every point a score of 0. The cross at (1, 2) is inside, so a goes up by 0.1 × 1 × 1 = 0.1, b by 0.1 × 1 × 2 = 0.2, and the shift by 0.1 × 1 = 0.1. Its new score is 0.1 × 1 + 0.2 × 2 + 0.1 = **0.6**. Up from 0, on its way to 1.
+
+The second move is the **shrink**: when a point is safely outside, make *a* and *b* a little smaller.
+
+::: {.ask}
+The strip's edges are where the score is 1 and −1. If *a* and *b* shrink, does the strip get wider or narrower?
+
+- **Narrower.** Try it with the line where the score is 2 × up. The score reaches 1 at up = 0.5. Halve b to 1, and the score only reaches 1 at up = 1. The edge moved out.
+- **Wider.** Yes. With the score 2 × up, the edge is at up = 0.5. Halve b to 1, and the edge is at up = 1. Smaller numbers make the score climb more slowly, so it has to go further to reach 1. The width is 2 divided by the length of (a, b).
+:::
+
+So the nudges push every point out of the strip, and the shrinks keep widening it. Where the two balance, the strip is as wide as the points allow. Here is the whole thing. The blank is how much of *a* a shrink keeps.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+rate = 0.1                  # how big one nudge is
+keep = 0.99                 # one shrink keeps 99% of a and b
+
+def one_round(line, points, kinds):
+    a, b, shift = line
+    for p, k in zip(points, kinds):
+        if k * score((a, b, shift), p) < 1:          # on the wrong side, or inside the strip
+            a = a + rate * k * p[0]                   # nudge the line away from this point
+            b = b + rate * k * p[1]
+            shift = shift + rate * k
+        else:                                         # outside the strip, on its own side
+            a = a * ____                              # shrink a and b a little: the strip widens
+            b = b * keep
+    return (a, b, shift)
+
+def width(line):
+    a, b, shift = line
+    return 2 / math.sqrt(a * a + b * b)               # the edges are where the score is 1 and -1
+
+line = (0, 0, 0)                                      # start with no line at all
+frames = []
+for r in range(70):                                   # 70 rounds, each one visiting every point
+    line = one_round(line, points, kinds)
+    touching = [p for p, k in zip(points, kinds) if k * score(line, p) < 1.1]   # in the strip, or at its edge
+    pic = draw(points, kinds, line, 1, touching)
+    pic["notes"] = ["round " + str(r + 1), "strip width " + str(round(width(line), 2))]
+    frames.append(pic)
+
+print("wrong side:", len(wrong_side(line, points, kinds)))
+print("strip width:", round(width(line), 2))
+```
+::: {.py-solution}
+```python
+rate = 0.1                  # how big one nudge is
+keep = 0.99                 # one shrink keeps 99% of a and b
+
+def one_round(line, points, kinds):
+    a, b, shift = line
+    for p, k in zip(points, kinds):
+        if k * score((a, b, shift), p) < 1:          # on the wrong side, or inside the strip
+            a = a + rate * k * p[0]                   # nudge the line away from this point
+            b = b + rate * k * p[1]
+            shift = shift + rate * k
+        else:                                         # outside the strip, on its own side
+            a = a * keep                              # shrink a and b a little: the strip widens
+            b = b * keep
+    return (a, b, shift)
+
+def width(line):
+    a, b, shift = line
+    return 2 / math.sqrt(a * a + b * b)               # the edges are where the score is 1 and -1
+
+line = (0, 0, 0)                                      # start with no line at all
+frames = []
+for r in range(70):                                   # 70 rounds, each one visiting every point
+    line = one_round(line, points, kinds)
+    touching = [p for p, k in zip(points, kinds) if k * score(line, p) < 1.1]   # in the strip, or at its edge
+    pic = draw(points, kinds, line, 1, touching)
+    pic["notes"] = ["round " + str(r + 1), "strip width " + str(round(width(line), 2))]
+    frames.append(pic)
+
+print("wrong side:", len(wrong_side(line, points, kinds)))
+print("strip width:", round(width(line), 2))
+```
+:::
+:::
+
+The picture plays back all 70 rounds: the line appears, swings into the gap, and the strip opens out until it touches a few starred points. `range(70)` counts 0, 1, 2 and so on up to 69, so the loop runs 70 times. `frames` is the list of pictures, one added per round, and `pic["notes"]` writes a few words beside each one: `str` turns a number into text, so `+` can join it to other text.
+
+Compare the width it prints with the widest strip in Fig. 2, 2.36. Close, but not equal, and if you watch the last rounds you will see why: the strip keeps breathing, a little too wide, then a little too narrow. This loop takes nudges of one fixed size, so it jostles about near the best line rather than landing on it. Real programs make the nudges smaller as they go, or solve for the best line directly. Yours is a simplified version of what they do, but the two moves are the same.
+
+## What if no line can split them?
+
+Real data is rarely so tidy. Here are 28 new applications, and this time the kinds overlap: a few crosses sit among the triangles, and a few triangles among the crosses.
+
+### How does it break?
+
+You already have a loop that nudges the line away from every point on the wrong side. So tell it to keep going until no point is on the wrong side. On the first 24 points that happens in the very first round. The 80 is a safety catch. Run it.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+from page import tangled_points, tangled_kinds     # 28 new points: the two kinds overlap
+
+line = (0, 0, 0)
+frames = []
+for r in range(80):                         # a safety catch: the plan is to stop long before 80
+    line = one_round(line, tangled_points, tangled_kinds)
+    wrong = wrong_side(line, tangled_points, tangled_kinds)
+    pic = draw(tangled_points, tangled_kinds, line, 1, wrong)
+    pic["notes"] = ["round " + str(r + 1), "wrong side " + str(len(wrong))]
+    frames.append(pic)
+    if len(wrong) == 0:                     # every point on its own side: done
+        break                               # break leaves the loop early
+
+print("rounds:", len(frames), "  still on the wrong side:", len(wrong))
+```
+:::
+
+It never stops early. It uses up all 80 rounds, and the starred points are still on the wrong side. Without the safety catch it would run forever, because what it is waiting for cannot happen: no straight line puts every one of these points on its own side. Dragging a line by hand would never have shown you this. You would simply have given up. A program has to be told what to do instead.
+
+::: {.ask data-veil="true"}
+No straight line gets every point right. What should the computer do?
+
+- **Draw a bendy line that weaves round the strays.** It could, and later on this page you will see a fair way to bend. But a line that weaves round every stray is learning the strays, and tomorrow's strays will be somewhere else.
+- **Keep the line with the fewest mistakes.** Closer. But many lines tie on fewest mistakes, and you are back to choosing between them, with no strip to help.
+- **Allow some points inside the strip, or even across the line, and weigh them against the width.** Yes. A few points in the strip is a fair price for a wide one, as long as there is a dial for how much to pay.
+:::
+
+::: {.ink-figure data-figure="gap-dial" data-step="0" data-caption="Fig. 3 · 28 made-up applications that overlap, fitted live in your browser"}
+:::
+
+Slide the dial. Allow hardly any mistakes and the line twists to keep points out of a narrow strip. Allow a lot and the strip opens wide, swallowing more points, and the line settles on the broad shape of the two clouds. Neither end is right in general. People pick the setting by testing each one on points the fit never saw; a later lesson shows how.
+
+Then drag a point that has no star, without pulling it into the strip. The line barely moves, if at all. Drag a starred one and it does. Even here, only the points in or touching the strip decide where the line goes.
+
+Your loop has this dial already. It is `keep`. A shrink that keeps less widens the strip harder, so the nudges lose more often. Here it is turned four ways on the same 28 points:
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import tangled_points, tangled_kinds     # the 28 points of Fig. 3 again
+
+frames = []
+for keep in [0.999, 0.99, 0.95, 0.9]:        # the dial: from hardly any shrink to a lot
+    line = (0, 0, 0)
+    for r in range(60):
+        line = one_round(line, tangled_points, tangled_kinds)
+    inside = [p for p, k in zip(tangled_points, tangled_kinds) if k * score(line, p) < 1]
+    print("keep", keep, "  strip width", round(width(line), 2), "  inside or wrong", len(inside))
+    pic = draw(tangled_points, tangled_kinds, line, 1, inside)
+    pic["notes"] = ["keep " + str(keep), "strip width " + str(round(width(line), 2)), "inside " + str(len(inside))]
+    frames.append(pic)
+```
+:::
+
+Each time round, `keep` takes the next value in the list, and `one_round` uses whatever `keep` is when it runs. As `keep` falls, the strip widens and takes in more points: the same trade as the dial in Fig. 3.
+
+## What if no straight line will do at all?
+
+Sometimes the trouble is not a few strays. Below, the crosses sit in the middle and the triangles ring them all the way round. Every straight line leaves crosses and triangles together on one side.
+
+::: {.ink-figure data-figure="gap-ring" data-step="0" data-caption="Fig. 4 · one kind ringed by the other · made-up points"}
+:::
+
+What separates them is plain to see: crosses are near the centre, triangles far from it. So build a new measurement out of the two old ones, the distance from the centre. For the point (3, 0) it is 3. For the point (0.6, 0.8) it is the square root of 0.6 × 0.6 + 0.8 × 0.8 = 0.36 + 0.64 = 1, and the square root of 1 is 1.
+
+Press *measure from centre*. Each point keeps its across, and its up is swapped for its distance from the centre. The crosses sink, the triangles rise, and now a flat straight line splits them. Drag it until the count is 0, then go back: the same cut, in the old picture, is a circle.
+
+Nothing else changes. The method still draws a straight line with the widest strip. It just draws it on new measurements made from the old ones, and a straight line there can be a curve here. Programs can do this with many new measurements at once, built so cleverly that they never have to be listed one by one.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Splitting two kinds with a straight line, using the widest strip | A support vector machine |
+| The kinds, written as 1 and −1 | Class labels |
+| The line | The decision boundary (in more measurements: a plane, then a hyperplane) |
+| *a* and *b* | The weights, $\mathbf{w}$ |
+| The shift | The bias or intercept, $b$ |
+| The empty strip | The margin |
+| The starred points that touch it | Support vectors |
+| Kind × score below 1 means a nudge | The hinge loss |
+| Shrinking *a* and *b* | Regularisation |
+| The dial: how much room to give mistakes | The cost parameter, C (or λ) |
+| Allowing points in the strip | A soft margin |
+| New measurements built from old ones | A feature map; a kernel does it without listing them |
+
+The method takes its name from those starred points: they hold the line up, and nothing else matters to it. With more than two measurements, the line becomes a flat plane, and then a flat shape in more dimensions than anyone can picture. The score and the rule do not change.
+
+A library such as scikit-learn, or R's `e1071`, has a support vector machine that finds the widest strip exactly instead of by fixed-size nudges. Its dial is usually called C, and it runs the other way to your shrinking: a large C makes every point in the strip expensive, so the strip narrows, like `keep` close to 1. A small C lets points in and the strip widens. You choose C by testing on points the fit has not seen.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write the line as $\mathbf{w} \cdot \mathbf{x} + b = 0$, where $\mathbf{x}$ is a point, $\mathbf{w}$ holds the weights (your *a* and *b*) and $b$ is the shift. Read $\mathbf{w} \cdot \mathbf{x}$ as "multiply matching numbers and add": $a \times \text{across} + b \times \text{up}$. The sign of $\mathbf{w} \cdot \mathbf{x} + b$ is the side. Changing $\mathbf{w}$ turns the line; changing $b$ slides it.
+
+With the strip's edges at $\mathbf{w} \cdot \mathbf{x} + b = \pm 1$, its width is
 
 $$\text{margin} = \frac{2}{\|\mathbf{w}\|}$$
 
-so the widest street is the one with the smallest weights. That turns "find the best line" into a problem you can hand to an optimiser:
+where $\|\mathbf{w}\|$ is the length of $\mathbf{w}$. So the widest strip is the one with the smallest weights:
 
-$$\min_{\mathbf{w},\, b} \; \tfrac{1}{2}\|\mathbf{w}\|^2 \quad \text{subject to} \quad y_i(\mathbf{w} \cdot \mathbf{x}_i + b) \ge 1 \;\text{ for every } i$$
+$$\min_{\mathbf{w},\, b} \; \tfrac{1}{2}\|\mathbf{w}\|^2 \quad \text{such that} \quad y_i(\mathbf{w} \cdot \mathbf{x}_i + b) \ge 1 \;\text{ for every point } i$$
 
-Here $y_i$ is the label of point $i$, written as $+1$ or $-1$. Multiplying by it makes the left side positive whenever the point is on its own side, so the constraint says: every point on the correct side, and at least one unit clear of the line. The square and the half change nothing about the answer. They only make the calculus cleaner.
+Here $y_i$ is the kind of point $i$, 1 or −1, and the condition is your "kind × score at least 1". The half and the square change nothing about the answer; they only make the calculus tidier.
 
-## Trading width for mistakes
-
-Real classes overlap, and then no line satisfies every constraint. The soft-margin version lets a point break the rule by an amount $\xi_i$ and charges for it:
+When the kinds overlap, each point may break the rule by an amount $\xi_i$ (read "ksi"), at a price:
 
 $$\min_{\mathbf{w},\, b} \; \tfrac{1}{2}\|\mathbf{w}\|^2 + C \sum_i \xi_i$$
 
-A point with $\xi_i = 0$ is outside the street on its own side. Between 0 and 1 it is inside the street but still correctly classified. At 1 or more it is on the wrong side. The two terms pull against each other: a wider street, or fewer violations.
+Read the big Σ as "add these up". $\xi_i = 0$ means the point is outside the strip on its own side, between 0 and 1 means inside the strip but still on its own side, and 1 or more means across the line. The same trade is often written the other way round, with the dial on the width instead:
 
-::: {.ink-figure data-figure="svm-figure" data-step="2" data-steps="2:slide λ|3:move a point" data-caption="Fig. 3 · fitted live in your browser · made-up points"}
-:::
+$$\sum_j \max\{0,\, 1 - y_j(\mathbf{w} \cdot \mathbf{x}_j + b)\} + \lambda \|\mathbf{w}\|^2$$
 
-The figure writes the same trade the other way round, as the course lectures do: $\sum_j \max\{0,\, 1 - y_j(\mathbf{a} \cdot \mathbf{x}_j + a_0)\} + \lambda \sum_i a_i^2$. There the knob $\lambda$ multiplies the margin term, so raising it widens the street and lets more points inside. [Exam trap: read the formula before the letter. On the error term, a large C means a narrow margin and overfitting risk. On the coefficient term, a large C or λ means a wide margin and underfitting risk.]{.side}
+The first part is your nudge rule, the second your shrink. Raising $\lambda$ widens the strip, like lowering `keep`; raising $C$ narrows it.
 
-In R's `e1071` and `kernlab`, C sits on the error term, so it runs opposite to $\lambda$: a large C makes every violation expensive, the street narrows, and the model bends to fit the training points. A small C tolerates violations, the street widens, and the model is simpler. Neither end is right in general. You pick the value by cross-validation.
-
-One practical rule comes before any of this. The method measures distances, so a variable recorded in large units will dominate one recorded in small units. Scale the features first.
-
-## When a line will not do
-
-Some data cannot be split by any straight line: a ring of one class around a cluster of the other, for example. The optimisation above only ever uses the data through dot products $\mathbf{x}_i \cdot \mathbf{x}_j$. Replace that dot product with a **kernel** function $K(\mathbf{x}_i, \mathbf{x}_j)$ and you get the effect of mapping the points into a higher-dimensional space, where a flat separator exists, without ever computing the mapping.
+The new measurements enter through a **kernel**, $K(\mathbf{x}_i, \mathbf{x}_j)$, which stands in for $\mathbf{x}_i \cdot \mathbf{x}_j$. The fit only ever uses the points through such products, so swapping in a kernel acts like moving the points into a space with more measurements, without ever working them out.
 
 | Kernel | Formula | When to use |
 |:------:|:--------|:------------|
-| Linear | $K = \mathbf{x}_i \cdot \mathbf{x}_j$ | The classes are roughly linearly separable |
-| Polynomial | $K = (\mathbf{x}_i \cdot \mathbf{x}_j + 1)^d$ | Interaction effects between features |
-| RBF (Gaussian) | $K = e^{-\gamma\|\mathbf{x}_i - \mathbf{x}_j\|^2}$ | The default for nonlinear patterns |
+| Linear | $K = \mathbf{x}_i \cdot \mathbf{x}_j$ | The kinds are roughly split by a straight line |
+| Polynomial | $K = (\mathbf{x}_i \cdot \mathbf{x}_j + 1)^d$ | Measurements that matter in combination |
+| RBF (Gaussian) | $K = e^{-\gamma\|\mathbf{x}_i - \mathbf{x}_j\|^2}$ | The usual first choice for curved boundaries |
+:::
 
-## Run it yourself {.reference}
-
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 Two clusters of labelled points, the starting position for everything above.
@@ -344,46 +721,4 @@ points(grid3$x1, grid3$x2,
 
 par(mfrow = c(1, 1))
 ```
-
-## On one page {.reference}
-
-```
-THE SVM RECIPE
-==============
-
-1. GOAL: Find the boundary with the widest margin
-
-2. FORMULA (soft margin):
-
-   min  ½||w||²  +  C × Σξᵢ
-        --------     --------
-        "keep the    "penalize
-         margin       errors"
-         wide"
-
-   subject to: yᵢ(w·xᵢ + b) ≥ 1 - ξᵢ
-
-3. KEY PARAMETERS:
-   C     → error tolerance  (tune via cross-validation)
-   kernel → shape of boundary (linear, RBF, polynomial)
-   γ     → RBF "reach"      (high γ = local, low γ = global)
-
-4. SUPPORT VECTORS = points on the margin edge
-   - Only these points define the boundary
-   - More SVs = simpler/wider margin
-   - Fewer SVs = tighter/narrower margin
-
-5. ALWAYS SCALE YOUR FEATURES FIRST
-   SVM uses distances — unscaled features with large ranges dominate
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What does the weight vector $\mathbf{w}$ control geometrically?
-2. Why do we minimize $\|\mathbf{w}\|^2$ instead of maximizing the margin directly?
-3. What happens when you increase C? What about decreasing it?
-4. Why are they called "support" vectors?
-5. When would you use an RBF kernel instead of a linear one?
-6. Why must you scale features before using SVM?
+:::

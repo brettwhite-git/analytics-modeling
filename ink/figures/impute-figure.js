@@ -2,7 +2,7 @@
    80 made-up rows: x is known for every row, y is hidden for some. Which rows lose y is decided by a seeded
    priority (pure chance, or "mostly when y is high"), so the hidden set grows smoothly with the slider.
    The mean, the least-squares line and its residual spread are fitted from the rows that still have y;
-   the readouts (mean, SD, correlation) are computed from exactly the values that are drawn.
+   the readouts (average, spread, typical miss from the closest line) are computed from exactly the values drawn.
    Steps: 0 the problem (x known, y not; rows kept vs truth) · 1 mean imputation · 2 regression imputation ·
           3 regression plus perturbation (seeded noise with the residual SD).
    Controls in every step: share missing (slider) and how y goes missing (button).
@@ -45,7 +45,8 @@
     for (i = 0; i < n; i++) { mx += xs[i]; my += ys[i]; }
     mx /= n; my /= n;
     for (i = 0; i < n; i++) { sxx += (xs[i] - mx) * (xs[i] - mx); syy += (ys[i] - my) * (ys[i] - my); sxy += (xs[i] - mx) * (ys[i] - my); }
-    return { n: n, mx: mx, mean: my, sd: Math.sqrt(syy / (n - 1)), corr: sxy / Math.sqrt(sxx * syy), sxx: sxx, sxy: sxy, syy: syy };
+    // spread: typical distance from the average; miss: typical distance from the closest line (both divide by n)
+    return { n: n, mx: mx, mean: my, sd: Math.sqrt(syy / n), miss: Math.sqrt(Math.max(0, syy - sxy * sxy / sxx) / n), sxx: sxx, sxy: sxy, syy: syy };
   }
 
   /* least squares on the rows that still have y, and the residual standard error */
@@ -91,7 +92,7 @@
       var C1 = SIDE + 102, C2 = SIDE + COL;
       side.text(C1, 46, 'true', { kind: 'label', anchor: 'end' });
       var head = side.text(C2, 46, '', { kind: 'label', anchor: 'end' });
-      var rows = [['mean y', 'mean', 2], ['sd of y', 'sd', 2], ['corr', 'corr', 2]].map(function (r, i) {
+      var rows = [['average', 'mean', 2], ['spread', 'sd', 2], ['line miss', 'miss', 2]].map(function (r, i) {
         var y = 66 + i * 18;
         side.text(SIDE, y, r[0], { kind: 'label' });
         return { key: r[1], dp: r[2], t: side.text(C1, y, '', { kind: 'val', anchor: 'end' }), v: side.text(C2, y, '', { kind: 'val', anchor: 'end' }) };
@@ -105,7 +106,7 @@
       side.dot(SIDE + 5, 260, 1.7, { op: 0.5 });
       side.text(SIDE + 16, 263.5, 'the y you never saw', { kind: 'axis' });
 
-      var NOTES = [['a', 'x known, y not'], ['b', 'all at the mean'], ['c', 'all on the line'], ['d', 'line plus noise']];
+      var NOTES = [['a', 'x known, y not'], ['b', 'all at the average'], ['c', 'all on the line'], ['d', 'line plus a nudge']];
 
       function redraw() {
         var step = k.step(), m = Math.round(pct / 100 * N), r = solve(pts, biased, m, step), i, target = null;

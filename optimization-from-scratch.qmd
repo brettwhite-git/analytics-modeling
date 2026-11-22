@@ -1,125 +1,373 @@
 ---
 title: "How do you choose the best plan when everything has a limit?"
-subtitle: "Software will solve an optimisation model in milliseconds. Writing the model down is the part it cannot do for you."
+subtitle: "You will hunt for the best plan by hand first, then teach a computer to find it. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="lp-figure" data-step="0" data-caption="Fig. 1 · three limits, and the plans they leave · made-up workshop"}
+A small workshop makes tables and chairs. A table earns \$500 and a chair \$400. So make as many as you can? You can't. A table takes 5 hours on the saw and 2 hours in the paint shop. A chair takes 2 on the saw and 5 in the paint shop. Each week has 30 saw hours and 26 paint hours, and nobody has ordered more than 4 chairs.
+
+How many of each should the workshop make? Most of this guide asks *what will happen?* This lesson asks *what should we do?* A computer can answer that in a blink, but only once someone has written the question down clearly. Writing it down is the part nobody can do for you.
+
+## How many tables and how many chairs?
+
+A plan is two numbers: so many tables, so many chairs. In the picture, a plan is a point. Across is tables, up is chairs, and every faint dot is a plan you could pick.
+
+Drag the ring. The column beside the picture shows what your plan earns, and how many hours it uses on the saw and in the paint shop against the hours there are. A bar that runs past its stop means the plan breaks that limit.
+
+::: {.ink-figure data-figure="plan-workshop" data-step="0" data-caption="Fig. 1 · a made-up workshop: drag your plan and watch the hours"}
 :::
 
-A small workshop makes tables and chairs. A table needs 5 hours on the saw and 2 in the paint shop; a chair needs 2 and 5. The week has 30 saw hours and 26 paint hours, and there are orders for at most 4 chairs. A table earns \$500 and a chair \$400. How many of each should it make?
+Hunt for the best plan you can find. Try 5 tables and 3 chairs first: 5 × 5 + 2 × 3 = 31 saw hours, and there are only 30. Close, but not allowed.
 
-Most of this guide answers *what will happen?* Optimisation answers *what should we do?* Given a goal, some limits and a set of decisions you control, it finds the best combination of decisions. It shows up in two places. At the top level it is prescriptive analytics: what to invest in, how to schedule workers, which route the delivery truck takes. And it sits underneath almost every model in this guide, picking their parameters. The thing to remember through all of it: software can *solve* an optimisation problem, but it cannot *formulate* one for you. The modelling is the hard part, and that makes it a competitive skill.
+The column keeps your best allowed plan so far. Keep it in mind. A computer will hunt for the same thing in a moment.
 
-## Three parts of every model
+Three things decide the answer, and you have just used all of them: **the choices** (how many tables, how many chairs), **the limits** (saw hours, paint hours, orders), and **the goal** (as much profit as possible).
 
-Every optimisation model is built from the same three pieces.
+## Which plans are allowed?
 
-| Piece | What it represents |
-|---|---|
-| **Variables** | The decisions the solver picks values for |
-| **Constraints** | The rules those decisions must obey |
-| **Objective function** | The single number we're maximizing or minimizing |
+Hunting point by point is slow. You can draw the limits instead.
 
-A **solution** is a value for every variable. A **feasible solution** satisfies every constraint. The **optimal solution** is the feasible solution with the best objective value. In the figure, every point of the hatched region is a feasible solution, and the workshop's model reads: maximise $500x_1 + 400x_2$ subject to $5x_1 + 2x_2 \le 30$, $2x_1 + 5x_2 \le 26$, $x_2 \le 4$ and $x_1, x_2 \ge 0$. [A language habit: never say "more optimal" or "most optimal". It is like saying "more best". A solution is either optimal or it isn't.]{.side}
+Take the saw. Six tables and no chairs use 6 × 5 = 30 hours, exactly what there is. So does 4 tables and 5 chairs: 20 + 10 = 30. Every plan that uses exactly 30 saw hours sits on one straight line. On one side of it the saw has hours to spare. On the other side it runs out.
 
-When the objective and every constraint are straight-line expressions like these, the model is a **linear program**. The problem that started the field in the 1940s was a linear program: feed soldiers at minimum cost subject to nutritional constraints. Here is a version with two foods and two nutrients. The decision is how much of each food to serve, $x_1$ servings of bread and $x_2$ of cheese. A meal needs at least 8 g of protein and 10 g of carbs. Bread has 2 g of protein and 4 g of carbs per serving and costs \$0.20; cheese has 5 g and 1 g and costs \$0.50.
+Press *draw the next limit* three times. Each limit arrives as a line, with the side that breaks it hatched.
+
+::: {.ink-figure data-figure="plan-workshop" data-step="1" data-caption="Fig. 2 · each limit cuts off the plans that break it"}
+:::
+
+The plans nobody hatched are the allowed ones. There is one more limit you never had to draw: you cannot make fewer than zero of anything, so every plan stays right of the left edge and above the bottom edge.
+
+Is your best plan from Fig. 1 inside the clear area? It has to be. And now you can see where the good plans are: up and to the right, as far as the limits let you go.
+
+### Now tell a computer
+
+A computer cannot see the picture. It needs the limits as numbers. The cell below fetches the same three limits, the two profits, and the best plan you found in Fig. 1.
+
+Press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import limits, profits, my_plan     # the workshop above, and your best plan
+
+print("Limits:", limits)
+print("Profit for a table, for a chair:", profits)
+print("Your best plan:", my_plan)
+
+picture = {"stars": [my_plan], "xlim": (0, 7), "ylim": (0, 6),
+           "xlabel": "tables", "ylabel": "chairs"}
+```
+:::
+
+`print` writes things out. Each limit is four things in a row: its name, the hours one table uses, the hours one chair uses, and the hours there are. The last line leaves a `picture` behind, a small collection of named things to draw. Here that is one ring, where your plan sits.
+
+Next, a check that a plan breaks no limit. By hand you would take each limit in turn, add up the hours the plan uses, and compare with the hours there are.
+
+::: {.ask}
+Before you write code for it: how would you check the code is right?
+
+- **Try it on my best plan.** That only tests one answer, and one you expect to be "allowed". Code that says "allowed" to everything would pass.
+- **Try 5 tables and 3 chairs.** Yes. You worked that one out by hand: 31 saw hours when there are 30. The code must say no. Try an allowed plan too, so you see it can say yes.
+:::
+
+`def` gives a set of steps a name, so you can use them again. `for ... in limits` takes the limits one at a time and gives the four parts of each a name. `if` does the next line only when something is true, and `return` hands back an answer and stops.
+
+::: {.py-cell}
+```python
+def allowed(plan):
+    tables, chairs = plan                              # a plan is two numbers
+    for name, per_table, per_chair, available in limits:
+        used = per_table * tables + per_chair * chairs  # hours this plan needs
+        if used > ____:                                 # more than there is?
+            return False                                # then it breaks this limit
+    return True                                        # it broke none of them
+
+print(allowed((5, 3)))      # by hand: 31 saw hours of 30, so False
+print(allowed((5, 2)))      # 29 saw hours, 20 paint hours, 2 chairs ordered: True
+```
+::: {.py-solution}
+```python
+def allowed(plan):
+    tables, chairs = plan                              # a plan is two numbers
+    for name, per_table, per_chair, available in limits:
+        used = per_table * tables + per_chair * chairs  # hours this plan needs
+        if used > available:                            # more than there is?
+            return False                                # then it breaks this limit
+    return True                                        # it broke none of them
+
+print(allowed((5, 3)))      # by hand: 31 saw hours of 30, so False
+print(allowed((5, 2)))      # 29 saw hours, 20 paint hours, 2 chairs ordered: True
+```
+:::
+:::
+
+The orders limit fits the same pattern: a table uses none of it, a chair uses one, and there are 4.
+
+The profit is plainer still. `profits[0]` is the first number in the list, what a table earns, and `profits[1]` is the second.
+
+::: {.py-cell}
+```python
+def profit(plan):
+    tables, chairs = plan
+    return profits[0] * tables + ____
+
+print(profit((5, 2)))       # by hand: 2500 + 800 = 3300
+print(profit(my_plan))      # compare with your best in Fig. 1
+```
+::: {.py-solution}
+```python
+def profit(plan):
+    tables, chairs = plan
+    return profits[0] * tables + profits[1] * chairs
+
+print(profit((5, 2)))       # by hand: 2500 + 800 = 3300
+print(profit(my_plan))      # compare with your best in Fig. 1
+```
+:::
+:::
+
+## Which allowed plan earns the most?
+
+The workshop can make 0 to 7 tables and 0 to 6 chairs, so there are 8 × 7 = 56 plans on the page. A computer does not get bored. It can try all of them.
+
+`range(8)` counts 0, 1, 2 and so on up to 7. A `for` inside another `for` is two loops: for each number of tables, try every number of chairs. `plans` is a list, written with square brackets, and `append` adds one thing to its end.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+plans = []                          # every plan on the page
+for tables in range(8):             # 0 to 7 tables
+    for chairs in range(7):         # and, for each, 0 to 6 chairs
+        plans.append((tables, chairs))
+
+shapes = []                         # 0 draws a ring, 2 draws a cross
+for plan in plans:
+    if allowed(plan):
+        shapes.append(0)
+    else:
+        shapes.append(2)
+
+print(len(plans), "plans,", shapes.count(0), "of them allowed")   # count the 0s
+
+picture = {"points": plans, "labels": shapes, "xlim": (-0.5, 7.5), "ylim": (-0.5, 6.5),
+           "xlabel": "tables", "ylabel": "chairs",
+           "notes": ["ring: allowed", "cross: breaks a limit"]}
+```
+:::
+
+The rings make the same shape as the clear area in Fig. 2. Your code found the allowed plans one at a time, with no picture to look at.
+
+Now keep the best. By hand you would remember the best allowed plan so far, and swap it out whenever you met a better one. That is what the column in Fig. 1 did while you dragged. Every time the code finds a new best, it saves a picture, so you can watch the ring jump.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+best = None                         # no plan yet
+best_profit = -1                    # so the first allowed plan beats it
+frames = []                         # one picture for every new best
+
+for tables in range(8):
+    for chairs in range(7):
+        plan = (tables, chairs)
+        if allowed(plan) and profit(plan) > ____:
+            best = plan
+            best_profit = profit(plan)
+            frames.append({"points": plans, "labels": shapes, "stars": [best],
+                           "xlim": (-0.5, 7.5), "ylim": (-0.5, 6.5),
+                           "xlabel": "tables", "ylabel": "chairs",
+                           "notes": ["best so far " + str(best), "profit $" + str(best_profit)]})
+
+print("Best plan:", best, "Profit:", best_profit)
+print("Yours:", my_plan, "Profit:", profit(my_plan))
+```
+::: {.py-solution}
+```python
+best = None                         # no plan yet
+best_profit = -1                    # so the first allowed plan beats it
+frames = []                         # one picture for every new best
+
+for tables in range(8):
+    for chairs in range(7):
+        plan = (tables, chairs)
+        if allowed(plan) and profit(plan) > best_profit:
+            best = plan
+            best_profit = profit(plan)
+            frames.append({"points": plans, "labels": shapes, "stars": [best],
+                           "xlim": (-0.5, 7.5), "ylim": (-0.5, 6.5),
+                           "xlabel": "tables", "ylabel": "chairs",
+                           "notes": ["best so far " + str(best), "profit $" + str(best_profit)]})
+
+print("Best plan:", best, "Profit:", best_profit)
+print("Yours:", my_plan, "Profit:", profit(my_plan))
+```
+:::
+:::
+
+`and` means both must be true: the plan is allowed, and it earns more than the best so far. `str` turns a plan into text, so it can go in a note. The code settles on 5 tables and 2 chairs, for \$3,300. Compare it with the best you found in Fig. 1. If you found the same plan, you did by hand exactly what the loops did.
+
+## Where is the best plan?
+
+Fifty-six plans is nothing for a computer. A real factory chooses hundreds of amounts at once, and there are far too many combinations to try them all. You need to know where to look.
+
+For a moment, forget whole numbers. Pretend the workshop can make part of a table this week and finish it next week. Then every point in the clear area is a plan, not just the dots.
+
+::: {.ask data-veil="true"}
+Where would the plan with the most profit be?
+
+- **Somewhere in the middle of the allowed area.** Pick any plan in the middle. Add a little more of either: still allowed, and richer. So the middle can always be beaten.
+- **On its edge, against a limit.** Yes, it must be: anywhere else you could add a little more of something. But an edge is long. Which point on it?
+- **At a corner.** That is the claim. Slide the line and see if it holds.
+:::
+
+Every plan that earns exactly \$1,500 sits on one straight line: 3 tables, or 3¾ chairs, or anything between. Every plan that earns \$3,000 sits on another line, parallel to the first and further out. Drag the slider to move the line, or press *push it out*.
+
+::: {.ink-figure data-figure="plan-workshop" data-step="2" data-caption="Fig. 3 · a line of equal profit, pushed out until it is about to leave"}
+:::
+
+For a while the line still crosses the allowed area, so that profit can be reached. Then it is about to leave, and the last plan it touches is a corner. That is the best plan: 4⅔ tables and 3⅓ chairs, for \$3,667, exactly where the saw line and the paint line cross. At that corner both are used up, to the hour.
+
+So you only ever need to check the corners. Here there are five. Work one by hand: at 3 tables and 4 chairs the profit is 1500 + 1600 = 3100.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+corners = [(0, 0), (6, 0), (14 / 3, 10 / 3), (3, 4), (0, 4)]   # around the allowed area
+
+top = corners[0]
+for c in corners:
+    print("corner", (round(c[0], 2), round(c[1], 2)), "profit", round(profit(c)))
+    if profit(c) > profit(top):
+        top = c
+
+print("Best corner:", (round(top[0], 2), round(top[1], 2)), "Profit:", round(profit(top)))
+
+picture = {"lines": [corners + [corners[0]]],      # the outline, back to the start
+           "points": corners, "stars": [top],
+           "xlim": (-0.5, 7.5), "ylim": (-0.5, 6.5), "xlabel": "tables", "ylabel": "chairs",
+           "notes": ["5 corners checked", "not 56 plans"]}
+```
+:::
+
+`round(x, 2)` keeps two figures after the point, so 4.666… prints as 4.67. Compare the printed profits with the list in Fig. 3: they are the same five numbers.
+
+Why a corner? Walk along any edge of the area and the profit changes steadily, always up or always down, because it is just so much per table plus so much per chair. So you can always do at least as well by walking on to the corner at the end. This gives a fast method even for thousands of choices: start at one corner, step to a neighbouring corner that earns more, and stop when none does. If the line happens to lie exactly along an edge, every plan on that edge ties, and a corner is still among the best.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write $x_1$ for the number of tables and $x_2$ for the number of chairs. The whole workshop is
 
 $$
 \begin{aligned}
-\text{minimize} \quad & 0.20 x_1 + 0.50 x_2 \\
-\text{subject to} \quad & 2 x_1 + 5 x_2 \ge 8 \quad (\text{protein}) \\
-& 4 x_1 + 1 x_2 \ge 10 \quad (\text{carbs}) \\
+\text{maximise} \quad & 500 x_1 + 400 x_2 \\
+\text{subject to} \quad & 5 x_1 + 2 x_2 \le 30 \quad (\text{saw}) \\
+& 2 x_1 + 5 x_2 \le 26 \quad (\text{paint}) \\
+& x_2 \le 4 \quad (\text{orders}) \\
 & x_1, x_2 \ge 0
 \end{aligned}
 $$
 
-The two problems look different, one a maximum under "at most" limits and the other a minimum under "at least" limits, but they have the same three parts and the same solver handles both.
-
-## Why the answer is at a corner
-
-With two variables you can draw the whole problem. Each constraint cuts off a half-plane, and the feasible set is what is left where they all overlap. The objective is a family of parallel lines, one for each value it can take. Pick a profit, and the plans that earn exactly that much lie on one line.
-
-::: {.ink-figure data-figure="lp-figure" data-step="1" data-steps="1:slide the profit line|2:change a price" data-caption="Fig. 2 · the same model, solved in your browser · made-up workshop"}
+Read $\le$ as "at most" and $\ge$ as "at least". The best corner is where the saw and paint lines cross, where both hold exactly: $5x_1 + 2x_2 = 30$ and $2x_1 + 5x_2 = 26$. Multiply the first by 5 and the second by 2 to get $25x_1 + 10x_2 = 150$ and $4x_1 + 10x_2 = 52$. Take one from the other: $21x_1 = 98$, so $x_1 = 14/3 \approx 4.67$, and then $x_2 = 10/3 \approx 3.33$.
 :::
 
-Slide the line toward higher profit and it sweeps across the region. For a while part of it is still inside, so that profit can be reached. Then it lets go, and the last thing it touches is a corner. That is the answer: the optimum of a linear program sits at a vertex of the feasible region, where two constraints are both used up. Those are the **binding** constraints; the others have slack.
+## What if you can only make whole tables?
 
-The reason is that the objective is linear. Moving along any edge changes the objective steadily in one direction, so you can always do at least as well by going on to the vertex at its end. That is the whole idea behind the simplex algorithm, which walks from vertex to vertex until no neighbour improves the objective. Change what a table earns and the line tilts; at some price a different corner becomes the last one touched, and the plan jumps there with nothing in between. [In the diet problem the cost line is exactly parallel to the protein line (0.20/2 = 0.50/5), so there is a tie: the corner `lpSolve` reports, (2.33, 0.67), and the all-bread corner (4, 0) both cost \$0.80, and so does every point between them. A tie fills an edge, and a vertex is still among the best.]{.side}
+Nobody buys two thirds of a table. The obvious fix is to round the best corner: 4.67 tables becomes 5, and 3.33 chairs becomes 3. `round` with no second number rounds to a whole number.
 
-## Choosing the variables
+This cell also checks the plan before it would be sent to the workshop floor. `assert` means: stop right here if this is not true.
 
-Picking the right variables matters more than the algebra. The standard warning is a call centre that needs $d_i$ workers on day $i$ of the week and wants everyone to work 5 consecutive days and then take 2 off.
+::: {.py-cell data-aside="true"}
+```python
+best_corner = (14 / 3, 10 / 3)
+rounded = (round(best_corner[0]), round(best_corner[1]))   # 4.67 -> 5, 3.33 -> 3
+print("Rounded plan:", rounded, "Profit:", profit(rounded))
 
-The obvious variables are $x_i$, the number of workers on day $i$. The objective $\sum x_i$ and the demand constraints $x_i \ge d_i$ are trivial to write. The five-consecutive-days rule is nearly impossible to express.
+for name, per_table, per_chair, available in limits:
+    print(name, per_table * rounded[0] + per_chair * rounded[1], "of", available)
 
-The right variables are $x_i$, the number of workers who *start* their five-day stretch on day $i$. The objective becomes $5 \sum x_i$. Tuesday's demand is
-
-$$x_{\text{Fri}} + x_{\text{Sat}} + x_{\text{Sun}} + x_{\text{Mon}} + x_{\text{Tue}} \ge d_{\text{Tue}}$$
-
-and the five-in-a-row rule is built into the definition of the variable, with no extra constraints needed. [Common pitfall: optimisation is as much about formulation as about solving. The same problem written with the wrong variables can become intractable. Whenever a constraint feels awkward to write, ask whether a different variable definition would make it disappear.]{.side}
-
-## Yes-or-no decisions
-
-Some decisions are not amounts. Take a portfolio where $x_i$ is the dollars put into stock $i$. Add a second variable $y_i \in \{0, 1\}$ that is 1 if you invest in stock $i$ and 0 otherwise, and you can model real constraints that are impossible with continuous variables alone.
-
-A **fixed charge**: if buying any amount of a stock costs a flat transaction fee $t$, add $\sum_i t \cdot y_i$ to the objective and link the two variables with $x_i \le B \cdot y_i$. If you are not buying, $x_i$ must be zero; if you are, it can be anything up to the budget $B$. A **minimum investment size** is $x_i \ge m_i \cdot y_i$: you can't put \$3 into Google when one share costs hundreds. [Link the variables. Solvers only see math, not your English intent. A relationship such as $\sum_d v_{id} = y_i$ does not exist for the solver unless you write it.]{.side}
-
-Logical rules become plain arithmetic on the binary variables.
-
-| Rule | Constraint |
-|---|---|
-| Must invest in Tesla | $y_{\text{TSLA}} = 1$ |
-| Invest in at least one of {A, G, AP} | $y_A + y_G + y_{AP} \ge 1$ |
-| Exactly one of them | $y_A + y_G + y_{AP} = 1$ |
-| FedEx and UPS together or neither | $y_{\text{FDX}} = y_{\text{UPS}}$ |
-| Coke and Pepsi opposite decisions | $y_{\text{KO}} = 1 - y_{\text{PEP}}$ |
-
-A binary variable is a variable that must be a whole number, and that requirement changes the problem. Go back to the workshop: its best corner calls for 4.67 tables and 3.33 chairs, and nobody buys two thirds of a table.
-
-::: {.ink-figure data-figure="lp-figure" data-step="3" data-steps="2:the LP answer|3:whole numbers only" data-caption="Fig. 3 · the best whole-number plan, found by checking every one · made-up workshop"}
+assert allowed(rounded), "the rounded plan breaks a limit"
+```
 :::
 
-Rounding the corner gives 5 tables and 3 chairs, which needs 31 saw hours when there are 30. The best whole-number plan is 5 and 2, which is not the nearest lattice point to the corner, and at other prices it is further away still. With whole-number variables the answer is no longer at a corner of the region, so the corner-walking trick is gone. Here the figure can afford to check all 28 candidate plans. A model with hundreds of binary variables has far too many combinations for that.
+It stops with `AssertionError`. The rounded plan needs 31 saw hours, and there are 30. You saw the same thing in Fig. 1 when you tried 5 and 3. The best corner was right on the saw line, so nudging it outward stepped over the line.
 
-## How hard is it to solve?
+::: {.ask}
+So what should the workshop make?
 
-Problem types differ enormously in how hard they are to solve. From easiest to hardest:
+- **Round down instead: 4 tables, 3 chairs.** That is allowed, and earns \$3,200. But your loops found 5 and 2, which earns \$3,300. Rounding down is safe, not best.
+- **Look at the whole plans next to the corner.** Here that works: 5 and 2 is close by. Now set a table to \$900 in Fig. 4. The corner does not move, but the best whole plan jumps all the way to 6 tables and no chairs.
+- **Try every whole plan.** That is what your two loops did, and it is the only one of these that is always right. It works for 56 plans. It does not work for millions.
+:::
 
-| Type | Notes |
-|---|---|
-| **Linear Program (LP)** | Millions of variables, fast. What we've been doing. |
-| **Convex Quadratic Program (QP)** | Fast. Portfolio optimization, ridge regression. |
-| **Convex Optimization (general)** | Still "easy" in theory, can be slow. |
-| **Integer Program (IP)** | Hard. Some small IPs don't have known optimal solutions even after days of compute. |
-| **General Non-Convex** | Brutal. Even tiny problems may be intractable. |
-| **Network Optimization** | *Faster* than LP. Shortest path, assignment, max flow. |
+::: {.ink-figure data-figure="plan-workshop" data-step="3" data-caption="Fig. 4 · the best corner, its rounding, and the best whole plan, checked one by one"}
+:::
 
-Recognising the type matters. A problem written as an integer program may be intractable, while the same problem reformulated as a network-flow problem can solve in milliseconds. This is why modelling ability matters more than knowing how to call a solver. [Binary variables make integer programs hard. Don't default to $y \in \{0, 1\}$ without considering whether an LP or network formulation would do.]{.side}
+Slide what a table earns. The corner jumps from one place to another, and the best whole plan wanders on its own, sometimes next to the corner, sometimes nowhere near it. With whole numbers the best plan is usually not at a corner of the area, so the trick of checking corners stops working. Whole-number problems are genuinely harder. Small ones are fine. Some quite small ones still have no known best answer after days of computing.
 
-## When the numbers are uncertain
+## What goes wrong when you write it down?
 
-Everything so far treats the inputs as known. When they are uncertain (demand forecasts, returns, transition rates), the deterministic optimum can be catastrophically bad. There are four approaches.
+Every problem like this has the same three parts: the choices, the limits, and the goal. Writing them down clearly is most of the work, and it is where mistakes happen.
 
-| Approach | Idea |
-|---|---|
-| **Conservative constraints** | Pad the RHS: require demand + $\theta$ extra buffer. |
-| **Chance constraints** | $P(\text{demand met}) \ge p$. Needs a distribution estimate. |
-| **Scenario optimization** | Define multiple scenarios, solve for a *robust* solution (feasible in all) or minimize expected cost across them. |
-| **Stochastic dynamic programming / Markov Decision Processes** | Model the system as states + decisions + transition probabilities and find the best policy via Bellman's equation. |
+**The same three parts, upside down.** A meal must have at least 8 g of protein and at least 10 g of carbohydrate. A serving of bread has 2 g of protein, 4 g of carbohydrate and costs \$0.20. A serving of cheese has 5 g, 1 g and \$0.50. The choices: servings of bread, servings of cheese. The limits: at least 8 g of protein, at least 10 g of carbohydrate. The goal: as *little* cost as possible. Its best plan is 2⅓ servings of bread and ⅔ of cheese, for \$0.80. All bread, 4 servings, also costs \$0.80: here the cost line lies exactly along the protein edge, so that whole edge ties. A problem very like this one, feeding soldiers as cheaply as possible, is where this whole subject began in the 1940s.
 
-Scenario optimisation in particular is very flexible. You can represent a messy probabilistic world as a discrete set of what-ifs and let the solver pick a policy that works across them.
+**Choosing the choices.** A call centre needs a certain number of people each day of the week. Everyone works 5 days in a row, then has 2 days off.
 
-## The optimisation inside every model
+::: {.ask}
+What should the choices be?
 
-Linear regression, LASSO, ridge, logistic regression, SVM, exponential smoothing, ARIMA, GARCH and k-means are all optimisation problems inside: each one is solved to pick parameters. Linear regression, for instance, minimises $\sum_i (y_i - a_0 - a_1 x_i)^2$ over the coefficients $a_0$ and $a_1$. [Statisticians and optimisers mean different things by "variable". Statisticians call the data $x_{ij}$ variables, because they vary across rows. Optimisers call the coefficients $a_0, a_1, \ldots$ variables, because they are what the solver picks. Always check which hat the person is wearing.]{.side}
+- **How many people work on each day.** The natural guess. The days are easy to write. But "5 in a row, then 2 off" is very hard to say in these numbers: nothing stops Monday having 10 people and Tuesday 30 different ones.
+- **How many people start their five days on each day.** Yes. Tuesday's crew is then everyone who started on Friday, Saturday, Sunday, Monday or Tuesday, and those five numbers added up must reach Tuesday's need. The "5 in a row" rule is built into what each number means, so it never has to be written as a limit.
+:::
 
-Hand that sum of squares to a general-purpose optimiser and you get the same intercept and slope as `lm()`. The optimiser is doing what `lm()` does under the hood; it just exposes the optimisation.
+When a limit is awkward to write, ask whether different choices would make it disappear.
 
-And because it is an optimisation problem, you can customise it: force the intercept to zero, constrain coefficients to be monotone, or use $|y - \hat{y}|^{1.5}$ instead of squared error. Standard regression packages can't do that. Optimisation solvers can.
+**Yes-or-no choices.** Some choices are not amounts. Build the factory or not. Buy this stock or not. Write such a choice as a number that can only be 0 (no) or 1 (yes), and plain arithmetic can say a lot:
 
-## Run it yourself {.reference}
+| What you want | What you write |
+|:--|:--|
+| Must buy Tesla | Tesla's number = 1 |
+| At least one of Amazon, Google, Apple | their three numbers add up to at least 1 |
+| Exactly one of them | their three numbers add up to exactly 1 |
+| FedEx and UPS together, or neither | FedEx's number = UPS's number |
+| Coke or Pepsi, but not both and not neither | Coke's number = 1 − Pepsi's number |
 
+A yes-or-no number can also be tied to an amount. Say you can put up to \$100,000 into a stock. Write "amount ≤ 100,000 × yes-or-no". If the answer is no (0), the amount must be 0; if yes (1), it can be anything up to the budget. A minimum works the same way: "amount ≥ 5,000 × yes-or-no" means you buy nothing or at least \$5,000. A flat fee for buying a stock at all is "fee × yes-or-no", added to the cost.
+
+Tie them together yourself. The computer only sees the numbers you wrote, not what you meant. If you never wrote the rule that ties an amount to its yes-or-no, the computer will happily invest money in a stock it said no to.
+
+Yes-or-no numbers are whole numbers, so they bring back the trouble from the last section. Use them when you need them, not by habit.
+
+**When the numbers are guesses.** Everything here treated 30 saw hours and 4 chair orders as certain. Real numbers are forecasts, and a plan that is best for the forecast can be terrible when the forecast is off. There are four common answers: leave a safety margin in the limits; ask for a limit to hold most of the time, say 95% of the time; write down several possible futures and find a plan that works in all of them, or is best on average across them; or plan one step at a time, deciding again as each future unfolds.
+
+## Where have you seen this before?
+
+Several earlier lessons were this all along. Fitting a straight line through points chose two numbers, the tilt and the height, to make the total squared miss as small as possible. The choices were the tilt and the height; there were no limits; the goal was the smallest miss. Moving flags to the middle of their dots made a total as small as possible too. So does almost every model in this guide.
+
+One word will trip you up. A statistician calls the columns of the data "variables", because they vary from row to row. Someone solving problems like this one calls the *choices* "variables", because they are what the computer varies. When you fit a line, those are the tilt and the height. Check which meaning someone has in mind.
+
+And because fitting is choosing, you can change the rules: force the line through zero, or measure the miss differently. A ready-made fitting function will not let you. A general solver will.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Choosing what to do, not predicting what will happen | Optimisation (prescriptive analytics) |
+| The choices: how many tables, how many chairs | Decision variables |
+| The limits | Constraints |
+| The goal: as much profit as possible | Objective function |
+| A plan that breaks no limit | A feasible solution |
+| All of the allowed plans, the clear area | The feasible region |
+| The allowed plan that earns the most | The optimal solution |
+| A line of equal profit | An iso-profit line (a level line of the objective) |
+| A limit that is used up exactly at the best plan | A binding constraint; the others have slack |
+| Straight-line goal and limits, any amounts | A linear program |
+| Walking from corner to better corner | The simplex method |
+| Whole numbers only | An integer program |
+| Yes-or-no numbers, 0 or 1 | Binary variables |
+| Leave a margin; hold most of the time; several futures; decide step by step | Conservative constraints; chance constraints; scenario optimisation; dynamic programming (Markov decision processes) |
+
+A best plan is either optimal or it is not; "more optimal" means nothing, like "more best".
+
+Problems come in kinds, from easy to hard. Linear programs solve in moments even with millions of choices. Problems shaped like a network (shortest routes, matching people to jobs) are faster still. Bending the goal into a smooth bowl, as in fitting a line, is still quick. Whole numbers are hard. Goals with many separate dips and peaks can be hopeless even when small. The same problem, written two ways, can land in different kinds, so the writing matters more than the solver.
+
+Libraries do the solving: SciPy's `linprog` in Python, or `lpSolve` in R as below. You hand them the profits, the hours each choice uses and the hours there are. They walk the corners for you, and for whole-number problems they search far more cleverly than your loops. Writing down the three parts is still your job.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every result below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 The diet problem, solved with `lpSolve`: the objective, the constraint matrix, the directions and the right-hand sides.
@@ -355,27 +603,4 @@ fit_optim <- optim(par = c(0, 0), fn = sse, method = "BFGS")
 cat("optim() intercept =", round(fit_optim$par[1], 4),
     "   slope =",          round(fit_optim$par[2], 4), "\n")
 ```
-
-## On one page {.reference}
-
-Common pitfalls recap:
-
-1. **"More optimal" is not a thing.** A solution is optimal or it isn't.
-2. **Problem formulation > solver choice.** The call-center example is the canonical illustration.
-3. **Link the variables.** Solvers only see math, not your English intent. $\sum_d v_{id} = y_i$ may be invisible to the solver if you don't write it.
-4. **LP optima live at vertices.** That's why simplex works.
-5. **Binary variables make IPs hard.** Don't default to "$y \in \{0, 1\}$" without considering whether an LP or network formulation would do.
-6. **Regression is optimization in disguise.** So are LASSO, SVM, exponential smoothing, and k-means. Knowing this lets you customize them.
-7. **Statisticians and optimizers mean different things by "variable."** Always check which hat the person is wearing.
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. Why does the optimum of an LP always sit at a vertex of the feasible region?
-2. What are the three pieces of every optimisation model, and what makes a solution feasible? Optimal?
-3. In the call-centre problem, why does "workers who start on day $i$" work where "workers on day $i$" does not?
-4. How do you model a fixed transaction fee with a binary variable? Which constraint links $x_i$ to $y_i$?
-5. Put these in order from easiest to hardest: integer program, linear program, general non-convex, convex quadratic program. Where does network optimisation fit?
-6. Name the four ways to handle uncertain inputs.
-7. What does a statistician mean by "variable"? What does an optimiser mean?
+:::

@@ -7,7 +7,10 @@
    The shaded shape is the set of places as near as the 5th neighbour: a circle to the ruler, drawn on a
    chart whose axes each fill the page. In raw units it is a sliver, because a dollar counts like a point.
    Steps: 0 raw units (the neighbours are just the nearest incomes) · 1 scaled (both features count)
-          · 2 a slider stretches the income axis from scaled to raw and the neighbours change live.
+          · 2 a slider sets how much income counts, from raw units (where it starts) down to scaled, and the
+            neighbours and the vote change live.
+   The applicants are offered to the page's Python as `applicants` (income, score), `approved` (1 approve, 0 deny)
+   and `applicant` (the new one).
    Made-up applicants. Needs InkKit (ink/ink-kit.js). */
 (function () {
   'use strict';
@@ -27,6 +30,13 @@
     return pts;
   }
 
+  // made once, so the page's Python works on exactly the same applicants
+  var DATA = makeData(window.InkKit.rng(6));
+  window.InkPage = window.InkPage || {};
+  window.InkPage.applicants = function () { return DATA.map(function (p) { return [p.inc, p.cr]; }); };
+  window.InkPage.approved = function () { return DATA.map(function (p) { return p.c > 0 ? 1 : 0; }); };
+  window.InkPage.applicant = function () { return [QUERY.inc, QUERY.cr]; };
+
   /* mean and sample standard deviation of each feature: what scale() in R would use */
   function stats(pts) {
     var n = pts.length, mi = 0, mc = 0, vi = 0, vc = 0;
@@ -40,7 +50,7 @@
     steps: 3,
     seed: 5,
     draw: function (k) {
-      var pts = makeData(k.rng(6)), st = stats(pts);
+      var pts = DATA.map(function (p) { return { inc: p.inc, cr: p.cr, c: p.c }; }), st = stats(pts);
       var RAW = st.si / st.sc;                       // the stretch that reproduces raw-unit distance
       var cx = PLOT.x + PLOT.w / 2, cy = PLOT.y + PLOT.h / 2;
       function zx(inc) { return (inc - st.mi) / st.si; }
@@ -54,7 +64,7 @@
 
       /* ---- axes: the same chart throughout; only the tick labels change with the units ---- */
       k.root.axes({ x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'income', ylabel: 'credit score', xticks: [] });
-      var rawTicks = k.root.group({ steps: [0], d: 200 }), zTicks = k.root.group({ steps: [1, 2], d: 200 });
+      var rawTicks = k.root.group({ steps: [0, 2], d: 200 }), zTicks = k.root.group({ steps: [1], d: 200 });
       function tickX(g, px, str) {
         g.line(px, PLOT.y + PLOT.h, px, PLOT.y + PLOT.h + 4, { w: 0.6, op: 0.6, rough: 0.2 });
         g.text(px, PLOT.y + PLOT.h + 16, str, { kind: 'axis', anchor: 'middle' });
@@ -65,7 +75,7 @@
       }
       [40000, 60000, 80000].forEach(function (v) { tickX(rawTicks, sx(zx(v)), '$' + v / 1000 + 'k'); });
       [600, 700].forEach(function (v) { tickY(rawTicks, sy(zy(v)), String(v)); });
-      [-2, 0, 2].forEach(function (z) { tickX(zTicks, sx(z), (z > 0 ? '+' : '') + z + ' sd'); });
+      [-2, 0, 2].forEach(function (z) { tickX(zTicks, sx(z), (z > 0 ? '+' : '') + z); });
       [-2, 0, 2].forEach(function (z) { tickY(zTicks, sy(z), (z > 0 ? '+' : '') + z); });
 
       /* ---- the applicants: always there ---- */
@@ -78,9 +88,10 @@
       /* ---- the column beside the plot ---- */
       var side = k.root.group({ d: 300 });
       side.text(SIDE, 60, 'the 5 nearest', { kind: 'label' });
-      side.text(SIDE, 82, 'o  deny', { kind: 'label' });
+      side.mark(SIDE + 5, 78, 'o', { r: 3.4 }); side.mark(SIDE + 5, 98, '+', { r: 3.4 });
+      side.text(SIDE + 18, 82, 'deny', { kind: 'label' });
       var denyVal = side.text(SIDE + 158, 82, '', { kind: 'val', anchor: 'end' });
-      side.text(SIDE, 102, '+  approve', { kind: 'label' });
+      side.text(SIDE + 18, 102, 'approve', { kind: 'label' });
       var apprVal = side.text(SIDE + 158, 102, '', { kind: 'val', anchor: 'end' });
       side.line(SIDE, 114, SIDE + 158, 114, { w: 0.6, op: 0.45, rough: 0.3 });
       side.text(SIDE, 134, 'the vote says', { kind: 'label' });
@@ -128,7 +139,7 @@
       /* ---- step 2: stretch the income axis, on a log scale from scaled to raw ---- */
       var LOG_RAW = Math.log(RAW) / Math.LN10;
       var slider = k.slider({
-        x: SIDE, y: 268, w: 158, min: 0, max: 1, step: 0.01, value: 0,
+        x: SIDE, y: 268, w: 158, min: 0, max: 1, step: 0.01, value: 1,
         label: 'income counts', steps: [2],
         format: function (v) { var m = Math.pow(10, v * LOG_RAW); return '× ' + (m < 10 ? m.toFixed(1) : m.toFixed(0)); },
         onChange: function (v) { stretch = Math.pow(10, v * LOG_RAW); redraw(); }
@@ -141,7 +152,7 @@
 
       k.root.group({ steps: [0] }).callout('a', 'income decides alone', SIDE, 204, { d: 700 });
       k.root.group({ steps: [1] }).callout('b', 'both features count', SIDE, 204, { d: 700 });
-      k.root.group({ steps: [2] }).callout('c', 'stretch one axis', SIDE, 204, { d: 400 });
+      k.root.group({ steps: [2] }).callout('c', 'slide: income counts less', SIDE, 204, { d: 400 });
 
       k.onStep(function (step) {
         stretch = step === 0 ? RAW : step === 1 ? 1 : Math.pow(10, slider.value * LOG_RAW);

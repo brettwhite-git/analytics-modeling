@@ -1,91 +1,338 @@
 ---
-title: "How does k-means find groups nobody labelled?"
-subtitle: "Guess some centres, give every point to its nearest one, move each centre to the middle of its points, and repeat until nothing changes."
+title: "How do you find groups nobody labelled?"
+subtitle: "You will do every step by hand first, then teach it to a computer. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="kmeans-figure" data-step="0" data-caption="Fig. 1 · all you are given: points, and no labels · made-up data"}
+Here are 38 customers of a shop. Each dot is one customer, placed by two numbers: how often they visit, and how much they spend. Dots that sit close together are customers who behave alike.
+
+Nobody has told you what kinds of customer there are. You are going to find out, starting with a guess.
+
+## Where would you put three flags?
+
+Suppose there are three kinds of customer, and each kind gathers around a flag. Click the picture three times to plant three flags where you think the groups are.
+
+::: {.ink-figure data-figure="kmeans-lab" data-step="0" data-caption="Fig. 1 · 38 made-up customers, and your three flags"}
 :::
 
-SVM and KNN both started from **labelled** data. You knew which group each point belonged to, and the job was to learn the rule. Now take the labels away. You have a pile of customers, each with two measurements, and nobody has told you what kinds of customer there are. The question is whether natural groupings are hiding in the data.
+Now press *whose flag is each under*. Every dot reaches for the flag closest to it, and the dots change shape to show which flag they chose.
 
-This is **unsupervised learning**. There is no response variable and no right answer to check against, so the algorithm has to discover the structure on its own. [Exam trap: clustering has no response variable. "Find groups", "segment customers", "no labels" means clustering. "Classify", "predict the category", "labelled data" means classification (SVM, KNN). Do not confuse the two.]{.side}
+That is the only rule in this whole lesson: **a dot belongs to its nearest flag.**
 
-## Assign, then move
+Drag a flag and watch the dots near the edge of a group change sides. You did not draw the groups. They follow from where the flags stand.
 
-k-means is a short loop. Pick $k$ random starting centres, called centroids. Assign each point to the nearest centre. Move each centre to the average of the points assigned to it. Repeat the last two steps until nothing changes. That is the whole algorithm.
+### Now tell a computer
 
-::: {.ink-figure data-figure="kmeans-figure" data-step="1" data-caption="Fig. 2 · one half-step per press: assign, move, assign, move · made-up data"}
+A computer cannot look at a picture. It needs the dots as numbers. Each dot is a pair, such as `(2.4, 7.3)`: 2.4 across and 7.3 up. The cell below fetches the same 38 dots you just saw, and the flags you planted.
+
+Press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-kmeans"}
+```python
+from page import points, my_flags     # the dots above, and the flags you planted
+
+flags = my_flags
+
+print("There are", len(points), "points. The first one is", points[0])
+print("Your flags:", flags)
+```
 :::
 
-The figure opens just after the first assignment, with every point stitched to the centre it was given to and drawn with that centre's mark. Press the button and the centres move; press again and some points switch sides. After a few rounds no point switches and the centres stop moving. The algorithm has **converged**, and each point belongs to the cluster whose centre is closest.
+The picture under the cell is drawn from those numbers. It should look like the one you made by hand, without the threads. The computer does not know the rule yet.
 
-The assignment rule is plain Euclidean distance:
+## How far is a dot from a flag?
 
-$$\text{cluster}(\mathbf{x}_i) = \arg\min_j \|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$$
+"Nearest" means measuring distance, so that comes first. Try one by hand. A dot sits at (0, 0) and a flag at (3, 4). The flag is 3 across and 4 up.
 
-It is the same distance formula as KNN. The difference is what you measure to: KNN looks at the nearest **data points**, k-means looks at the nearest **cluster centres**. The rule also carves the whole plane into territories, one per centre, each holding every location that is closer to that centre than to any other (a Voronoi diagram).
+Multiply each number by itself and add: 3 × 3 = 9, and 4 × 4 = 16, and 9 + 16 = **25**. This is the squared distance. A bigger number means further away, and that is all the rule needs.
 
-The update rule is where the name comes from. The centre of cluster $j$ is the **mean** of the points assigned to it:
+::: {.ask}
+Before you write code for it: how would you check the code is right?
 
-$$\boldsymbol{\mu}_j = \frac{1}{|C_j|} \sum_{\mathbf{x}_i \in C_j} \mathbf{x}_i$$
-
-## The total it lowers
-
-Both half-steps serve one number, the **total within-cluster sum of squares (WCSS)**:
-
-$$\min \sum_{j=1}^{k} \sum_{\mathbf{x}_i \in C_j} \|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$$
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $k$ | Number of clusters | How many groups you want |
-| $C_j$ | Cluster $j$ | The set of points assigned to group $j$ |
-| $\mathbf{x}_i$ | A data point | One observation |
-| $\boldsymbol{\mu}_j$ | Center (centroid) of cluster $j$ | The average of all points in group $j$ |
-| $\|\mathbf{x}_i - \boldsymbol{\mu}_j\|^2$ | Squared distance | How far point $i$ is from its cluster center |
-
-In plain words: make each point as close as possible to the centre of its assigned cluster. Tight clusters mean a low WCSS, and a low WCSS is good. In Fig. 2 it is the readout at the top right, the squared lengths of all the threads added up, and you can watch it fall with every press.
-
-## A different start, a different answer
-
-The loop is a heuristic. It always stops, but where it stops depends on where it began. k-means starts from **random** centres, and different starting positions can lead to different results, sometimes bad ones.
-
-::: {.ink-figure data-figure="kmeans-figure" data-step="2" data-caption="Fig. 3 · the same points and the same k, from another start · made-up data"}
+- **Run it on the 38 customers.** You would get a pile of numbers and no way of telling whether any of them is correct.
+- **Try the one I just did by hand.** Yes. You already know the answer is 25. If the code says anything else, it is wrong, and you found out straight away.
 :::
 
-This run has converged. No point wants to switch and no centre wants to move, yet the total is far above the best one found. The algorithm cannot see that; it only ever compares a point with the centres it currently has. Press "new start" to try other seeded starts, or drag a centre somewhere and press "run".
+The code below does the same sum. One piece is missing. Replace the blank and press Run.
 
-The fix is to run k-means many times from different random starts and keep the result with the **lowest WCSS**. In R, `kmeans(data, centers = k, nstart = 20)` does the 20 runs for you. More starts make the best clustering more likely to turn up, with diminishing returns past about 20. [A single run is not guaranteed to find the best clustering. It can get stuck in a bad solution. Use `nstart`.]{.side}
+::: {.py-cell}
+```python
+def dist2(p, q):
+    across = p[0] - q[0]          # p[0] is the first number of the pair
+    up = p[1] - q[1]              # p[1] is the second
+    return across * across + ____
 
-## How many groups?
+print(dist2((0, 0), (3, 4)))      # by hand this was 25
+```
+::: {.py-solution}
+```python
+def dist2(p, q):
+    across = p[0] - q[0]          # p[0] is the first number of the pair
+    up = p[1] - q[1]              # p[1] is the second
+    return across * across + up * up
 
-The hardest part of k-means is that you must choose $k$ in advance. The algorithm cannot decide for you, and there is no formula. What you have is the **elbow method**: run k-means for $k = 1, 2, 3, \dots$, record the total WCSS for each, plot $k$ against WCSS, and look for the elbow, the place where the curve bends and adding more clusters stops helping much.
-
-::: {.ink-figure data-figure="kmeans-figure" data-step="3" data-caption="Fig. 4 · the best of 20 starts for each k, computed in your browser · made-up data"}
+print(dist2((0, 0), (3, 4)))      # by hand this was 25
+```
+:::
 :::
 
-Here going from 2 clusters to 3 gives a big drop in WCSS and going from 3 to 4 gives almost nothing, so the elbow bends at 3. The elbow is a **judgment call**, not an exact calculation. Sometimes it is obvious and sometimes it is ambiguous. [The two k's are different things. In KNN, k is the number of neighbours. In k-means, k is the number of clusters.]{.side}
+`def` gives a set of steps a name, so you can use them again. From now on, `dist2(a, b)` means "do that sum for a and b".
 
-## What to watch for
+## Whose flag is each dot under?
 
-Know the difference between supervised and unsupervised cold.
+By hand, you would check a dot against the first flag, then the second, then the third, and remember which was closest so far. The code does exactly that. `best` is the flag it is remembering.
 
-| | Supervised (SVM, KNN) | Unsupervised (k-means) |
-|:--|:----------------------|:-----------------------|
-| **Labels?** | Yes — you know the groups | No — groups are unknown |
-| **Goal** | Learn the rule to predict labels | Discover hidden structure |
-| **Evaluation** | Accuracy, cross-validation | WCSS, silhouette, elbow method |
-| **k means...** | (KNN) number of neighbors | (k-means) number of clusters |
-| **Example** | "Is this email spam?" | "What types of customers do we have?" |
+::: {.py-cell data-draw="py-kmeans"}
+```python
+def nearest(p, flags):
+    best = 0                                  # start by assuming the first flag is closest
+    for j in range(len(flags)):               # then try each flag in turn: 0, 1, 2
+        if dist2(p, flags[j]) < dist2(p, flags[best]):
+            best = ____                       # a closer flag: which one should it remember?
+    return best
 
-Scaling is mandatory, for the same reason as in KNN and SVM. k-means uses distance, so an unscaled feature with a large range dominates. Cluster customers on income in dollars and age in years and income alone decides the groups. [Scale first. Every distance-based method on this site needs it: KNN, SVM and k-means.]{.side}
+labels = [nearest(p, flags) for p in points]  # do it for every point
+print(labels)
+```
+::: {.py-solution}
+```python
+def nearest(p, flags):
+    best = 0                                  # start by assuming the first flag is closest
+    for j in range(len(flags)):               # then try each flag in turn: 0, 1, 2
+        if dist2(p, flags[j]) < dist2(p, flags[best]):
+            best = j                          # a closer flag: remember it
+    return best
 
-k-means also assumes spherical clusters. Its boundaries are equidistant from the centres, which produces round, convex regions, so data with elongated, curved or irregular shapes will not cluster well. Two concentric rings are the standard failure: it cannot wrap one cluster around another. It is sensitive to outliers too, because a single extreme point can pull a centre away.
+labels = [nearest(p, flags) for p in points]  # do it for every point
+print(labels)
+```
+:::
+:::
 
-The classic use is customer segmentation. You have customer data, no labels, and the business wants to know what types of customers it has. The workflow: collect the customer features (spend, visits, demographics), scale them, use the elbow method to choose $k$, run k-means with `nstart = 20`, interpret the clusters and give them business-meaningful names, then build a different strategy for each segment.
+The list it prints has one number per customer: 0, 1 or 2, the flag that customer chose. The picture now has threads and shapes, drawn from your code's answer. Compare it with Fig. 1. They should match, because the computer just did what you did.
 
-## Run it yourself {.reference}
+## Are the flags in the right place?
 
+You planted the flags before you knew which dots each one would collect. Now you know.
+
+::: {.ask data-veil="true"}
+A flag stands for the dots under it. Where should it stand?
+
+- **Where I first put it.** That was a guess, made before any dot had chosen a flag. The dots have told you something since then.
+- **On the dot closest to the middle.** Close. But nothing says the best spot has to be one of the customers. It can be anywhere on the page.
+- **In the middle of its dots.** Yes. The middle is the average: add up the positions and divide by how many there are.
+:::
+
+::: {.ink-figure data-figure="kmeans-lab" data-step="1" data-caption="Fig. 2 · your flags, moved to the middle of their dots, again and again"}
+:::
+
+Press *move the flags*. Each flag glides to the middle of its group. Then look at the edges again: some dots are now closer to a different flag, so the rule is broken. Hand the dots out again. That changes the middles, so move the flags again.
+
+Two steps, taking turns: **hand out the dots, move the flags.**
+
+The middle is easy to work out by hand. Three dots at 2, 4 and 9 across: 2 + 4 + 9 = 15, divided by 3 is 5. Do the same for the "up" numbers and you have the spot.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With $c_j$ for the position of flag $j$, and $S_j$ for the set of dots under it, the middle is
+
+$$c_j = \frac{1}{|S_j|} \sum_{x \in S_j} x$$
+
+and the total in the side column, which is how the whole arrangement is judged, is
+
+$$\text{total} = \sum_j \sum_{x \in S_j} \|x - c_j\|^2$$
+
+Read the big Σ as "add these up".
+:::
+
+### How does it break?
+
+Here is the middle in code. To test it properly, the last line plants one flag far off the page, where no customer will choose it. Run it.
+
+::: {.py-cell data-aside="true"}
+```python
+def middle(group):
+    n = len(group)                            # how many points in the group
+    return (sum(p[0] for p in group) / n,     # add up the first numbers, divide
+            sum(p[1] for p in group) / n)     # add up the second numbers, divide
+
+faraway = [flags[0], flags[1], (30, 30)]      # the third flag is nowhere near anyone
+chosen = [nearest(p, faraway) for p in points]
+
+for j in range(3):
+    group = [p for p, c in zip(points, chosen) if c == j]
+    spot = middle(group)
+    print("flag", j, "has", len(group), "points. Middle:", round(spot[0], 2), round(spot[1], 2))
+```
+:::
+
+It stops with `ZeroDivisionError`. The faraway flag has no dots, so the code tried to divide by zero. Doing it by hand never showed you this, because you planted your flags sensibly. A program has to be told what to do in every case, including the silly ones.
+
+::: {.ask}
+What should a flag do when no dot chooses it?
+
+- **Stay where it is.** The simplest answer, and the one used below. The cost: you asked for three groups and might end up with two.
+- **Be taken away.** Reasonable, but then the number of groups changes while the program is running, and everything else has to cope with that.
+- **Jump somewhere new.** Also reasonable, and close to what careful programs do: move it onto a dot that is far from every flag.
+:::
+
+## Does it ever stop?
+
+Go back to Fig. 2, press *run until nothing moves*, and watch the small chart beside it.
+
+::: {.ask}
+From one step to the next, can the total go up?
+
+- **Yes, sometimes.** Look at the chart: it never does. Moving a flag to the middle of its dots is the best spot for those dots. Giving each dot to its nearest flag can only shorten that dot's distance.
+- **No, never.** Right. Moving a flag to the middle of its dots is the best spot for those dots. Giving each dot to its nearest flag can only shorten that dot's distance.
+:::
+
+A total that only goes down has to stop going down eventually. It stops when a round changes nothing.
+
+Now the whole thing in code. `while True` means "keep going", and `return` is the way out: it leaves as soon as a round moves nothing. One blank is left: what goes in the list when a flag has no points?
+
+::: {.py-cell data-draw="py-kmeans"}
+```python
+def middle(group):
+    n = len(group)
+    return (sum(p[0] for p in group) / n, sum(p[1] for p in group) / n)
+
+def move(points, labels, flags):
+    new = []
+    for j in range(len(flags)):
+        group = [p for p, l in zip(points, labels) if l == j]
+        if group:
+            new.append(middle(group))
+        else:
+            new.append(____)                  # no points chose flag j: where should it go?
+    return new
+
+def total(points, labels, flags):
+    return sum(dist2(p, flags[l]) for p, l in zip(points, labels))
+
+def kmeans(points, flags):
+    history = [flags]                         # remember the flags after every round
+    while True:
+        labels = [nearest(p, flags) for p in points]     # hand out the points
+        moved = move(points, labels, flags)              # move the flags
+        history.append(moved)
+        if moved == flags:                               # nothing moved: finished
+            return flags, labels, history
+        flags = moved
+
+flags, labels, history = kmeans(points, my_flags)
+print(len(history) - 1, "rounds. Total:", round(total(points, labels, flags), 1))
+```
+::: {.py-solution}
+```python
+def middle(group):
+    n = len(group)
+    return (sum(p[0] for p in group) / n, sum(p[1] for p in group) / n)
+
+def move(points, labels, flags):
+    new = []
+    for j in range(len(flags)):
+        group = [p for p, l in zip(points, labels) if l == j]
+        if group:
+            new.append(middle(group))
+        else:
+            new.append(flags[j])              # no points chose flag j: it stays where it is
+    return new
+
+def total(points, labels, flags):
+    return sum(dist2(p, flags[l]) for p, l in zip(points, labels))
+
+def kmeans(points, flags):
+    history = [flags]                         # remember the flags after every round
+    while True:
+        labels = [nearest(p, flags) for p in points]     # hand out the points
+        moved = move(points, labels, flags)              # move the flags
+        history.append(moved)
+        if moved == flags:                               # nothing moved: finished
+            return flags, labels, history
+        flags = moved
+
+flags, labels, history = kmeans(points, my_flags)
+print(len(history) - 1, "rounds. Total:", round(total(points, labels, flags), 1))
+```
+:::
+:::
+
+The picture plays back every round your code went through. Compare the total it prints with the total in Fig. 2 once that has settled. Same dots, same starting flags, same two steps: the numbers should agree.
+
+## Would another start end in the same place?
+
+You chose where the flags began. Someone else would have chosen differently.
+
+::: {.ask data-veil="true"}
+Same dots, same two steps, different starting flags. Do they finish in the same place?
+
+- **Yes. The dots decide.** That would be convenient. Throw the flags a few times and watch the tally beside the picture.
+- **No. It depends on the start.** Throw the flags a few times and see how often.
+:::
+
+::: {.ink-figure data-figure="kmeans-lab" data-step="2" data-caption="Fig. 3 · different starts on the same dots"}
+:::
+
+Most starts finish at the same low total. A few do not: two flags end up sharing one clump while the third stretches across the other two. And there it stops, because every dot is under its nearest flag and every flag is in the middle of its dots. Nothing moves, so nothing can get better.
+
+The two steps find *an* arrangement where nothing changes. They do not promise the best one. The cure is simple: start from several places and keep the best.
+
+In code, that is a loop around what you already wrote. `random.sample(points, 3)` picks three of the customers at random to start the flags on.
+
+::: {.py-cell}
+```python
+import random
+random.seed(2)                                # so you get the same "random" starts each time
+
+totals = []
+for attempt in range(12):
+    start = random.sample(points, 3)
+    f, l, h = kmeans(points, start)
+    totals.append(round(total(points, l, f), 1))
+
+print(sorted(totals))
+print("Best:", min(totals))
+```
+:::
+
+Twelve starts, twelve totals. Most agree. The larger ones are the starts that got stuck.
+
+## How many flags?
+
+Three was handed to you. With real data, nobody tells you the number.
+
+::: {.ask}
+More flags always make the total smaller. Why not use 38 flags, one per customer, for a total of zero?
+
+- **Because it would be slow.** It would be instant. The trouble is what it tells you: 38 groups of one customer each is just the list you started with.
+- **Because it would tell me nothing.** Exactly. 38 groups of one customer each is just the list you started with.
+:::
+
+::: {.ink-figure data-figure="kmeans-figure" data-step="3" data-caption="Fig. 4 · the best total for each number of flags, from 1 to 6"}
+:::
+
+Slide the number of flags and watch the curve. The total drops fast while each new flag splits a real clump. Then it flattens, because new flags are only cutting clumps in half. The bend is where extra flags stop helping much. People call it the elbow. Choosing it is a judgment, not a sum.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Finding groups with no labels | Clustering |
+| The flags | Centroids |
+| The number of flags | *k* |
+| Hand out the dots, move the flags, repeat | The k-means algorithm |
+| The total | Within-cluster sum of squares |
+| Starting from several places | Multiple random starts |
+
+You did not need the names to do it. They are for talking to other people, and for looking things up. A library such as scikit-learn has a `KMeans` that runs these same two steps. It picks its starting flags more carefully, tries several starts for you, and handles the flag with no dots. You could now read its code and recognise every part.
+
+::: {.callout-note collapse="true" title="Going further: why real programs do not use loops like these"}
+Your code checks one number at a time. That is the right way to learn, and too slow for a million customers. Libraries do the same arithmetic on whole tables of numbers at once, using compiled code underneath. The steps do not change. Only who does the counting.
+:::
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 Three hidden clusters, shown the way you would actually meet them: without the labels.
@@ -437,57 +684,4 @@ ggplot(customers2, aes(annual_spend, visit_frequency, color = segment)) +
        color = "Segment",
        title = "k-means segmentation: 3 customer groups discovered")
 ```
-
-## On one page {.reference}
-
-```
-THE k-MEANS RECIPE
-===================
-
-1. ALGORITHM (repeat until convergence):
-   - Assign each point to nearest center
-   - Move each center to mean of its points
-
-2. THE FORMULA:
-
-   min  Σⱼ Σᵢ∈Cⱼ ||xᵢ - μⱼ||²
-        -------------------------
-        "total distance from points
-         to their cluster centers"
-
-   Center of cluster j:  μⱼ = (1/|Cⱼ|) × Σ xᵢ
-
-3. KEY PARAMETER:
-   k → number of clusters (choose via elbow method)
-
-4. ELBOW METHOD:
-   Plot k vs WCSS → pick the "bend" point
-
-5. GOTCHAS:
-   - Random initialization → use nstart = 20
-   - ALWAYS scale features first
-   - Assumes spherical clusters
-   - You must choose k in advance
-
-6. SUPERVISED vs UNSUPERVISED:
-   Labels → supervised (SVM, KNN)
-   No labels → unsupervised (k-means)
-
-7. PRACTICE TIP:
-   "Segment customers" / "find groups" / "no labels" → k-means
-   "Classify" / "predict category" / "labeled data" → SVM, KNN
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What makes k-means **unsupervised**? How is this different from KNN?
-2. Describe the k-means algorithm in 4 steps.
-3. What does k-means minimize? Write the formula in words.
-4. Why is the centroid the **mean** of the cluster points?
-5. How does the elbow method work? What are you plotting?
-6. Why do you need to run k-means with multiple random starts?
-7. Give a scenario where k-means would fail. Why does it fail?
-8. A question says "we have customer purchase data and want to identify
-   different customer types." Which model? Why not SVM?
+:::

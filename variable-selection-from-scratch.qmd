@@ -1,84 +1,520 @@
 ---
-title: "How do you decide which variables a model gets to see?"
-subtitle: "Give the coefficients a budget. The shape of that budget decides whether a variable is dropped or only turned down."
+title: "How do you choose what a model gets to see?"
+subtitle: "You will pick measurements by hand first, then teach a computer to do it. All you need is arithmetic and the line-fitting loop from the last lesson."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="lasso-figure" data-step="0" data-caption="Fig. 1 · an ordinary least-squares fit with two predictors, and it uses both · made-up data"}
+Here are sixteen plants and their heights after a month. For each one, somebody wrote down five things: the hours of sun it got each day, the number of letters in its gardener's name, the day of the week it was sown, the number on its pot, and how many heads came up when they tossed a coin ten times that morning.
+
+Only one of those can make a plant grow. You know which. The model does not. Nobody has told you yet what a model does with the other four: it uses them, and on the plants it has already seen, they seem to help.
+
+## Does a useless measurement hurt?
+
+In the last lesson you fitted a line by scoring it with its total squared miss and nudging it until that total stopped falling. A model can use several measurements at once. Each one gets a **weight**: how many centimetres the guess goes up for each extra unit of that measurement. Fitting means nudging all the weights.
+
+The model only learns from eight of the plants. Call them the *seen* plants, drawn as o. The other eight, drawn as +, are kept back. They are *fresh*: the model never sees them while it fits, so they show how it would do on the next plant someone brings in.
+
+::: {.ask data-veil="true"}
+Four of the five measurements are pure chance. If the model is allowed to use them as well as the sun, what happens to its misses?
+
+- **Both misses get worse.** Half right. Look at the seen plants: their miss goes *down*. The model can always find some use for an extra number on plants it is looking at.
+- **Nothing. It gives them a weight of zero.** It would, with thousands of plants. With eight, chance patterns are everywhere, and the model cannot tell them from real ones.
+- **The seen miss goes down and the fresh miss goes up.** Yes. Untick and tick the boxes and watch the two numbers move in opposite directions.
 :::
 
-Every model so far has used **factors** (predictor variables) to make a prediction, and regression will happily use every one you hand it. The first reason to hand it fewer is overfitting. When the number of factors gets close to the number of data points, the model starts fitting *random* patterns as well as *real* ones. With three data points and one factor, different samples give wildly different regression lines. With enough factors relative to data, even a meaningless one, such as the temperature 37 days after someone was born, appears to predict their adult height.
-
-The second reason is simplicity. Fewer factors cost less to collect and are easier to explain to people who are not analysts. There is also less chance that one of them is noise: 20 factors each tested at $p = 0.05$ leave a 64% chance that at least one is meaningless. In credit decisions the law forbids factors such as race, sex, religion and marital status, and an overly complex model can use them indirectly through correlated proxies (zip code for race, "lives in Utah" for religion). If you cannot clearly say what your model is doing, it will not be trusted or used, and in some industries it would be illegal to use.
-
-## One factor at a time
-
-The oldest methods build the model in steps. **Forward selection** starts with no factors. At each step it adds the single best remaining factor, the one with the lowest p-value or the largest improvement in $R^2$, as long as it is good enough (for example $p < 0.10$ to $0.15$). It stops when nothing left meets the threshold, and it can optionally remove weak factors at the end.
-
-**Backward elimination** runs the other way. It starts with all the factors and removes the worst one at each step, until nothing is bad enough to remove (for example, every remaining factor has $p < 0.05$). **Stepwise regression** combines the two: after adding each new factor it immediately checks whether any factor already in the model should now come out, so the model can adjust as new factors change the picture. It is the most commonly used of the three. All three can use p-values, $R^2$, AIC or BIC as the criterion.
-
-These are **greedy** methods. Each step makes the best local decision without considering what it does to later steps, so they are fast and good for a first look at the data. [A greedy method can miss the best model. A run of locally best choices is not guaranteed to be the best choice overall.]{.side} The price is that they tend to fit random effects, and the models they produce often do worse on new data than the global methods that follow.
-
-## A budget for the coefficients
-
-LASSO (Least Absolute Shrinkage and Selection Operator) does not step through the factors at all. It runs the usual regression, minimising the squared error, with one constraint added:
-
-$$\min_{a_0, \ldots, a_p} \; \sum_{i=1}^{n} \Bigl( y_i - \bigl( a_0 + \sum_{j=1}^{p} a_j x_{ij} \bigr) \Bigr)^2 \quad \text{subject to} \quad \sum_{j=1}^{p} |a_j| \le T$$
-
-The sum of the absolute values of the coefficients has to fit inside a budget $T$. The model spends that budget on the coefficients that matter most and drives the rest **exactly to zero**, which removes those variables from the model. A tighter budget removes more variables, not fewer: a smaller $T$ forces more coefficients to zero.
-
-::: {.ink-figure data-figure="lasso-figure" data-step="1" data-caption="Fig. 2 · the same fit, held inside the LASSO budget with T = 1 · made-up data"}
+::: {.ink-figure data-figure="keep-noise" data-step="0" data-caption="Fig. 1 · each mark is a plant: across, its real height; up, the model's guess · made-up data"}
 :::
 
-With two coefficients you can draw the whole thing. The plane is every possible pair $(a_1, a_2)$. The cross is the least-squares solution, and the rings around it are contours of equal error, which grows as you move away from the cross. The allowed pairs form a **diamond**, with straight edges and corners that sit on the axes. LASSO's answer is the first place the expanding rings touch the diamond, and that is usually a corner, where one coefficient is zero. In the figure the unconstrained fit of $(1.53,\ 0.43)$ becomes $(1.00,\ 0)$: the whole budget goes to $a_1$ and the second variable is out.
+A mark on the slanted line was guessed exactly. The thin threads are the misses. All five boxes start ticked, so the model uses everything. The seen plants hug the line, with a total squared miss of 27.8. The fresh plants scatter, and their miss is 189.5.
 
-Because the constraint acts on the size of the coefficients, the data has to be scaled first. On unscaled data the units of each variable decide which coefficients look large, and the budget is spent accordingly. [Scale the data before LASSO or ridge. It is the same requirement as for SVM: the constraint acts on coefficient magnitudes, and units change those.]{.side}
+Now untick the four that cannot matter. The seen miss rises to 55.7, and the fresh miss falls to 31.6. The model with less information predicts new plants six times better.
 
-There is no formula for the right $T$. You try different values and compare the quality of the models they give, using cross-validation.
+The rule: **a measurement can make the model fit what it has seen better and predict what it has not seen worse.** With eight plants and five measurements, the model has almost as many weights to turn as it has plants to fit. It turns them to fit the luck in these eight plants, and that luck is not there in the next eight.
 
-## A round budget
+### Now tell a computer
 
-Ridge regression uses the same idea with the constraint on the **squared** coefficients:
+A computer needs each plant as numbers. The page gives it the same sixteen plants. Each plant is six numbers in a row, in brackets: sun, name, day, pot, coin, and last of all the height. `seen[0]` is the first seen plant: `(9, 8, 2, 8, 5, 29)`. Python counts from zero, so `row[0]` is a plant's sun and `row[5]` is its height.
 
-$$\sum_{j=1}^{p} a_j^2 \le T$$
+A guess starts from the average seen plant, which is 23 cm tall and gets 6 hours of sun. The first seen plant gets 9 hours, which is 3 above average. With a weight of 3 cm per hour, the guess is 23 + 3 × 3 = **32**. The other four measurements have weight 0, so they add nothing.
 
-In the plane this region is a **circle**. Its boundary is curved, and so are the error contours. A curved contour touching a curved boundary almost never lands on an axis, so the solution has every coefficient nonzero. That is the entire geometric explanation: a straight-edged constraint meeting a curved error function picks out corners, and a curved constraint meeting a curved error function does not. With more variables and a tighter $T$, LASSO is even more likely to hit a corner.
+`def` gives a set of steps a name, and `return` hands its answer back. `for j in range(5)` repeats the lines under it for `j` = 0, 1, 2, 3 and 4. `append` adds an item to the end of a list. `sum(row[j] for row in rows)` adds up column `j` over all the rows, and `len(rows)` counts them. Fill in the blank: how far above average is this plant, for measurement `j`?
 
-::: {.ink-figure data-figure="lasso-figure" data-step="2" data-steps="2:ridge|3:slide T" data-caption="Fig. 3 · diamond or circle, solved live in your browser · made-up data"}
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import seen, fresh, names     # the plants in Fig. 1
+
+def middles(rows):
+    mids = []
+    for j in range(6):                                          # each of the six numbers in turn
+        mids.append(sum(row[j] for row in rows) / len(rows))    # add the column up, divide
+    return mids
+
+avg = middles(seen)                      # the average seen plant
+print("average seen plant:", avg)
+
+def guess(w, row):
+    g = avg[5]                           # start at the average height
+    for j in range(5):                   # then, for each of the five measurements,
+        g = g + w[j] * ____              # add its weight times how far above average it is
+    return g
+
+w = [3, 0, 0, 0, 0]                      # 3 cm per extra hour of sun, nothing for the rest
+print(guess(w, seen[0]))                 # by hand this was 32
+
+dots = [(row[0], row[5]) for row in seen + fresh]     # across: hours of sun, up: height
+kinds = [0] * 8 + [1] * 8                             # eight o's for seen plants, eight +'s for fresh
+line = [(2, guess(w, (2, 0, 0, 0, 0, 0))), (10, guess(w, (10, 0, 0, 0, 0, 0)))]
+frames = [{"points": dots, "labels": kinds, "lines": [line], "xlabel": "hours of sun", "ylabel": "height"}]
+```
+::: {.py-solution}
+```python
+from page import seen, fresh, names     # the plants in Fig. 1
+
+def middles(rows):
+    mids = []
+    for j in range(6):                                          # each of the six numbers in turn
+        mids.append(sum(row[j] for row in rows) / len(rows))    # add the column up, divide
+    return mids
+
+avg = middles(seen)                      # the average seen plant
+print("average seen plant:", avg)
+
+def guess(w, row):
+    g = avg[5]                           # start at the average height
+    for j in range(5):                   # then, for each of the five measurements,
+        g = g + w[j] * (row[j] - avg[j]) # add its weight times how far above average it is
+    return g
+
+w = [3, 0, 0, 0, 0]                      # 3 cm per extra hour of sun, nothing for the rest
+print(guess(w, seen[0]))                 # by hand this was 32
+
+dots = [(row[0], row[5]) for row in seen + fresh]     # across: hours of sun, up: height
+kinds = [0] * 8 + [1] * 8                             # eight o's for seen plants, eight +'s for fresh
+line = [(2, guess(w, (2, 0, 0, 0, 0, 0))), (10, guess(w, (10, 0, 0, 0, 0, 0)))]
+frames = [{"points": dots, "labels": kinds, "lines": [line], "xlabel": "hours of sun", "ylabel": "height"}]
+```
+:::
 :::
 
-So ridge **shrinks every coefficient toward zero without eliminating any**. The tighter the constraint, the further the solution moves inward from the least-squares point toward the origin. If the least-squares point is already inside the region, the constraint does nothing and $T$ has to come down before it has any effect. Slide the budget in the figure and watch the small plot beside it: under LASSO the second coefficient stays at exactly zero until $T$ passes 1.10, while under ridge both coefficients fall together and reach zero only when the budget does. [Ridge regression does not do variable selection. It shrinks coefficients but never drives them exactly to zero. LASSO removes variables; ridge only shrinks them.]{.side}
+`[... for row in seen + fresh]` makes a list by doing the same thing for every plant. The picture is drawn from `frames`, a list of pictures; here there is only one. The line is your guess: it only depends on the sun, because every other weight is zero.
 
-If it removes nothing, what is ridge for? It is a form of **regularization**: it reduces overfitting by limiting the size of each variable's effect instead of the number of variables. Use it when a linear regression looks overfit, with validation error much worse than training error, and you do not want to remove variables entirely.
+## How far off is a guess?
 
-## Real patterns and random ones
+The score is the one from the last lesson. For each plant, take the real height minus the guess, multiply that by itself, and add up.
 
-Every data set contains **real patterns** (true effects) and **random patterns** (artifacts of noise). A model cannot tell them apart. It can only fit more or less closely to all of them at once.
+::: {.ask}
+Before you write it: how would you check the code is right?
 
-| | Fits random patterns (high) | Avoids random patterns (low) |
-|---|---|---|
-| **Captures real patterns (high)** | Overfitting danger | **Sweet spot** |
-| **Misses real patterns (low)** | Worst case | Underfitting |
+- **Run it on all eight seen plants.** You would get one number, and no way to tell whether it is correct.
+- **Try two plants I can do by hand.** Yes. The first plant is 29 cm and the guess was 32: off by 3, and 3 × 3 = 9. The second plant gets 7 hours, so its guess is 23 + 3 × 1 = 26, and it is 25 cm: off by 1, which squares to 1. Together, **10**.
+:::
 
-**Bias** is the error from missing real patterns, which is underfitting. Removing variables and shrinking coefficients increases bias. **Variance** is the error from fitting random patterns, which is overfitting. More variables and larger coefficients increase variance. The course lecturer says he dislikes both terms in this context and finds them confusing. The intuition of real against random patterns matters more than the jargon.
+::: {.py-cell data-draw="py-plot"}
+```python
+def miss(w, rows):
+    total = 0
+    for row in rows:
+        off = row[5] - guess(w, row)     # real height minus the guess
+        total = total + ____             # add it up, squared
+    return total
 
-The budget $T$ moves you along this trade. A small $T$ fits loosely and risks underfitting, and if you make it too small the model does underfit. A large $T$ fits closely and risks overfitting. The sweet spot is where total prediction error, bias plus variance, is smallest. [The trade-off is about prediction on new data. Training error alone does not reveal it, which is why the figure's training error only ever rises as the budget tightens.]{.side} Validation is how you find it, and domain experts can tell you which patterns are likely to be real.
+print(miss(w, [seen[0], seen[1]]))       # by hand this was 9 + 1 = 10
+print("seen plants:", round(miss(w, seen), 1))
+print("fresh plants:", round(miss(w, fresh), 1))
 
-## Choosing a method
+threads = [((row[0], row[5]), (row[0], guess(w, row))) for row in seen + fresh]
+frames = [{"points": dots, "labels": kinds, "lines": [line], "segments": threads,
+           "xlabel": "hours of sun", "ylabel": "height"}]
+```
+::: {.py-solution}
+```python
+def miss(w, rows):
+    total = 0
+    for row in rows:
+        off = row[5] - guess(w, row)     # real height minus the guess
+        total = total + off * off        # add it up, squared
+    return total
 
-| Method | Speed | Variable selection? | Regularization? | Best for |
-|--------|-------|-------------------|-----------------|----------|
-| Forward / backward / stepwise | Fast | Yes | No | Initial exploration |
-| LASSO | Slower | Yes (zeros out coefficients) | Yes | Final predictive models |
-| Ridge | Slower | No (shrinks only) | Yes | Reducing overfitting without removing variables |
-| Elastic net | Slower | Yes, plus shrinkage | Yes | Correlated predictors |
+print(miss(w, [seen[0], seen[1]]))       # by hand this was 9 + 1 = 10
+print("seen plants:", round(miss(w, seen), 1))
+print("fresh plants:", round(miss(w, fresh), 1))
 
-**Elastic net** constrains a combination of the two: LASSO's absolute-value term and ridge's quadratic term. It matters most when factors are correlated. Given two highly correlated predictors, LASSO tends to keep just one, and not necessarily the better one. It might keep an expensive medical test and drop a cheap one that gives similar results. Ridge keeps both but shrinks their coefficients toward each other, and may underestimate a predictor that truly matters. Elastic net is a middle ground. [Elastic net is not "LASSO but better". It is a trade-off, and with uncorrelated factors LASSO alone may be cleaner.]{.side}
+threads = [((row[0], row[5]), (row[0], guess(w, row))) for row in seen + fresh]
+frames = [{"points": dots, "labels": kinds, "lines": [line], "segments": threads,
+           "xlabel": "hours of sun", "ylabel": "height"}]
+```
+:::
+:::
 
-There is no rule that settles the choice. The greedy methods are fast and suit a first exploration. LASSO and elastic net are slower and usually give better predictive models. In the lecturer's words, "there's a lot of art to analytics": if you have time to try one method, you have time to try several and compare.
+`round(x, 1)` keeps one decimal. The threads in the picture are the misses, one per plant.
 
-## Run it yourself {.reference}
+### The nudge loop, for five weights
 
+Fitting is the loop you know. Take one weight. Add a tiny bit to it, 0.001, and see how much the miss changes: that is the slope. Step that weight the other way, downhill. Then do the same for the next weight, and go round all of them again and again. One trip round all the weights is a *sweep*.
+
+How big a step? A measurement whose numbers swing far from their average moves the guess a lot for each bit of weight, so its weight needs smaller steps. The line that sets `rate` sizes the step to each measurement so it lands at the bottom for that weight. You do not need the details: what matters is that it adapts to each column. `x ** 2` means x times x.
+
+There is one more line, `pay`, that does nothing yet. It is waiting for the price you will meet below. The cell fits whichever boxes you left ticked in Fig. 1.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import my_ticks                # the boxes you ticked in Fig. 1, as numbers 0 to 4
+
+def pay(weight, cut):
+    return weight                        # no price yet: every weight is free
+
+def fit(use, price=0, sweeps=40):
+    rate = []
+    for j in range(5):                   # how big a step each weight takes:
+        swing = sum((row[j] - avg[j]) ** 2 for row in seen)
+        rate.append(1 / (2 * swing))     # a column that swings a lot takes small steps
+    w = [0, 0, 0, 0, 0]                  # every weight starts at zero
+    for sweep in range(sweeps):          # go round the weights, again and again
+        for j in use:                    # only the measurements it is allowed to use
+            old = w[j]
+            before = miss(w, seen)
+            w[j] = old + 0.001                          # try a tiny bit more weight
+            slope = (miss(w, seen) - before) / 0.001    # how fast did the miss change?
+            w[j] = old - rate[j] * slope                # step the other way, downhill
+            w[j] = pay(w[j], rate[j] * price)           # pay for the weight (free, for now)
+    return w
+
+frames = []
+for sweeps in [1, 2, 4, 8, 40]:
+    w = fit(my_ticks, sweeps=sweeps)
+    frames.append({
+        "points": [(row[5], guess(w, row)) for row in seen + fresh],   # across: real, up: guessed
+        "labels": kinds, "lines": [[(5, 5), (45, 45)]],                 # on the line: guessed right
+        "xlabel": "real height", "ylabel": "guessed",
+        "notes": ["after " + str(sweeps) + " sweeps",
+                  "seen miss " + str(round(miss(w, seen), 1)),
+                  "fresh miss " + str(round(miss(w, fresh), 1))],
+    })
+
+print("weights:", [round(x, 2) for x in w])
+print("seen plants:", round(miss(w, seen), 1), "  fresh plants:", round(miss(w, fresh), 1))
+```
+:::
+
+`price=0` gives `price` a value to use when nobody passes one. `str` turns a number into text, so it can go in a note. The picture plays the fit after 1, 2, 4, 8 and 40 sweeps. Compare the two misses it prints with the ones in Fig. 1 for the same boxes. Same plants, same loop: they should agree.
+
+## How would you choose by hand?
+
+You knew which measurement mattered before you started. Usually you do not. Here is a way to choose without knowing. Start with no measurements. Try each one on its own and keep the one with the lowest *fresh* miss. Then try adding each of the others to it. Keep going while adding something helps the fresh plants. Stop when nothing does.
+
+Go back to Fig. 1 and do it: untick everything, then tick one box at a time. Or press through the rounds below.
+
+::: {.ink-figure data-figure="keep-noise" data-step="1" data-caption="Fig. 2 · add the one that helps the fresh plants most, until nothing helps · made-up data"}
+:::
+
+Round one keeps the sun: a fresh miss of 31.6 against 560 with nothing at all. In round two, the gardener's name comes close, at 31.7, but close is not better. Nothing beats 31.6, so it stops.
+
+In code, it is a loop around a loop. The outer one runs the rounds. The inner one tries every measurement not yet kept. `if` runs the lines under it only when its test is true, so `if j not in kept` skips the ones already in. `break` leaves the outer loop early, the moment a round finds nothing better. Fill in what a score has to beat.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+kept = []                                # start with nothing
+best = miss(fit(kept), fresh)            # nothing kept: every guess is the average height
+frames = []
+for step in range(5):                    # at most five rounds
+    choice = -1                          # -1 means "nothing better found yet"
+    tried = []
+    for j in range(5):
+        if j not in kept:                # try each measurement not yet kept
+            score = miss(fit(kept + [j]), fresh)
+            tried.append((j, score))
+            frames.append({"bars": list(tried), "hlines": [best], "xlim": (-0.6, 4.6),
+                           "notes": ["round " + str(step + 1), "trying " + names[j],
+                                     "fresh miss " + str(round(score, 1)), "to beat " + str(round(best, 1))]})
+            if score < ____:             # better than the best so far?
+                best = score
+                choice = j
+    if choice == -1:
+        break                            # nothing helped: stop
+    kept.append(choice)
+    print("keep", names[choice], "  fresh miss", round(best, 1))
+
+print("kept:", [names[j] for j in kept])
+```
+::: {.py-solution}
+```python
+kept = []                                # start with nothing
+best = miss(fit(kept), fresh)            # nothing kept: every guess is the average height
+frames = []
+for step in range(5):                    # at most five rounds
+    choice = -1                          # -1 means "nothing better found yet"
+    tried = []
+    for j in range(5):
+        if j not in kept:                # try each measurement not yet kept
+            score = miss(fit(kept + [j]), fresh)
+            tried.append((j, score))
+            frames.append({"bars": list(tried), "hlines": [best], "xlim": (-0.6, 4.6),
+                           "notes": ["round " + str(step + 1), "trying " + names[j],
+                                     "fresh miss " + str(round(score, 1)), "to beat " + str(round(best, 1))]})
+            if score < best:             # better than the best so far?
+                best = score
+                choice = j
+    if choice == -1:
+        break                            # nothing helped: stop
+    kept.append(choice)
+    print("keep", names[choice], "  fresh miss", round(best, 1))
+
+print("kept:", [names[j] for j in kept])
+```
+:::
+:::
+
+Each bar is one try, standing over its measurement: 0 is sun, 1 name, 2 day, 3 pot, 4 coin. The level line is the score to beat.
+
+This way of choosing is quick, and here it found the right answer. It is also short-sighted. Each round takes the best single step and never looks back, so a pair of measurements that only help together can be missed. And it is scored on only eight fresh plants, so a lucky measurement can sneak in.
+
+## What if every weight had a price?
+
+Ticking is all or nothing. Here is a gentler idea. Let the model use every measurement, but charge it for weight. The bill is a **price** times the total size of the weights, and the fit now makes the miss plus the bill as small as it can. A weight only stays big if it lowers the miss by more than it costs.
+
+There are two natural ways to measure "total size". Add up the sizes: a weight of −1.2 counts as 1.2. Or add up the squares: 1.2 × 1.2 = 1.44.
+
+::: {.ask data-veil="true"}
+Paying by sizes, you raise the price. What happens to the weights of the four chance measurements?
+
+- **They shrink a little, like everything else.** Watch them: they do not stop at small. They reach zero exactly, and stay there.
+- **They drop to exactly zero, one by one.** Yes. The sun's weight barely moves, because it earns its cost many times over.
+- **The sun goes first, because its weight is the biggest.** A big weight pays a big bill, but it also saves the most miss. The sun stays far longer than the rest.
+:::
+
+::: {.ink-figure data-figure="lasso-figure" data-step="0" data-caption="Fig. 3 · the five weights, fitted with a price on their size · made-up data"}
+:::
+
+Slide the price and watch the bars. Paying by sizes, the day of the week goes at a price of 17, then the others by 19, and only the sun is left. Switch to squares and slide again: every bar shrinks, and none of them ever reaches zero.
+
+Why the difference? Look at what a small weight costs. A weight of 0.1 costs 0.1 by sizes, but only 0.1 × 0.1 = 0.01 by squares. Paying by squares, the last little bit of a weight is almost free, so it is never worth giving up. Paying by sizes, every bit costs the same, so a weight that does not earn its price is pushed all the way to zero.
+
+Now the price in code. Paying by sizes takes a flat amount off each weight, toward zero. Paying by squares takes off a share of it, and a share of something is never nothing. `==` asks "is it equal to?". The new `pay` replaces the old one, and `fit` uses it straight away, because it looks `pay` up every time it runs. Fill in what a weight becomes when it is too small to pay. Then change `"sizes"` to `"squares"` and run it again.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+kind = "sizes"                           # run it, then change this to "squares" and run again
+
+def pay(weight, cut):
+    if kind == "squares":
+        return weight / (1 + 2 * cut)    # shrink by a share: smaller, but never zero
+    if weight > cut:
+        return weight - cut              # pay a flat amount, down toward zero
+    if weight < -cut:
+        return weight + cut              # (a weight below zero pays upward)
+    return ____                          # too small to pay: it stops at zero
+
+frames = []
+for price in [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 30, 40, 60, 100, 200]:
+    w = fit([0, 1, 2, 3, 4], price)
+    frames.append({
+        "bars": [(0, w[0]), (1, w[1]), (2, w[2]), (3, w[3]), (4, w[4])],
+        "xlim": (-0.6, 4.6), "ylim": (-1.5, 3),
+        "notes": [kind + ", price " + str(price), "0 sun  1 name  2 day", "3 pot  4 coin",
+                  "weights at zero: " + str(w.count(0))],
+    })
+    if price in [0, 20, 100]:
+        print("price", price, [round(x, 2) for x in w])
+```
+::: {.py-solution}
+```python
+kind = "sizes"                           # run it, then change this to "squares" and run again
+
+def pay(weight, cut):
+    if kind == "squares":
+        return weight / (1 + 2 * cut)    # shrink by a share: smaller, but never zero
+    if weight > cut:
+        return weight - cut              # pay a flat amount, down toward zero
+    if weight < -cut:
+        return weight + cut              # (a weight below zero pays upward)
+    return 0                             # too small to pay: it stops at zero
+
+frames = []
+for price in [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 30, 40, 60, 100, 200]:
+    w = fit([0, 1, 2, 3, 4], price)
+    frames.append({
+        "bars": [(0, w[0]), (1, w[1]), (2, w[2]), (3, w[3]), (4, w[4])],
+        "xlim": (-0.6, 4.6), "ylim": (-1.5, 3),
+        "notes": [kind + ", price " + str(price), "0 sun  1 name  2 day", "3 pot  4 coin",
+                  "weights at zero: " + str(w.count(0))],
+    })
+    if price in [0, 20, 100]:
+        print("price", price, [round(x, 2) for x in w])
+```
+:::
+:::
+
+`w.count(0)` counts the weights that are exactly zero. The picture plays the bars as the price rises. Set Fig. 3 to the same price and rule, and the bars should match the numbers printed here.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With $a_j$ for the weight on measurement $j$, and $\lambda$ (read "lambda") for the price, paying by sizes means making this as small as possible:
+
+$$\sum_{i} \bigl(y_i - \hat y_i\bigr)^2 \;+\; \lambda \sum_{j} |a_j|$$
+
+Read the big Σ as "add these up", $y_i$ as the real height of plant $i$, $\hat y_i$ as its guess, and $|a_j|$ as the size of a weight, ignoring its sign. Paying by squares swaps $|a_j|$ for $a_j^2$.
+
+The same idea is often written as a **budget** instead of a price: make the miss as small as possible while keeping $\sum_j |a_j| \le T$. A high price and a small budget $T$ do the same job. A tighter budget forces more weights to zero, not fewer.
+
+With only two weights you can draw the budget. Every possible pair of weights is a point on the page. Paying by sizes, the pairs you can afford fill a **diamond**, with corners on the axes. Paying by squares, they fill a **circle**. The rings are pairs with the same miss, centred on the best unpriced fit. The answer is the first spot where a ring touches the region. On a diamond, that is usually a corner, where one weight is exactly zero. A circle has no corners.
+
+::: {.ink-figure data-figure="lasso-figure" data-step="2" data-caption="Fig. 3b · two weights, a diamond or a circle; slide the budget T · made-up data with two measurements"}
+:::
+:::
+
+## How does it break?
+
+So far every measurement was a number between 1 and 10. Suppose whoever wrote down the sunshine had used days instead of hours. Nine hours is 9 ÷ 24 = 0.375 of a day. Nothing about the plants has changed.
+
+The cell below fits at a price of 20, first in hours, then with the sunshine written in days.
+
+::: {.py-cell data-aside="true"}
+```python
+kind = "sizes"                           # back to paying by size
+
+print("hours, no price:", [round(x, 2) for x in fit([0, 1, 2, 3, 4])])
+print("hours, price 20:", [round(x, 2) for x in fit([0, 1, 2, 3, 4], 20)])
+
+days = []
+for row in seen:                         # the same plants, with the sunshine written in days
+    days.append((row[0] / 24, row[1], row[2], row[3], row[4], row[5]))
+seen = days
+avg = middles(seen)
+
+print("days,  no price:", [round(x, 2) for x in fit([0, 1, 2, 3, 4])])
+print("days,  price 20:", [round(x, 2) for x in fit([0, 1, 2, 3, 4], 20)])
+```
+:::
+
+Read the four lines. With no price, the two fits make exactly the same guesses. Only the sun's weight changed: 2.15 cm per hour became 51.59 cm per day, which is 24 times bigger, because a day is 24 hours.
+
+But the price charges by size. In days, the sun's weight is 24 times bigger, so its bill is 24 times bigger, for doing exactly the same job. At a price of 20, the price threw away the sun and kept the name, the day, the pot and the coin. The one measurement that matters is gone.
+
+::: {.ask}
+What should you do before charging a price?
+
+- **Always write sunshine in hours.** That fixes this column. But somebody has to choose the units for every column, and nothing says which unit is fair for a pot number or a coin toss.
+- **Give each measurement its own price.** That could work, but now you have five prices to choose instead of one, and no rule for choosing them.
+- **Put every column on the same ruler first.** Yes. Measure each column in units of its own spread, and the units it was written in stop mattering.
+:::
+
+A column's **spread** is how far its numbers typically sit from their average. Here it is: take each number's distance from the average, square it, take the average of those squares, then the square root. The sun's spread in hours is 2.5. In days it is 2.5 ÷ 24, about 0.104. Now divide each number by its column's spread. The first plant: 9 hours ÷ 2.5 = 3.6. In days: 0.375 ÷ 0.104 = 3.6. The same number, whichever units it was written in.
+
+## How do you pick the price?
+
+There is no formula for the right price. Too low, and the model keeps the chance measurements. Too high, and it squeezes the sun as well. So try several, and score each one on the fresh plants. The seen plants are no use for this: on them, a price of zero always wins, because the price only ever stops the fit from bending to them.
+
+::: {.ink-figure data-figure="lasso-figure" data-step="1" data-caption="Fig. 4 · every column on the same ruler; each price scored on the fresh plants · made-up data"}
+:::
+
+Slide the price, or press *try every price*. The fresh miss falls steeply as the chance measurements are pushed out, then climbs slowly as the price starts to squeeze the sun. The bottom of that curve is the price to keep.
+
+In code, it is the ruler first, then a loop over prices. `import math` brings in `math.sqrt`, the square root. `range(0, 41, 2)` counts 0, 2, 4 and so on up to 40. Fill in what each measurement is divided by.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import math
+kind = "sizes"
+
+spread = []
+for j in range(5):                       # how far each column typically sits from its average
+    spread.append(math.sqrt(sum((row[j] - avg[j]) ** 2 for row in seen) / len(seen)))
+print("spreads:", [round(s, 2) for s in spread])
+
+def scale(row):
+    new = []
+    for j in range(5):
+        new.append(row[j] / ____)        # each measurement in units of its own spread
+    new.append(row[5])                   # the height stays in centimetres
+    return new
+
+seen = [scale(row) for row in seen]
+fresh = [scale(row) for row in fresh]    # the fresh plants use the same ruler as the seen ones
+avg = middles(seen)
+
+best = miss(fit([0, 1, 2, 3, 4]), fresh)
+best_price = 0
+tried = []
+frames = []
+for price in range(0, 41, 2):
+    score = miss(fit([0, 1, 2, 3, 4], price), fresh)    # fit on seen plants, score on fresh
+    tried.append((price, score))
+    if score < best:
+        best = score
+        best_price = price
+    frames.append({"points": list(tried), "lines": [list(tried)], "stars": [(best_price, best)],
+                   "xlim": (0, 40), "ylim": (0, 200), "xlabel": "price", "ylabel": "fresh miss",
+                   "notes": ["price " + str(price), "fresh miss " + str(round(score, 1)),
+                             "best so far: " + str(best_price)]})
+
+print("best price:", best_price, "  fresh miss:", round(best, 1))
+print("weights:", [round(x, 2) for x in fit([0, 1, 2, 3, 4], best_price)])
+```
+::: {.py-solution}
+```python
+import math
+kind = "sizes"
+
+spread = []
+for j in range(5):                       # how far each column typically sits from its average
+    spread.append(math.sqrt(sum((row[j] - avg[j]) ** 2 for row in seen) / len(seen)))
+print("spreads:", [round(s, 2) for s in spread])
+
+def scale(row):
+    new = []
+    for j in range(5):
+        new.append(row[j] / spread[j])   # each measurement in units of its own spread
+    new.append(row[5])                   # the height stays in centimetres
+    return new
+
+seen = [scale(row) for row in seen]
+fresh = [scale(row) for row in fresh]    # the fresh plants use the same ruler as the seen ones
+avg = middles(seen)
+
+best = miss(fit([0, 1, 2, 3, 4]), fresh)
+best_price = 0
+tried = []
+frames = []
+for price in range(0, 41, 2):
+    score = miss(fit([0, 1, 2, 3, 4], price), fresh)    # fit on seen plants, score on fresh
+    tried.append((price, score))
+    if score < best:
+        best = score
+        best_price = price
+    frames.append({"points": list(tried), "lines": [list(tried)], "stars": [(best_price, best)],
+                   "xlim": (0, 40), "ylim": (0, 200), "xlabel": "price", "ylabel": "fresh miss",
+                   "notes": ["price " + str(price), "fresh miss " + str(round(score, 1)),
+                             "best so far: " + str(best_price)]})
+
+print("best price:", best_price, "  fresh miss:", round(best, 1))
+print("weights:", [round(x, 2) for x in fit([0, 1, 2, 3, 4], best_price)])
+```
+:::
+:::
+
+The ring marks the best price so far. Compare the best price it prints with the one Fig. 4 finds. At that price, the sun carries nearly all the weight. The coin keeps a crumb, about 0.005, which prints as `0.0` rather than `0` because it is not quite zero. Fig. 4 shows the same crumb.
+
+## What you just built
+
+| What you did | What it is called |
+|:--|:--|
+| A measurement the model can use | A variable, factor or feature |
+| The seen plants and the fresh plants | Training data and validation data |
+| Fitting the seen plants better and the fresh ones worse | Overfitting |
+| Adding the measurement that helps the fresh plants most, until nothing helps | Forward selection, a greedy method |
+| A price on the total size of the weights | LASSO (an L1 penalty) |
+| A price on the total of the squared weights | Ridge regression (an L2 penalty) |
+| Charging for weight at all | Regularization |
+| The price | λ, or equivalently a budget T |
+| Putting every column on the same ruler | Scaling, or standardizing |
+| Trying prices and scoring each on fresh plants | Validation; done several times over, cross-validation |
+
+Forward selection has two relatives. *Backward elimination* starts with every measurement and removes the worst one each round. *Stepwise* selection adds one, then checks whether anything already in should now come out. All three are greedy: each round makes the best move it can see, without looking ahead, so they are fast and good for a first look, but they can miss the best set and they tend to keep chance patterns. Paying by sizes usually gives better models for predicting. Paying by squares removes nothing, but it still helps a model that fits its seen data far better than its fresh data, when you want to keep every measurement. A mix of the two prices is called the *elastic net*. It matters when two measurements carry the same information: paying by sizes tends to keep one of them, not necessarily the better or cheaper one, while paying by squares keeps both and shrinks them toward each other.
+
+The price slides you between two kinds of mistake. Too high, and the model misses real patterns, which is called *underfitting* or bias. Too low, and it fits chance patterns, which is called overfitting or variance. Only fresh data shows where the balance lies.
+
+Prediction is not the only reason to keep fewer measurements. Each one costs money to collect. A short list is easier to explain, and a model nobody can explain will not be trusted. If you try 20 useless measurements, each with a 1 in 20 chance of looking useful by luck, the chance that at least one fools you is 1 − 0.95²⁰, about 64%. And some measurements are forbidden: credit decisions may not use race, sex, religion or marital status, and a model with too many measurements can use them by the back door, through a zip code that stands in for race. A library such as scikit-learn has `Lasso`, `Ridge` and `ElasticNet` that do what your `fit` does with a price, and `LassoCV` that tries the prices for you and scores each on several fresh splits.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 The diamond and the circle side by side, as a static base-R sketch. Here the ellipses are placed by hand to show the shape of the argument. The figures above compute them from data.
 
 ```{r}
@@ -150,39 +586,4 @@ legend("bottomleft", legend = c("Constraint region", "Error contours", "Solution
        col = c("#2d6a4f", "#d62828", "#2d6a4f"), lty = c(1, 3, NA),
        pch = c(NA, NA, 19), lwd = c(2, 1, NA), cex = 0.8, bg = "white")
 ```
-
-## On one page {.reference}
-
-| Method | Constraint or rule | Removes variables? | Use it for |
-|--------|--------------------|:------------------:|------------|
-| Forward selection | Start with none, add the best factor while one is good enough | Yes | Initial exploration (fast, greedy) |
-| Backward elimination | Start with all, remove the worst factor while one is bad enough | Yes | Initial exploration (fast, greedy) |
-| Stepwise | Add, then re-check what is already in | Yes | Initial exploration; most common of the three |
-| LASSO | $\sum \lvert a_j \rvert \le T$ (diamond) | Yes, exactly zero | Final predictive models |
-| Ridge | $\sum a_j^2 \le T$ (circle) | No, shrinks only | An overfit regression, keeping every variable |
-| Elastic net | A combination of both terms | Yes, plus shrinkage | Correlated predictors |
-
-Common misconceptions:
-
-1. **Ridge regression does NOT do variable selection.** It shrinks coefficients but never drives them exactly to zero.
-2. **LASSO requires scaled data**, because the absolute-value constraint is sensitive to coefficient magnitudes.
-3. **Greedy methods can miss the best model.** They make locally optimal choices that may not be globally optimal.
-4. **Elastic net is not "LASSO but better".** It is a trade-off. With uncorrelated factors, LASSO alone may be cleaner.
-5. **A tighter budget $T$ in LASSO means more variables removed**, not fewer. Smaller $T$ forces more coefficients to zero.
-6. **Bias-variance is about prediction on NEW data.** Training error alone does not reveal the trade-off.
-
-Bias is error from missing real patterns (underfitting); variance is error from fitting random ones (overfitting). Choose $T$ by trying values and comparing them with cross-validation.
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What are the two reasons to prefer a model with fewer factors?
-2. How do forward selection, backward elimination and stepwise regression differ, and why are all three called greedy?
-3. Why does the LASSO solution tend to land where a coefficient is exactly zero, while the ridge solution does not?
-4. What happens to the number of variables in a LASSO model when you make $T$ smaller?
-5. Why must the data be scaled before LASSO or ridge?
-6. Ridge removes no variables. What is it for?
-7. Which actions increase bias, and which increase variance?
-8. Why can you not find the best $T$ by looking at training error?
-9. What do LASSO and ridge each do with two highly correlated predictors, and where does elastic net fit?
+:::

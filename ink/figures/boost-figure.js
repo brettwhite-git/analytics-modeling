@@ -1,204 +1,198 @@
-/* Boosting figure — gradient boosting on one variable, worked for real.
-   F0 is the mean of the training points. Each round fits a stump (one split, two levels, the split that
-   leaves the least squared error) to the current residuals and adds gamma times it to the model.
-   Training and held-out error (RMSE) are computed from the same model that is drawn; the held-out points
-   come from the same made-up curve with fresh seeded noise.
-   Steps: 0 the mean and what it leaves over · 1 the first stump, and the shrunken copy that is added ·
-          2 add trees, slide the learning rate, watch both errors.
-   Made-up data. Needs InkKit (ink/ink-kit.js). */
+/* Corrections figure — a weak rule fixed in rounds, worked for real.
+   The first guess is the average height of the points. Each round finds the misses, fits one tiny rule to
+   them (one cut on x; each side predicts the average miss on its side; the cut that leaves the least squared
+   miss), and adds a fraction of it to the guess. The reader adds one correction at a time (or ten), slides
+   the fraction, and watches the miss on the points used and on fresh points from the same made-up curve.
+   "Miss" is the average distance between a point and the line. Every number is computed from what is drawn.
+   One step. Offers `train`, `fresh`, `rate` to the page's Python. Made-up data. Needs InkKit (ink/ink-kit.js). */
 (function () {
   'use strict';
   if (!window.InkKit) return;
 
   var PLOT = { x: 44, y: 34, w: 392, h: 372 };
   var SIDE = 462, COL = 158;
-  var N = 24, NOISE = 1, ROUNDS = 40;
-  var RATE_START = 0.5;
-  var CHART = { x: SIDE + 2, y: 152, w: COL - 4, h: 76 };
+  var N = 24, ROUNDS = 40, RATE_START = 0.5;
+  var CHART = { x: SIDE + 2, y: 150, w: COL - 4, h: 70 };
 
+  function r2(v) { return Math.round(v * 100) / 100; }
   function truth(x) { return 5 + 2.6 * Math.sin(x * 0.75) + 0.25 * (x - 5); }
   function makeData(rand) {
     var pts = [];
     for (var i = 0; i < N; i++) {
       var x = 0.3 + 9.4 * (i + 0.15 + 0.7 * rand()) / N;
-      pts.push({ x: x, y: truth(x) + NOISE * (rand() + rand() + rand() - 1.5) * 2 });
+      pts.push([r2(x), r2(truth(x) + (rand() + rand() + rand() - 1.5) * 2)]);
     }
     return pts;
   }
+  // made once, to two decimals, so the page's Python works on exactly the same points
+  var TRAIN = makeData(window.InkKit.rng(1096)).sort(function (a, b) { return a[0] - b[0]; });
+  var FRESH = makeData(window.InkKit.rng(2096));
+  var state = { rate: RATE_START };
 
-  /* the one split of x that leaves the least squared error in `res`, with the mean of each side */
-  function fitStump(pts, res) {
-    var n = pts.length, total = 0, left = 0, best = null, i;
-    for (i = 0; i < n; i++) total += res[i];
-    for (i = 0; i < n - 1; i++) {                       // pts are sorted by x
-      left += res[i];
-      var nl = i + 1, nr = n - nl, right = total - left;
-      var gain = left * left / nl + right * right / nr;
-      if (!best || gain > best.gain) best = { gain: gain, s: (pts[i].x + pts[i + 1].x) / 2, l: left / nl, r: right / nr };
+  /* what `from page import train, fresh, rate` gives the Python on the same page */
+  window.InkPage = window.InkPage || {};
+  window.InkPage.train = function () { return TRAIN; };
+  window.InkPage.fresh = function () { return FRESH; };
+  window.InkPage.rate = function () { return state.rate; };
+
+  /* one cut on x, each side the average miss on its side: the cut whose sides miss their averages least */
+  function bestCut(pts, misses) {
+    var best = null;
+    for (var i = 1; i < pts.length; i++) {
+      var l = 0, r = 0, j, left = 0;
+      for (j = 0; j < i; j++) l += misses[j];
+      for (j = i; j < pts.length; j++) r += misses[j];
+      l /= i; r /= pts.length - i;
+      for (j = 0; j < pts.length; j++) { var d = misses[j] - (j < i ? l : r); left += d * d; }
+      if (!best || left < best.left) best = { left: left, cut: (pts[i - 1][0] + pts[i][0]) / 2, l: l, r: r };
     }
     return best;
   }
-  function rmse(pts, pred) {
-    var s = 0;
-    for (var i = 0; i < pts.length; i++) s += (pts[i].y - pred[i]) * (pts[i].y - pred[i]);
-    return Math.sqrt(s / pts.length);
-  }
-  /* run every round at one learning rate: the stumps, and both errors after 0, 1, ... ROUNDS trees */
-  function boost(train, held, rate) {
-    var mean = 0, i, r;
-    for (i = 0; i < train.length; i++) mean += train[i].y / train.length;
-    var f = train.map(function () { return mean; }), g = held.map(function () { return mean; });
-    var out = { mean: mean, stumps: [], train: [rmse(train, f)], held: [rmse(held, g)] };
-    for (r = 0; r < ROUNDS; r++) {
-      var st = fitStump(train, train.map(function (p, j) { return p.y - f[j]; }));
-      for (i = 0; i < train.length; i++) f[i] += rate * (train[i].x < st.s ? st.l : st.r);
-      for (i = 0; i < held.length; i++) g[i] += rate * (held[i].x < st.s ? st.l : st.r);
-      out.stumps.push(st); out.train.push(rmse(train, f)); out.held.push(rmse(held, g));
+  function correction(rule, x) { return x < rule.cut ? rule.l : rule.r; }
+  function avg(v) { var s = 0; for (var i = 0; i < v.length; i++) s += v[i]; return s / v.length; }
+  /* every round at one fraction: the start, the rules, and both misses after 0, 1, ... ROUNDS rules */
+  function boost(rate) {
+    var start = avg(TRAIN.map(function (p) { return p[1]; }));
+    var g = TRAIN.map(function () { return start; }), h = FRESH.map(function () { return start; });
+    function miss(pts, guess) { return avg(pts.map(function (p, i) { return Math.abs(p[1] - guess[i]); })); }
+    var out = { start: start, rules: [], used: [miss(TRAIN, g)], fresh: [miss(FRESH, h)] };
+    for (var r = 0; r < ROUNDS; r++) {
+      var rule = bestCut(TRAIN, TRAIN.map(function (p, i) { return p[1] - g[i]; }));
+      g = g.map(function (v, i) { return v + rate * correction(rule, TRAIN[i][0]); });
+      h = h.map(function (v, i) { return v + rate * correction(rule, FRESH[i][0]); });
+      out.rules.push(rule); out.used.push(miss(TRAIN, g)); out.fresh.push(miss(FRESH, h));
     }
     return out;
   }
-  function predict(run, rate, trees, x, fullLast) {
-    var v = run.mean;
-    for (var i = 0; i < trees; i++) v += (fullLast && i === trees - 1 ? 1 : rate) * (x < run.stumps[i].s ? run.stumps[i].l : run.stumps[i].r);
+  function predict(run, rate, n, x) {
+    var v = run.start;
+    for (var i = 0; i < n; i++) v += rate * correction(run.rules[i], x);
     return v;
   }
 
   window.InkKit.define('boost-figure', {
-    label: 'Gradient boosting: a step function built one small tree at a time, with training and held-out error',
-    steps: 3,
+    label: 'Correcting mistakes in rounds: a stepped line built one small correction at a time, with the miss on the points used and on fresh points',
+    steps: 1,
     seed: 31,
     draw: function (k) {
-      var train = makeData(k.rng(1096)).sort(function (a, b) { return a.x - b.x; });
-      var held = makeData(k.rng(2096));
       var lo = Infinity, hi = -Infinity;
-      train.concat(held).forEach(function (p) { lo = Math.min(lo, p.y); hi = Math.max(hi, p.y); });
+      TRAIN.concat(FRESH).forEach(function (p) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); });
       var sx = k.scale(0, 10, PLOT.x, PLOT.x + PLOT.w);
       var sy = k.scale(lo - 0.6, hi + 0.6, PLOT.y + PLOT.h, PLOT.y);
       var base = PLOT.y + PLOT.h;
 
-      var rate = RATE_START, trees = 1;                  // the live values of step 2
-      var first = boost(train, held, RATE_START);       // steps 0 and 1 always show the starting rate
-      var run = first;
-      var errTop = Math.max(run.train[0], run.held[0]) * 1.08;
+      var run = boost(state.rate), n = 0, busy = false;
+      var errTop = Math.max(run.used[0], run.fresh[0]) * 1.1;
       var cx = k.scale(0, ROUNDS, CHART.x, CHART.x + CHART.w), cy = k.scale(0, errTop, CHART.y + CHART.h, CHART.y);
 
-      k.root.axes({ x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'x', ylabel: 'y' });
+      k.root.axes({ x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'x', ylabel: 'height' });
 
-      var live = k.root.layer();
+      var below = k.root.layer();
       var marks = k.root.group({ d: 200, stagger: 18 });
-      held.forEach(function (p) { marks.mark(sx(p.x), sy(p.y), '+', { r: 3, op: 0.42, w: 0.9 }); });
-      train.forEach(function (p) { marks.mark(sx(p.x), sy(p.y), 'o', { r: 3.8 }); });
+      FRESH.forEach(function (p) { marks.mark(sx(p[0]), sy(p[1]), '+', { r: 3, op: 0.42, w: 0.9 }); });
+      TRAIN.forEach(function (p) { marks.mark(sx(p[0]), sy(p[1]), 'o', { r: 3.8 }); });
+      var live = k.root.layer();
 
       /* ---- the column beside the plot ---- */
       var rows = k.root.group({ d: 300 });
-      rows.text(SIDE, 56, 'trees', { kind: 'label' });
-      var treesVal = rows.text(SIDE + COL, 56, '', { kind: 'val', anchor: 'end' });
+      rows.text(SIDE, 56, 'corrections', { kind: 'label' });
+      var vN = rows.text(SIDE + COL, 56, '', { kind: 'val', anchor: 'end' });
       rows.mark(SIDE + 5, 72, 'o', { r: 3.6 });
-      rows.text(SIDE + 16, 76, 'train error', { kind: 'label' });
-      var trainVal = rows.text(SIDE + COL, 76, '', { kind: 'val', anchor: 'end' });
+      rows.text(SIDE + 16, 76, 'miss, used', { kind: 'label' });
+      var vUsed = rows.text(SIDE + COL, 76, '', { kind: 'val', anchor: 'end' });
       rows.mark(SIDE + 5, 92, '+', { r: 3.4 });
-      rows.text(SIDE + 16, 96, 'held-out error', { kind: 'label' });
-      var heldVal = rows.text(SIDE + COL, 96, '', { kind: 'val', anchor: 'end' });
+      rows.text(SIDE + 16, 96, 'miss, fresh', { kind: 'label' });
+      var vFresh = rows.text(SIDE + COL, 96, '', { kind: 'val', anchor: 'end' });
       rows.line(SIDE, 108, SIDE + COL, 108, { w: 0.6, op: 0.45, rough: 0.3 });
+      rows.text(SIDE, 132, 'miss by round', { kind: 'label' });
+      rows.axes({ x: CHART.x, y: CHART.y, w: CHART.w, h: CHART.h, xticks: [0, 20, 40].map(function (v) { return [cx(v), String(v)]; }) });
+      var chart = k.root.layer();
 
-      var chart = k.root.group({ steps: [2], d: 400 });
-      chart.text(SIDE, 128, 'best round so far', { kind: 'label' });
-      var bestVal = chart.text(SIDE + COL, 128, '', { kind: 'val', anchor: 'end' });
-      chart.axes({
-        x: CHART.x, y: CHART.y, w: CHART.w, h: CHART.h,
-        xticks: [0, 20, 40].map(function (v) { return [cx(v), String(v)]; })
-      });
-      chart.text(SIDE + COL, CHART.y + 6, 'error by round', { kind: 'axis', anchor: 'end' });
-      var chartLive = k.root.layer({ steps: [2] });
-
-      function view() {
-        var step = k.step();
-        return step === 2 ? { step: 2, trees: trees, run: run, rate: rate } : { step: step, trees: step, run: first, rate: RATE_START };
-      }
-      /* the model as a step function: flat between splits, a riser at each one */
-      function stepPath(run, rate, nTrees, fullLast) {
-        var cuts = [0];
-        for (var i = 0; i < nTrees; i++) cuts.push(run.stumps[i].s);
-        cuts.push(10);
-        cuts.sort(function (a, b) { return a - b; });
-        var d = '', first = true;
-        for (i = 0; i < cuts.length - 1; i++) {
-          if (cuts[i + 1] - cuts[i] < 1e-9) continue;
-          var y = sy(predict(run, rate, nTrees, (cuts[i] + cuts[i + 1]) / 2, fullLast)).toFixed(1);
-          d += (first ? 'M' : ' L') + sx(cuts[i]).toFixed(1) + ' ' + y + ' L' + sx(cuts[i + 1]).toFixed(1) + ' ' + y;
+      /* the guess as a stepped line: flat between cuts, a riser at each one */
+      function stepped(fn, cuts) {
+        var xs = [0].concat(cuts, [10]).sort(function (a, b) { return a - b; }), d = '', first = true;
+        for (var i = 0; i < xs.length - 1; i++) {
+          if (xs[i + 1] - xs[i] < 1e-9) continue;
+          var y = sy(fn((xs[i] + xs[i + 1]) / 2)).toFixed(1);
+          d += (first ? 'M' : ' L') + sx(xs[i]).toFixed(1) + ' ' + y + ' L' + sx(xs[i + 1]).toFixed(1) + ' ' + y;
           first = false;
         }
         return d;
       }
+      function cutsUpTo(m) { return run.rules.slice(0, m).map(function (r) { return r.cut; }); }
 
-      function redraw() {
-        var v = view(), t = v.trees, run = v.run, rate = v.rate;
-        live.clear();
-        // what is left over: each training point to the model
-        train.forEach(function (p) {
-          var f = predict(run, rate, t, p.x);
-          if (Math.abs(sy(f) - sy(p.y)) > 5) live.line(sx(p.x), sy(p.y) + (f < p.y ? 4 : -4), sx(p.x), sy(f), { w: 0.6, op: 0.45, rough: 0.2 });
+      /* draw the guess after n - 1 corrections plus `t` of the newest one (t = 1 when settled) */
+      function paint(t, ghost) {
+        var m = n, rate = state.rate;
+        function guess(x) {
+          var v = predict(run, rate, Math.max(0, m - 1), x);
+          return m > 0 ? v + t * rate * correction(run.rules[m - 1], x) : v;
+        }
+        live.clear(); below.clear();
+        // the misses: a thread from each point used to the line
+        var d = '';
+        TRAIN.forEach(function (p) {
+          var y0 = sy(p[1]), y1 = sy(guess(p[0]));
+          if (Math.abs(y1 - y0) > 5) d += 'M' + sx(p[0]).toFixed(1) + ' ' + (y0 + (y1 > y0 ? 4 : -4)).toFixed(1) + ' L' + sx(p[0]).toFixed(1) + ' ' + y1.toFixed(1) + ' ';
         });
-        if (t > 0) {
-          var cut = run.stumps[t - 1].s, right = sx(cut) > PLOT.x + PLOT.w - 80;
-          live.line(sx(cut), base, sx(cut), PLOT.y + 4, { w: 0.6, op: 0.35, rough: 0.2 });
-          live.text(sx(cut) + (right ? -6 : 6), PLOT.y + 12, t === 1 ? 'split' : 'newest split', { kind: 'label', anchor: right ? 'end' : 'start' });
+        if (d) below.path(d, { w: 0.7, op: 0.45 });
+        if (m > 0) {
+          var rule = run.rules[m - 1], right = sx(rule.cut) > PLOT.x + PLOT.w - 90;
+          below.path('M' + sx(rule.cut).toFixed(1) + ' ' + base + ' L' + sx(rule.cut).toFixed(1) + ' ' + (PLOT.y + 18), { w: 0.6, op: 0.35 });
+          below.text(sx(rule.cut) + (right ? -6 : 6), PLOT.y + 14, 'newest cut', { kind: 'label', anchor: right ? 'end' : 'start' });
+          if (ghost) {
+            // the whole correction, as if all of it were added: the line only goes a fraction of the way
+            var prev = function (x) { return predict(run, rate, m - 1, x) + correction(rule, x); };
+            below.path(stepped(prev, cutsUpTo(m)), { w: 0.9, op: 0.5 });
+          }
         }
-        if (v.step === 1) live.path(stepPath(run, rate, 1, true), { w: 0.9, op: 0.55 });   // the whole first stump
-        live.path(stepPath(run, rate, t, false), { w: 1.7, op: 0.95, accent: true });
-        if (v.step === 0) live.text(PLOT.x + PLOT.w - 4, sy(run.mean) - 7, 'the mean', { kind: 'label', anchor: 'end' });
-
-        treesVal.set(String(t));
-        trainVal.set(run.train[t].toFixed(2));
-        heldVal.set(run.held[t].toFixed(2));
-
-        chartLive.clear();
-        if (v.step !== 2) return;
-        var best = 0, i, a = [], b = [];
-        for (i = 0; i <= t; i++) {
-          if (run.held[i] < run.held[best]) best = i;
-          a.push([cx(i), cy(run.train[i])]); b.push([cx(i), cy(run.held[i])]);
-        }
-        bestVal.set(String(best));
-        chartLive.line(cx(best), CHART.y + CHART.h, cx(best), cy(run.held[best]) + 5, { w: 0.6, op: 0.45, rough: 0.2 });
-        if (t > 0) {
-          chartLive.polyline(a, { w: 0.9, op: 0.6 });
-          chartLive.polyline(b, { w: 1.2, op: 0.9 });
-        }
-        chartLive.mark(a[t][0], a[t][1], 'o', { r: 2.8 });
-        chartLive.mark(b[t][0], b[t][1], '+', { r: 3.2 });
-        if (t > best + 2 && run.held[t] > run.held[best] * 1.03) {
-          chartLive.text(SIDE, 412, 'past round ' + best + ' it only', { kind: 'hand' });
-          chartLive.text(SIDE, 434, 'fits the training set.', { kind: 'hand' });
-        }
+        live.path(stepped(guess, cutsUpTo(m)), { w: 1.7, op: 0.95, accent: true });
+        if (m === 0) live.text(sx(5.4), sy(run.start) - 8, 'the average', { kind: 'label' });
       }
 
-      /* ---- step 2: the controls ---- */
+      function side() {
+        vN.set(String(n));
+        vUsed.set(run.used[n].toFixed(2));
+        vFresh.set(run.fresh[n].toFixed(2));
+        chart.clear();
+        var a = [], b = [], best = 0;
+        for (var i = 0; i <= n; i++) {
+          a.push([cx(i), cy(run.used[i])]); b.push([cx(i), cy(run.fresh[i])]);
+          if (run.fresh[i] < run.fresh[best]) best = i;
+        }
+        if (n > 0) { chart.polyline(a, { w: 0.9, op: 0.6 }); chart.polyline(b, { w: 1.2, op: 0.9 }); }
+        chart.mark(a[n][0], a[n][1], 'o', { r: 2.6 });
+        chart.mark(b[n][0], b[n][1], '+', { r: 3 });
+        if (n > best + 3 && run.fresh[n] > run.fresh[best] * 1.04) {
+          chart.text(SIDE, 410, 'best on fresh: round ' + best + '.', { kind: 'hand' });
+          chart.text(SIDE, 432, 'since then, it rises.', { kind: 'hand' });
+        }
+        bOne.node.style.display = bTen.node.style.display = n >= ROUNDS ? 'none' : '';
+      }
+
+      /* add `times` corrections; one at a time is slow and shows the whole correction it takes a fraction of */
+      function add(times, single) {
+        if (times <= 0 || n >= ROUNDS) { busy = false; return; }
+        busy = true; n++; side();
+        k.animate(single ? 700 : 150, function (t) {
+          paint(t, single);
+          if (t >= 1) { if (times > 1 && n < ROUNDS) setTimeout(function () { add(times - 1, false); }, 30); else busy = false; }
+        });
+      }
+
+      /* ---- the controls ---- */
       k.slider({
-        x: SIDE, y: 316, w: COL, min: 0.1, max: 1, step: 0.05, value: RATE_START,
-        label: 'learning rate', steps: [2],
+        x: SIDE, y: 312, w: COL, min: 0.1, max: 1, step: 0.05, value: RATE_START,
+        label: 'fraction added',
         format: function (v) { return v.toFixed(2); },
-        onChange: function (v) { rate = v; run = boost(train, held, rate); redraw(); }
+        onChange: function (v) { state.rate = v; run = boost(v); if (!busy) { side(); paint(1, false); } }
       });
-      var add = k.button(SIDE, 352, 'add a tree', function () { grow(1); }, { steps: [2], d: 600 });
-      k.button(SIDE + COL, 352, 'add 10', function () { grow(10); }, { steps: [2], d: 650, anchor: 'end' });
-      k.button(SIDE, 380, 'start over', function () { trees = 0; add.set('add a tree'); redraw(); }, { steps: [2], d: 700 });
-      function grow(m) {
-        if (trees >= ROUNDS) return;
-        trees = Math.min(ROUNDS, trees + m);
-        add.set(trees >= ROUNDS ? '40 trees' : 'add a tree');
-        redraw();
-      }
+      var bOne = k.button(SIDE, 350, 'add one', function () { if (!busy) add(1, true); }, { d: 600 });
+      var bTen = k.button(SIDE + COL, 350, 'add 10', function () { if (!busy) add(10, false); }, { d: 650, anchor: 'end' });
+      k.button(SIDE, 378, 'start over', function () { if (busy) return; n = 0; side(); paint(1, false); }, { d: 700 });
+      k.root.group({ d: 800 }).callout('a', 'each fits what is left', SIDE, 266);
 
-      /* ---- the lettered notes ---- */
-      k.root.group({ steps: [0] }).callout('a', 'what the mean leaves over', SIDE, 150,
-        { to: [sx(train[N - 1].x) + 7, (sy(train[N - 1].y) + sy(first.mean)) / 2], d: 700 });
-      var st1 = first.stumps[0], mid = (st1.s + 10) / 2;
-      k.root.group({ steps: [1] }).callout('b', 'add half of the stump', SIDE, 150,
-        { to: [sx(mid) + 6, sy(first.mean + RATE_START * st1.r) - 5], d: 700 });
-      k.root.group({ steps: [2] }).callout('c', 'each tree fits what is left', SIDE, 274, { d: 300 });
-
-      k.onStep(function () { redraw(); });
+      k.onStep(function () { busy = false; side(); paint(1, false); });
     }
   });
 })();

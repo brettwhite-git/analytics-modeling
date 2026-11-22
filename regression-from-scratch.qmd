@@ -1,154 +1,505 @@
 ---
-title: "How do you fit a line to data, and what can it tell you?"
-subtitle: "Least squares scores a line by the squares of its misses, and one extra step turns the same line into a probability."
+title: "How do you draw the best line through points?"
+subtitle: "You will lay a line through some points by hand, score it, and then teach a computer to find the best one. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="regression-figure" data-step="0" data-caption="Fig. 1 · a guessed line, and how far each point sits from it · made-up data"}
+An ice-cream seller wrote down two numbers for 12 days: how many hours the sun shone, and how many ice creams she sold, counted in tens. Each dot below is one day. Sunny days sit further right, busy days higher up.
+
+Tomorrow the forecast says 6 hours of sun. How many ice creams should she get ready? Nobody has a day with exactly 6 hours. But the dots lean one way, and a straight line through them would let you read off an answer for any amount of sun.
+
+## Which line would you draw?
+
+Drag the two ends of the line in Fig. 1 until it runs through the dots as well as you can manage.
+
+::: {.ink-figure data-figure="regression-figure" data-step="0" data-caption="Fig. 1 · 12 made-up days, and your line"}
 :::
 
-Someone hands you house sales: square footage and sale price. You want to predict the price of the next house from its size. The answer is not a category but an actual number, and predicting a continuous value from one or more input features is what regression does.
+Every dot misses the line by a little: the gap straight up or down from the dot to the line. The figure draws each miss as a square, with the miss as its side, and adds up the areas of all the squares in the side column. A line close to every dot has small squares and a small total.
 
-You could lay a ruler across the scatter and call it a model. The figure does that, and the line is plainly too flat: nearly every point on the left sits well below it. To do better you need a way to score a line, so that "better" has a meaning.
+That is the whole idea of this lesson: **a line is scored by squaring each miss and adding them up. The smaller the total, the better the line.**
 
-## The line that misses least
+You met squared misses in the last lesson, and the reasons are the same. A miss above the line and a miss below cannot cancel each other out, because a square is never negative. And one big miss counts for much more than two small ones: a miss of 2 costs 4, but two misses of 1 cost only 1 + 1 = 2.
 
-The model is a straight line plus whatever the line cannot explain:
+Try to get the total as low as you can. Keep your line: the next part works on it.
 
-$$y = a_0 + a_1 x_1 + \epsilon$$
+## How do you score a line?
 
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $y$ | Response variable | What you're predicting (price) |
-| $x_1$ | Predictor variable | What you're using to predict (sqft) |
-| $a_0$ | Intercept | Predicted $y$ when $x = 0$ (the baseline) |
-| $a_1$ | Coefficient (slope) | How much $y$ changes per unit increase in $x$ |
-| $\epsilon$ | Error / residual | The noise, what the line can't explain |
+A straight line is just two numbers. The **height** is where the line starts, at 0 hours of sun: the left handle. The **tilt** is how much the line climbs for every 1 you go across. Fig. 1 shows both for your line.
 
-The slope $a_1$ is the number to read first. If $a_1 = 0.12$ and price is in thousands of dollars, every extra square foot adds 120 dollars to the predicted price.
+To find what a line says at some x, start at the height and climb the tilt once for every 1 across. Take a line with height 2 and tilt 1, at 5 hours of sun: 2 + 1 × 5 = **7**. Suppose that day she really sold 9. The miss is 9 − 7 = **2**, and squared, 2 × 2 = **4**. Do that for every day and add up, and you have the line's score.
 
-For each point, the **residual** is the actual value minus the predicted one, $y_i - \hat{y}_i$, where $\hat{y}_i = a_0 + a_1 x_i$. Regression chooses the line that makes the sum of the squared residuals as small as it can be:
+Click a dot in Fig. 1 and the side column does this sum for that one day.
 
-$$\min_{a_0, a_1} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2 = \min \sum_{i=1}^{n} (y_i - a_0 - a_1 x_i)^2$$
+### Now tell a computer
 
-Squaring does two things. It makes every error positive, so misses above and below the line do not cancel, and it penalises big errors more than small ones.
+A computer cannot look at a picture. It needs the days as numbers. Each day is a pair, such as `(0.77, 2.78)`: 0.77 hours of sun and 2.78 tens of ice creams. The cell below fetches the same 12 days, and the two numbers of the line you drew.
 
-::: {.ink-figure data-figure="regression-figure" data-step="1" data-steps="1:least squares|2:drag the line" data-caption="Fig. 2 · each miss drawn as a square; the fitted line makes their total area smallest · made-up data"}
+Press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, my_tilt, my_height    # the days above, and your line
+
+print("There are", len(points), "days. The first one is", points[0])
+print("Your line: tilt", my_tilt, "and height", my_height)
+
+line = [(0, my_height), (10, my_height + my_tilt * 10)]   # the two ends of your line
+picture = {"points": points, "lines": [line], "xlim": (0, 10), "ylim": (0, 10),
+           "xlabel": "hours of sun", "ylabel": "ice creams, in tens"}
+```
 :::
 
-After the fit, look at what is left over. Good residuals are centred at zero (no systematic over- or under-prediction), randomly scattered (no pattern when you plot them), and roughly normal (a bell-shaped histogram). A curve in the residual plot means the model is missing a non-linear relationship. A funnel shape means the variance is not constant, which is called heteroscedasticity and is what Box-Cox is for (Module 9).
+`from page import ...` fetches what the figures on this page offer. `points` is a list: many things in a row, between square brackets. `len(points)` counts them, and `points[0]` is the first one (Python counts from 0). The last two lines only describe a picture for the page to draw. You do not need to follow them.
 
-## More predictors, and how good the fit is
+::: {.ask}
+Before you write the code that scores a line: how would you check it is right?
 
-Real predictions use many features, and the line becomes
-
-$$y = a_0 + a_1 x_1 + a_2 x_2 + \dots + a_m x_m + \epsilon$$
-
-Each coefficient is read with the others held still. If the coefficient on bedrooms is 15, each extra bedroom adds about 15 thousand dollars to the predicted price, holding square footage constant.
-
-The usual score for the whole model is $R^2$, the share of the variance in $y$ that the model explains:
-
-$$R^2 = 1 - \frac{\text{SS}_{res}}{\text{SS}_{tot}} = 1 - \frac{\sum(y_i - \hat{y}_i)^2}{\sum(y_i - \bar{y})^2}$$
-
-| Value | Meaning |
-|:-----:|:--------|
-| $R^2 = 0$ | Model explains nothing, it is just predicting the mean |
-| $R^2 = 0.7$ | Model explains 70% of the variance |
-| $R^2 = 1.0$ | Perfect fit, every point on the line |
-
-$R^2$ has a flaw as a way to compare models. It always increases when you add more predictors, even useless ones, so a model with 50 predictors will always score higher than one with 2. Adjusted $R^2$ penalises each added predictor and can go down when a new one does not help enough to justify the added complexity: [Exam trap: a higher R² after adding predictors does not mean a better model. R² always increases. Adjusted R² does not always increase, so compare models with that.]{.side}
-
-$$R^2_{adj} = 1 - \frac{(1 - R^2)(n - 1)}{n - m - 1}$$
-
-where $m$ is the number of predictors and $n$ is the number of observations.
-
-Each coefficient also gets a p-value, which tests the question "is this coefficient actually zero?" Below 0.05 the predictor is called statistically significant and likely matters. Above 0.05 it is not significant and might be noise. Check the size as well as the significance: a predictor can have a low p-value and still be practically meaningless if its coefficient is tiny.
-
-More predictors is not always better, because including noise variables overfits. If predictors are correlated with each other (multicollinearity), use PCA (Module 9) to create uncorrelated components and regress on those. To choose which predictors stay:
-
-| Method | How it works | When to use |
-|:-------|:-------------|:------------|
-| **Adjusted $R^2$** | Pick the model with highest adj. $R^2$ | Comparing a few models |
-| **AIC** | Lower = better (penalizes complexity) | Automated model selection |
-| **BIC** | Like AIC but penalizes more aggressively | Want simpler models |
-| **Stepwise** | Add/remove predictors one at a time | Exploratory |
-| **Cross-validation** | Test actual prediction on held-out data | Gold standard |
-
-## What a good fit does not prove
-
-A regression finds a relationship. It does not tell you that one thing causes the other. Mozzarella consumption and the number of civil engineering PhDs awarded both rose year after year, so they are almost perfectly correlated, and cheese does not cause doctorates. Both simply increase over time, and time is the confounding variable. [Exam trap: correlation is not causation, and this is tested constantly. A good fit does not prove it. A significant p-value does not prove it either.]{.side}
-
-Causation requires three things: temporal precedence (the cause comes before the effect), a logical mechanism (a plausible reason why X would cause Y), and no confounding (no third variable driving both). Regression proves none of these. It only shows correlation.
-
-So "the model shows X and Y are correlated" is a statement you can make. "X causes Y" is not. Neither is "the significant coefficient means X influences Y": the coefficient means they move together.
-
-## When the pattern bends
-
-Real data is not always linear. You stay inside linear regression and still fit a curve by transforming the predictors: the model keeps the same form, with a new column built from $x$ alongside the old one.
-
-::: {.ink-figure data-figure="regression-figure" data-step="3" data-caption="Fig. 3 · one curved scatter, three choices of predictor; R² is computed for each · made-up data"}
+- **Score your line from Fig. 1 and look at the number.** It would print a number, but you would have no idea whether it was correct. A wrong sum still looks like a number.
+- **Try the one worked out by hand above.** Yes. You know the line with height 2 and tilt 1 says 7 at 5 hours, that the miss from 9 is 2, and that its square is 4. If the code prints anything else, it is wrong, and you find out straight away.
 :::
 
-The points in the figure rise and then fall. A straight line through them leaves residuals that bow: negative at both ends, positive in the middle. That bow is the curve in the residual plot from earlier, and it says a term is missing. Add $x^2$ as a second predictor and keep $x$, so the model is $y = a_0 + a_1 x + a_2 x^2$. The pattern in the residuals disappears and $R^2$ goes from about 0.3 to above 0.9. Fitting $x^2$ on its own does worse than the straight line here, because without the linear term the parabola is forced to have its turning point at $x = 0$. [Exam trap: a quadratic pattern in x means add x² as a predictor and keep x. Do not transform y. Do not drop the linear term.]{.side}
+The code below does that sum for one day. One piece is missing. Replace the blank and press Run.
 
-Transforming $y$ is a different tool for a different problem. Box-Cox on the response is for unequal variance (Module 9), not for a bend in $x$. The common transformations of predictors:
+::: {.py-cell}
+```python
+def predict(x, tilt, height):
+    return height + ____          # start at the height, climb the tilt once for every 1 of x
 
-| Transformation | When to use |
-|:---------------|:------------|
-| $\log(x)$ | Diminishing returns (more X helps less and less) |
-| $x^2$ | Quadratic relationship (up then down, or accelerating) |
-| $\sqrt{x}$ | Similar to log, less aggressive |
-| $x_1 \cdot x_2$ | Interaction: the effect of $x_1$ depends on $x_2$ |
+says = predict(5, 1, 2)           # the line with tilt 1 and height 2, at 5 hours of sun
+miss = 9 - says                   # the truth was 9
+print(says, miss, miss * miss)    # by hand: 7, 2 and 4
+```
+::: {.py-solution}
+```python
+def predict(x, tilt, height):
+    return height + tilt * x      # start at the height, climb the tilt once for every 1 of x
 
-The last row is an **interaction term**. Suppose the effect of square footage depends on the neighbourhood:
-
-$$y = a_0 + a_1 \cdot \text{sqft} + a_2 \cdot \text{neighborhood} + a_3 \cdot (\text{sqft} \times \text{neighborhood})$$
-
-The $a_3$ term lets the slope for sqft change with the neighbourhood. Without it, the model assumes square footage has the same effect everywhere.
-
-## When the answer is yes or no
-
-Linear regression predicts a number. Sometimes you need a probability instead: will this customer default, will the patient survive, will the student pass? Code the outcome as 0 or 1 and fit a straight line, and the line gives predictions above 1 and below 0, which are meaningless as probabilities.
-
-::: {.ink-figure data-figure="logistic-figure" data-step="0" data-steps="0:a straight line|1:the logistic curve" data-caption="Fig. 4 · yes/no outcomes along x; the line is least squares, the curve is logistic regression, both fitted in your browser · made-up data"}
+says = predict(5, 1, 2)           # the line with tilt 1 and height 2, at 5 hours of sun
+miss = 9 - says                   # the truth was 9
+print(says, miss, miss * miss)    # by hand: 7, 2 and 4
+```
+:::
 :::
 
-**Logistic regression** wraps the same linear expression inside a sigmoid, an S-shaped curve that squeezes any number into the range 0 to 1:
+`def` gives a set of steps a name, so you can use them again, and `return` hands back the answer. From now on, `predict(x, tilt, height)` means "what this line says at x".
 
-$$p = \frac{1}{1 + e^{-(a_0 + a_1 x_1 + \dots)}}$$
+Now the whole score. `for x, y in points:` goes through the days one at a time, and each time calls the day's two numbers `x` and `y`. The indented lines under it run once for every day. One blank again: what gets added to the running total?
 
-Written the other way round, it is the **log-odds** (the logit) that is linear in the predictors:
+::: {.py-cell data-draw="py-plot"}
+```python
+def total(points, tilt, height):
+    s = 0                                      # the running total starts at nothing
+    for x, y in points:
+        miss = y - predict(x, tilt, height)    # the truth minus what the line says
+        s = s + ____                           # add this day's square
+    return s
 
-$$\log\left(\frac{p}{1-p}\right) = a_0 + a_1 x_1 + \dots + a_m x_m$$
+print("Your line scores", round(total(points, my_tilt, my_height), 2))
 
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $p$ | Probability of the event | Chance of "yes" (0 to 1) |
-| $\frac{p}{1-p}$ | Odds | How much more likely "yes" than "no" |
-| $\log\left(\frac{p}{1-p}\right)$ | Log-odds (logit) | The thing that's actually linear |
+misses = []
+for x, y in points:
+    misses.append(((x, y), (x, predict(x, my_tilt, my_height))))   # from the dot to the line
+picture = {"points": points, "lines": [line], "segments": misses, "xlim": (0, 10), "ylim": (0, 10),
+           "xlabel": "hours of sun", "ylabel": "ice creams, in tens",
+           "notes": ["total " + str(round(total(points, my_tilt, my_height), 2))]}
+```
+::: {.py-solution}
+```python
+def total(points, tilt, height):
+    s = 0                                      # the running total starts at nothing
+    for x, y in points:
+        miss = y - predict(x, tilt, height)    # the truth minus what the line says
+        s = s + miss * miss                    # add this day's square
+    return s
 
-That changes how you read a coefficient. A 1-unit increase in $x_j$ changes the log-odds by $a_j$. More intuitively, $e^{a_j}$ is the **odds ratio**: the factor by which the odds of the event are multiplied for each unit increase in $x_j$.
+print("Your line scores", round(total(points, my_tilt, my_height), 2))
 
-The model gives a probability, and a decision needs a yes or a no, so you choose a threshold: say yes when $p$ is at or above it. The usual starting point is 0.5. Every threshold sorts the cases into four cells, the confusion matrix: true positives, false positives, false negatives and true negatives. Moving the threshold trades one kind of error for the other.
-
-::: {.ink-figure data-figure="logistic-figure" data-step="2" data-steps="2:slide the threshold|3:reprice a miss" data-caption="Fig. 5 · the confusion matrix and its total cost at each threshold, counted live · made-up data and made-up costs"}
+misses = []
+for x, y in points:
+    misses.append(((x, y), (x, predict(x, my_tilt, my_height))))   # from the dot to the line
+picture = {"points": points, "lines": [line], "segments": misses, "xlim": (0, 10), "ylim": (0, 10),
+           "xlabel": "hours of sun", "ylabel": "ice creams, in tens",
+           "notes": ["total " + str(round(total(points, my_tilt, my_height), 2))]}
+```
+:::
 :::
 
-Which threshold is better depends on what each error costs, and the only way to know is to do the sum: total cost = (FP × cost of a false positive) + (FN × cost of a false negative). In the figure a false positive costs 1 and a false negative costs 5. At a threshold of 0.50 there are 3 of each, so the cost is 3 × 1 + 3 × 5 = 18. At 0.35 there are 5 false positives and 2 false negatives, which is one more error in total and a lower cost: 5 × 1 + 2 × 5 = 15. [Exam trap: given confusion matrices and costs, always compute the actual total cost of each option. Do not guess from which matrix looks better or has fewer errors.]{.side}
+Compare the number it prints with the total of the squares in Fig. 1. They are the same line and the same twelve days, so they should agree. (If you move the line in Fig. 1, run the cell again: it always fetches the line as it is now.) `append` adds one more thing to the end of a list; here it collects the misses so the picture can draw them as threads.
 
-Keep the two models apart:
+## Can the computer find the best one?
 
-| | Linear Regression | Logistic Regression |
-|:--|:-----------------|:-------------------|
-| **Predicts** | A continuous number | A probability (0 to 1) |
-| **Output range** | $(-\infty, +\infty)$ | $(0, 1)$ |
-| **Use when** | "Predict price/sales/temperature" | "Predict probability/likelihood/yes-no" |
-| **Loss function** | Sum of squared errors | Log-likelihood |
-| **Coefficients** | Change in $y$ per unit $x$ | Change in log-odds per unit $x$ |
-| **Example** | "How much will the house sell for?" | "Will this loan default?" |
+You found a good line by eye. Is it the best one? There is no way to tell by looking.
 
-## Run it yourself {.reference}
+::: {.ask data-veil="true"}
+How could a computer find the line with the smallest total?
 
+- **Try every possible line.** There is no end to them: a tilt of 0.5, of 0.51, of 0.501 and so on. It could never finish.
+- **Start from a line and keep improving it.** Yes. Just as in the last lesson: guess, measure, nudge. Try moving each number a little up and a little down, and keep any change that makes the total smaller.
+- **Ask it to draw one by eye, like you did.** A computer has no eye. And even yours could not tell you whether a better line was hiding nearby.
+:::
+
+::: {.ink-figure data-figure="regression-figure" data-step="1" data-caption="Fig. 2 · your line, nudged until no nudge helps"}
+:::
+
+Press *nudge once* a few times and watch the side column. In each round the computer tries four small moves: tilt up, tilt down, height up, height down. It keeps every move that lowers the total. When none of the four helps, it makes the nudges half as big and tries again. Once the nudges are tiny, it stops.
+
+Then press *nudge until it stops*. The line swings into place, and the chart shows the total falling round by round. Compare where it ends with *least possible*: the smallest total any straight line through these days can have. The nudging gets there, to within a hair.
+
+The rule, in one line: **try a little each way, keep what helps, take smaller steps when nothing does.**
+
+Here it is in code. Three new words. `while step > 0.001:` repeats the lines under it for as long as the nudges are bigger than 0.001. `if` runs the lines under it only when its test is true. And `moved` remembers whether anything helped this round: it starts each round as `False` and becomes `True` when a move is kept.
+
+The blank is the last rule: what happens to the step when nothing helped?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def nudge(points, tilt, height):
+    step = 0.5                                 # how far one nudge moves a number, to begin with
+    path = [(tilt, height)]                    # remember every line on the way
+    while step > 0.001:                        # stop once the nudges are tiny
+        moved = False
+        for dt, dh in [(step, 0), (-step, 0), (0, step), (0, -step)]:
+            if total(points, tilt + dt, height + dh) < total(points, tilt, height):
+                tilt = tilt + dt               # it helped: keep it
+                height = height + dh
+                moved = True
+        if moved:
+            path.append((tilt, height))
+        else:
+            step = ____                        # nothing helped: make the nudges smaller
+    return tilt, height, path
+
+tilt, height, path = nudge(points, my_tilt, my_height)   # start from your line
+print(len(path) - 1, "moves. Tilt", round(tilt, 2), "and height", round(height, 2))
+print("Total:", round(total(points, tilt, height), 2))
+
+frames = []
+for t, h in path:                              # one picture for every line on the way
+    frames.append({"points": points, "accent": [(0, h), (10, h + t * 10)],
+                   "xlim": (0, 10), "ylim": (0, 10), "xlabel": "hours of sun", "ylabel": "ice creams, in tens",
+                   "notes": ["tilt " + str(round(t, 2)), "height " + str(round(h, 2)),
+                             "total " + str(round(total(points, t, h), 2))]})
+```
+::: {.py-solution}
+```python
+def nudge(points, tilt, height):
+    step = 0.5                                 # how far one nudge moves a number, to begin with
+    path = [(tilt, height)]                    # remember every line on the way
+    while step > 0.001:                        # stop once the nudges are tiny
+        moved = False
+        for dt, dh in [(step, 0), (-step, 0), (0, step), (0, -step)]:
+            if total(points, tilt + dt, height + dh) < total(points, tilt, height):
+                tilt = tilt + dt               # it helped: keep it
+                height = height + dh
+                moved = True
+        if moved:
+            path.append((tilt, height))
+        else:
+            step = step / 2                    # nothing helped: make the nudges smaller
+    return tilt, height, path
+
+tilt, height, path = nudge(points, my_tilt, my_height)   # start from your line
+print(len(path) - 1, "moves. Tilt", round(tilt, 2), "and height", round(height, 2))
+print("Total:", round(total(points, tilt, height), 2))
+
+frames = []
+for t, h in path:                              # one picture for every line on the way
+    frames.append({"points": points, "accent": [(0, h), (10, h + t * 10)],
+                   "xlim": (0, 10), "ylim": (0, 10), "xlabel": "hours of sun", "ylabel": "ice creams, in tens",
+                   "notes": ["tilt " + str(round(t, 2)), "height " + str(round(h, 2)),
+                             "total " + str(round(total(points, t, h), 2))]})
+```
+:::
+:::
+
+The picture plays back every line the code kept on its way. Compare the total it prints with the total in Fig. 2 once that has stopped: same days, same starting line, same nudges, so the numbers should agree. Both sit a hair above *least possible*, because the nudging stops when its steps get tiny, not when it is exactly right.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write $a_0$ for the height and $a_1$ for the tilt. The line says $\hat{y} = a_0 + a_1 x$ (read $\hat{y}$, "y-hat", as "what the line says"), and the whole model is
+
+$$y = a_0 + a_1 x + \epsilon$$
+
+where $\epsilon$ is the miss: whatever the line cannot explain. The best line is the one that makes the total of the squared misses as small as it can be:
+
+$$\min_{a_0, a_1} \sum_{i=1}^{n} (y_i - a_0 - a_1 x_i)^2$$
+
+Read the big Σ as "add these up, for every day $i$ from 1 to $n$", and "min" as "choose $a_0$ and $a_1$ to make this smallest".
+:::
+
+## What do the two numbers mean?
+
+The nudging ends near a tilt of 0.5 and a height of 2. Each tells you something on its own.
+
+**The tilt** is what one more of x adds. Here, one more hour of sun adds about 0.5 tens: about 5 more ice creams. A tilt of 0 would say sun makes no difference at all, and a negative tilt would say sunny days sell fewer.
+
+**The height** is where the line starts: what it says at x = 0. With no sun at all, it says about 2 tens, 20 ice creams. Careful, though: no day in the list had less than about 3/4 of an hour of sun. At 0 the line is running past the last dot, and a line is only trusted where there were days to draw it through.
+
+Now the question from the start. Tomorrow has 6 hours of sun: 2 + 0.5 × 6 = 2 + 3 = 5 tens. Get about 50 ice creams ready.
+
+## What if the points bend?
+
+A gardener grew plants in 16 greenhouses, each kept a little warmer or colder than 20 degrees, and measured how fast each plant grew. In the cell below, `-3` means 3 degrees colder than 20, and `2` means 2 degrees warmer.
+
+Some warmth helps a plant, and too much does not, so the points rise and then fall. Run the code you already have on them: find the best straight line, then go along the points from left to right and write `+` when a point sits above the line and `-` when it sits below.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+from page import bent                          # degrees from 20, and growth in cm a week
+
+tilt, height, path = nudge(bent, 0, 0)         # the best straight line, found the same way
+signs = ""
+for x, y in bent:                              # left to right
+    if y > predict(x, tilt, height):
+        signs = signs + "+"                    # above the line: the line is too low here
+    else:
+        signs = signs + "-"                    # below the line: the line is too high here
+print(signs)
+print("Total:", round(total(bent, tilt, height), 2))
+
+misses = []
+for x, y in bent:
+    misses.append(((x, y), (x, predict(x, tilt, height))))
+picture = {"points": bent, "segments": misses, "lines": [[(-6, predict(-6, tilt, height)), (5, predict(5, tilt, height))]],
+           "xlim": (-6, 6), "ylim": (0, 10), "xlabel": "degrees from 20", "ylabel": "growth, cm a week"}
+```
+:::
+
+Nothing crashed, and the computer did exactly what it was told. It found the best straight line there is. But look at the signs: `---++++++++++---`. Too high at both ends, too low all through the middle. Misses that fall in a pattern like this mean the line is the wrong shape. No nudging fixes it, because no straight line can bend.
+
+This is worth checking after every fit. Good misses are scattered above and below the line with no pattern, centred on zero, mostly small with a few larger ones. A bow like this one says the line is missing a curve. Misses that grow wider and wider along x are a different problem, with a different cure: changing the y numbers themselves, for example by taking their square roots.
+
+::: {.ask data-veil="true"}
+The best straight line still misses in a pattern. What would you change?
+
+- **Change the growth numbers instead.** Changing the y numbers is the cure for misses that grow wider along x. It does not put a bend in a line.
+- **Use x squared in place of x.** Close. But x squared on its own makes a curve that has to turn at 0, which here is exactly 20 degrees, and these plants do best a little warmer than that. Press *x squared only* in Fig. 3 and see.
+- **Give it x squared as well as x, and keep x.** Yes. The x squared lets the line bend, and keeping x lets it choose where the turn is.
+:::
+
+::: {.ink-figure data-figure="regression-figure" data-step="2" data-caption="Fig. 3 · 16 made-up plants, fitted three ways"}
+:::
+
+Press the three choices in turn. With x alone the misses bow. With x squared alone the turn is stuck at 0 and the misses lean. With both, the misses scatter with no pattern left, and the total falls from about 29 to about 2.
+
+That is the fix: **give the line x squared as well as x, and keep x.** Nothing else changes. It is the same score, squared misses added up, and the computer still finds the numbers by nudging. There is just a third number to nudge, the **bend**: how much x squared to add.
+
+The code below is the nudging from before with one more number in it. Each round now tries six moves instead of four, and `if not moved:` means "if nothing moved". The blank is the new part of the line.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import bent
+
+def predict2(x, bend, tilt, height):
+    return height + tilt * x + ____           # the new part: the bend, times x, times x
+
+def total2(points, bend, tilt, height):
+    s = 0
+    for x, y in points:
+        miss = y - predict2(x, bend, tilt, height)
+        s = s + miss * miss
+    return s
+
+bend = 0
+tilt = 0
+height = 0
+step = 0.5
+while step > 0.001:
+    moved = False
+    for db, dt, dh in [(step, 0, 0), (-step, 0, 0), (0, step, 0), (0, -step, 0), (0, 0, step), (0, 0, -step)]:
+        if total2(bent, bend + db, tilt + dt, height + dh) < total2(bent, bend, tilt, height):
+            bend = bend + db
+            tilt = tilt + dt
+            height = height + dh
+            moved = True
+    if not moved:
+        step = step / 2
+
+t1, h1, path = nudge(bent, 0, 0)              # the straight line, to compare
+print("Straight line, total:", round(total(bent, t1, h1), 2))
+print("With x squared, total:", round(total2(bent, bend, tilt, height), 2))
+print("bend", round(bend, 2), "tilt", round(tilt, 2), "height", round(height, 2))
+
+curve = []
+for i in range(58):                            # 58 places from -5.4 to 6, 0.2 apart
+    x = -5.4 + i * 0.2
+    curve.append((x, predict2(x, bend, tilt, height)))
+picture = {"points": bent, "lines": [[(-6, predict(-6, t1, h1)), (5, predict(5, t1, h1))]], "accent": curve,
+           "xlim": (-6, 6), "ylim": (0, 10), "xlabel": "degrees from 20", "ylabel": "growth, cm a week"}
+```
+::: {.py-solution}
+```python
+from page import bent
+
+def predict2(x, bend, tilt, height):
+    return height + tilt * x + bend * x * x   # the new part: the bend, times x, times x
+
+def total2(points, bend, tilt, height):
+    s = 0
+    for x, y in points:
+        miss = y - predict2(x, bend, tilt, height)
+        s = s + miss * miss
+    return s
+
+bend = 0
+tilt = 0
+height = 0
+step = 0.5
+while step > 0.001:
+    moved = False
+    for db, dt, dh in [(step, 0, 0), (-step, 0, 0), (0, step, 0), (0, -step, 0), (0, 0, step), (0, 0, -step)]:
+        if total2(bent, bend + db, tilt + dt, height + dh) < total2(bent, bend, tilt, height):
+            bend = bend + db
+            tilt = tilt + dt
+            height = height + dh
+            moved = True
+    if not moved:
+        step = step / 2
+
+t1, h1, path = nudge(bent, 0, 0)              # the straight line, to compare
+print("Straight line, total:", round(total(bent, t1, h1), 2))
+print("With x squared, total:", round(total2(bent, bend, tilt, height), 2))
+print("bend", round(bend, 2), "tilt", round(tilt, 2), "height", round(height, 2))
+
+curve = []
+for i in range(58):                            # 58 places from -5.4 to 6, 0.2 apart
+    x = -5.4 + i * 0.2
+    curve.append((x, predict2(x, bend, tilt, height)))
+picture = {"points": bent, "lines": [[(-6, predict(-6, t1, h1)), (5, predict(5, t1, h1))]], "accent": curve,
+           "xlim": (-6, 6), "ylim": (0, 10), "xlabel": "degrees from 20", "ylabel": "growth, cm a week"}
+```
+:::
+:::
+
+The picture draws both: the straight line in ink, the bent one in colour. Compare the two totals it prints with *x only* and *x and x squared* in Fig. 3. The bend comes out negative, about −0.15, which is what turns the curve back down. `range(58)` counts 0, 1, 2 and so on up to 57; the last lines use it to work out 58 places along the curve for the picture.
+
+## What if the answer is yes or no?
+
+Some questions do not have a number for an answer. A factory keeps machine parts, and wants to know: will this part break this month? For 34 parts it wrote down how many months since each was last serviced, and whether it broke. Write a break as 1 and no break as 0.
+
+::: {.ink-figure data-figure="logistic-figure" data-step="0" data-steps="0:a straight line|1:an S-shaped curve" data-caption="Fig. 4 · 34 made-up parts: broke (top) or fine (bottom), by months since service"}
+:::
+
+You could fit a straight line through the 0s and 1s with the squared misses, exactly as before. Fig. 4 does. But read what it says: below 0 for a part just serviced, and above 1 after ten months. As a chance of breaking, both are nonsense. A chance runs from 0 (it never happens) to 1 (it always does), and a straight line, given room, runs past both.
+
+Press *an S-shaped curve*. It stays flat near 0 on the left, climbs in the middle, and flattens out near 1 on the right. It never leaves 0 to 1, so every height on it can be read as a chance. It still comes from a tilt and a height inside; the S shape just squeezes them into the range 0 to 1.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+The curve takes the line $a_0 + a_1 x$ and squeezes it:
+
+$$p = \frac{1}{1 + e^{-(a_0 + a_1 x)}}$$
+
+$p$ is the chance, and $e$ is a fixed number, about 2.718. When the line is very negative, $p$ is near 0; when it is very positive, $p$ is near 1. Turned the other way round, it is the line that the chance is built from:
+
+$$\log\left(\frac{p}{1-p}\right) = a_0 + a_1 x$$
+
+$\frac{p}{1-p}$ is the odds: how much more likely yes is than no. So each extra month adds $a_1$ to the log of the odds, which multiplies the odds by $e^{a_1}$. The curve is not chosen by squared misses: it is the one that makes the yeses and noes that really happened as likely as possible.
+:::
+
+A chance is not yet a decision. To decide, pick a **cut-off**: say yes, service the part now, when its chance is at least the cut-off. A common first choice is 0.5.
+
+Every decision is either right or one of two mistakes. A **false alarm**: you said yes, but it would have been fine, so a part was serviced for nothing. A **miss**: you said no, and it broke. Count each part into one of four boxes: said yes and it broke, said yes and it was fine, said no and it broke, said no and it was fine.
+
+The two mistakes need not cost the same. Suppose a false alarm costs 1 (a part serviced early) and a miss costs 5 (a breakdown). At a cut-off of 0.50 there are 3 false alarms and 3 misses. The cost is 3 × 1 + 3 × 5 = 3 + 15 = **18**.
+
+::: {.ask data-veil="true"}
+Lower the cut-off to 0.35. Now there are 5 false alarms and 2 misses: 7 mistakes instead of 6. Does it cost more?
+
+- **Yes. More mistakes cost more.** Do the sum: 5 × 1 + 2 × 5 = 5 + 10 = 15. That is less than 18. It swapped one expensive miss for two cheap false alarms.
+- **Not necessarily. Work it out.** Right: 5 × 1 + 2 × 5 = 15, less than 18. It swapped one expensive miss for two cheap false alarms. Counting mistakes is not enough when they cost different amounts.
+:::
+
+::: {.ink-figure data-figure="logistic-figure" data-step="2" data-steps="2:slide the cut-off|3:reprice a miss" data-caption="Fig. 5 · a cut-off, the four counts, and their cost, worked out live · made-up costs"}
+:::
+
+Slide the cut-off and watch the four counts and the cost. The ringed points are the mistakes. Then press *reprice a miss* and change what a miss costs: the cheapest cut-off moves. There is no cut-off that is right for every job. The only way to choose is to count and multiply.
+
+Your code can do the counting. It fetches the 34 parts, the chance the curve gives each one, and the cut-off you left Fig. 5 on. `and` needs both sides to be true. One blank: what does each miss cost?
+
+::: {.py-cell}
+```python
+from page import parts, chances, my_cutoff     # months and broke (1) or not (0); each part's chance
+
+false_alarms = 0
+misses = 0
+for i in range(len(parts)):
+    broke = parts[i][1]
+    say_yes = chances[i] >= my_cutoff          # True when the chance reaches the cut-off
+    if say_yes and broke == 0:
+        false_alarms = false_alarms + 1
+    if not say_yes and broke == 1:
+        misses = misses + 1
+
+cost = false_alarms * 1 + misses * ____        # a false alarm costs 1. And a miss?
+print("Cut-off", my_cutoff, ":", false_alarms, "false alarms,", misses, "misses. Cost:", cost)
+```
+::: {.py-solution}
+```python
+from page import parts, chances, my_cutoff     # months and broke (1) or not (0); each part's chance
+
+false_alarms = 0
+misses = 0
+for i in range(len(parts)):
+    broke = parts[i][1]
+    say_yes = chances[i] >= my_cutoff          # True when the chance reaches the cut-off
+    if say_yes and broke == 0:
+        false_alarms = false_alarms + 1
+    if not say_yes and broke == 1:
+        misses = misses + 1
+
+cost = false_alarms * 1 + misses * 5           # a false alarm costs 1, a miss costs 5
+print("Cut-off", my_cutoff, ":", false_alarms, "false alarms,", misses, "misses. Cost:", cost)
+```
+:::
+:::
+
+Compare the cost it prints with the total cost in Fig. 5 (with a miss costing 5). `==` asks "are these equal?", where a single `=` would have put a value into a name.
+
+## Does a good fit prove that x causes y?
+
+No. A line that fits well shows that two things move together. It does not show that one makes the other happen.
+
+Over sixteen years, the cheese people ate and the number of engineering doctorates awarded both rose year after year. A line through one against the other fits almost perfectly. Cheese does not cause doctorates. Both simply grew with time, and time was the third thing driving them both.
+
+To say x causes y, you need three things that no line can give you: the cause comes before the effect, there is a sensible reason why it would work, and there is no third thing pushing both. The ice creams are a fair case: sun before sales, and a plain reason why, though summer holidays could still be pushing both. And the line alone only told you that sunny days and busy days go together.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Drawing a straight line through points to predict a number | Linear regression |
+| The number you predict (ice creams) | The response, $y$ |
+| The number you predict it from (hours of sun) | A predictor, $x$ |
+| The tilt | The slope, or coefficient, $a_1$ |
+| The height | The intercept, $a_0$ |
+| A miss | A residual |
+| Squaring the misses and adding them up | The sum of squared errors |
+| Choosing the line with the smallest total | Least squares |
+| Nudging the numbers until nothing helps | Numerical optimisation (here, a simple search) |
+| Misses that fall in a pattern | A residual pattern: the model is the wrong shape |
+| Giving the line x squared as well as x | A quadratic term, one kind of transformed predictor |
+| The S-shaped curve for yes or no | Logistic regression (the S is the sigmoid) |
+| The cut-off | The threshold |
+| The four boxes of right answers and mistakes | The confusion matrix |
+| False alarms and misses | False positives and false negatives |
+| Two things moving together | Correlation, which is not causation |
+| The third thing driving both | A confounding variable |
+
+You did not need the names to do it. They are for talking to other people, and for looking things up. A library such as scikit-learn has a `LinearRegression` and a `LogisticRegression`, and R has `lm` and `glm`. They score a line exactly the way you did. They do not nudge, though: for squared misses there is a formula that lands on the best line in one go. You could now read what they print and recognise every part.
+
+::: {.callout-note collapse="true" title="Going further: more than one x, and how good is the fit?"}
+**More than one x.** A line can take several inputs at once: price from size and number of bedrooms, $y = a_0 + a_1 x_1 + a_2 x_2 + \dots$. Each number is read with the others held still: "each extra bedroom adds 15, for a house of the same size".
+
+**Other shapes.** x squared is one of several ways to give a line a new shape. The log of x suits diminishing returns, where more x helps less and less; the square root is a milder version of the same. Multiplying two inputs together, $x_1 \times x_2$, lets the effect of one depend on the other (an interaction).
+
+**How good is the fit?** $R^2$ compares your total with the total you would get by always guessing the average: $R^2 = 1 - \frac{\text{your total}}{\text{the average's total}}$. 0 means the line does no better than the average, 1 means every point is on the line. It has a catch: adding any input, even pure noise, can never make $R^2$ go down. Adjusted $R^2$ takes a little off for every input, so it only rises when an input earns its place. Each number also comes with a p-value, which asks "could this number really be zero?" A small p-value (below 0.05, say) says probably not. Look at the size of the number too: a tiny effect can still have a small p-value. More inputs is not always better, because inputs that are only noise make the line fit this data and nothing else.
+
+**The yes-or-no curve.** Its numbers are read through the odds: each extra month multiplies the odds of breaking by $e^{a_1}$, called the odds ratio.
+:::
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every plot and table below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 Fifty made-up houses: square footage against price.
@@ -487,65 +838,4 @@ abline(h = c(0, 1), lty = 3, col = "gray70")
 
 par(mfrow = c(1, 1))
 ```
-
-## On one page {.reference}
-
-```
-REGRESSION RECIPE
-==================
-
-LINEAR REGRESSION
------------------
-y = a₀ + a₁x₁ + a₂x₂ + ... + ε
-
-Fit by: minimizing Σ(yᵢ - ŷᵢ)²
-Output: continuous number (-∞ to +∞)
-Use when: "predict a number"
-
-Key metrics:
-  R²         → proportion of variance explained (0 to 1)
-  Adj R²     → R² penalized for # predictors
-  p-value    → is this predictor significant? (< 0.05 = yes)
-  AIC/BIC    → compare models (lower = better)
-
-LOGISTIC REGRESSION
--------------------
-log(p/(1-p)) = a₀ + a₁x₁ + ...
-p = 1 / (1 + e^(-(a₀ + a₁x₁ + ...)))
-
-Output: probability (0 to 1)
-Use when: "predict probability", "yes/no outcome"
-Coefficients: change in LOG-ODDS per unit x
-Odds ratio: e^(aⱼ) = how many times more likely
-
-COMMON PITFALLS
-----------
-1. Correlation ≠ causation (ALWAYS)
-2. High R² on training ≠ good model (need validation)
-3. R² always increases with more predictors (use Adj R²)
-4. Significant p-value + tiny coefficient = practically useless
-5. Linear → predict number. Logistic → predict probability.
-6. Check residual plot: pattern = model is wrong
-
-TRANSFORMATIONS
-  log(x), x², √x      → for non-linear relationships
-  x₁ × x₂             → for interaction effects
-  Box-Cox(y)           → for unequal variance (Module 9)
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What does linear regression minimize? Write it in words.
-2. What does $a_1 = 0.15$ mean in `price = 50 + 0.15 × sqft`?
-3. Why does $R^2$ always increase when you add predictors? Why is this
-   a problem?
-4. You find a regression where ice cream sales predict drowning deaths
-   ($R^2 = 0.89$, $p < 0.001$). Does ice cream cause drowning? Explain.
-5. When do you use linear regression vs logistic regression?
-6. In logistic regression, what does a coefficient of 0.5 on `hours`
-   mean? What's the odds ratio?
-7. Your residual plot shows a clear U-shape. What's wrong? How do you fix it?
-8. You add 20 random predictors and $R^2$ goes from 0.70 to 0.85. Should
-   you celebrate? What metric should you check instead?
+:::

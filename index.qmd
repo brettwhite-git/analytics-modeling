@@ -1,63 +1,56 @@
 ---
-title: "Analytics modeling, from scratch"
-subtitle: "Fifteen lessons in five chapters, each a short essay with figures you can move."
-engine: knitr
+title: "Analytics modeling, from the ground up"
+subtitle: "Seventeen lessons. In each one you do the idea by hand, then teach it to a computer."
 ---
 
-Every lesson starts from a question and builds one modeling idea from the ground up: the problem the method solves, the formula that carries it, and the judgment calls that matter when the math meets messy data. The figures are computed in your browser, so you can drag a point or slide a parameter and watch the answer change. The R that produces every plot is at the end of each lesson.
+This is a free guide to how data is turned into predictions and decisions. It starts from arithmetic and assumes nothing else.
 
-## Chapters {#chapters}
+Every lesson works the same way. You are asked a question and you answer it by doing something: planting a flag, dragging a line, sliding a number. Then you write a few lines of Python that do what you just did, on the same data, and the page draws what your code computed. Only at the end are you told what the method is called.
+
+You do not need to install anything. The Python runs in this page.
+
+## Lessons {#chapters}
 
 ::: {.chapter-list}
 
-### Sorting and grouping
+### Foundations
 
-Putting points into classes when you know the labels, finding groups when you do not, and checking the result honestly.
+What data looks like as points, and the one idea every method shares: make a guess, measure how wrong it is, make it better.
 
-- [Support vector machines](svm-from-scratch.qmd) The widest street between two classes
-- [K nearest neighbours](knn-from-scratch.qmd) A majority vote among the closest points
-- [Cross-validation](cross-validation-from-scratch.qmd) Why testing on training data is cheating
-- [K-means](kmeans-from-scratch.qmd) Finding groups nobody told you about
+- [Points and distance](points-and-distance.qmd) How do you measure how alike two things are?
+- [A better guess](a-better-guess.qmd) How do you know one guess is better than another?
+
+### Predicting a number
+
+- [Fitting a line](regression-from-scratch.qmd) Which line misses the points least?
+- [Choosing what to keep](variable-selection-from-scratch.qmd) Which measurements actually help?
+
+### Sorting into classes
+
+- [Nearest neighbours](knn-from-scratch.qmd) What do the closest examples say?
+- [The widest gap](svm-from-scratch.qmd) Where should the dividing line go?
+- [Decision trees](cart-from-scratch.qmd) Which question should you ask first?
+
+### Trusting a model
+
+- [Testing on unseen data](cross-validation-from-scratch.qmd) How do you know it will work next time?
+
+### Finding structure
+
+- [Finding groups](kmeans-from-scratch.qmd) How do you find groups nobody labelled?
+- [Reshaping data](pca-boxcox-from-scratch.qmd) Can the same data be looked at from a better angle?
+- [Missing values](missing-data-from-scratch.qmd) What do you do about the holes?
 
 ### Data over time
 
-Noticing that a process has changed, and forecasting where a series goes next.
+- [Spotting a change](cusum-from-scratch.qmd) How do you catch the moment something shifted?
+- [Forecasting](time-series-from-scratch.qmd) What comes next in a series?
 
-- [CUSUM](cusum-from-scratch.qmd) Catching the moment something changed
-- [Smoothing, ARIMA and GARCH](time-series-from-scratch.qmd) Level, trend, season and volatility
+### Deciding
 
-### Predicting an outcome
-
-Connecting variables to a result, choosing which variables to keep, and the tree-shaped alternative.
-
-- [Linear and logistic regression](regression-from-scratch.qmd) Connecting variables to outcomes
-- [LASSO, ridge and stepwise](variable-selection-from-scratch.qmd) Fewer variables, on purpose
-- [CART](cart-from-scratch.qmd) If-then rules, grown and pruned
-
-### Preparing the data
-
-Reshaping variables and filling holes before a model ever sees them.
-
-- [PCA and Box-Cox](pca-boxcox-from-scratch.qmd) Reshaping data before you model it
-- [Missing data](missing-data-from-scratch.qmd) What to do about the holes
-
-### Experiments and decisions
-
-Collecting data deliberately, simulating what you cannot test, and choosing the best plan under limits.
-
-- [A/B tests, factorials and bandits](doe-from-scratch.qmd) Collecting data deliberately
-- [Queues and Markov chains](simulation-markov-from-scratch.qmd) Randomness you can run
-- [Linear and integer programs](optimization-from-scratch.qmd) Why formulation is the hard part
-- [Beyond the basics](advanced-topics-from-scratch.qmd) Bayesian models, neural nets, boosting and more
-
-:::
-
-## Practice {#practice}
-
-::: {.chapter-list .chapter-list--plain}
-
-- [Comprehensive quiz](comprehensive-quiz.qmd) Mixed concept checks with short explanations
-- [Binary choice drill](binary-choice-drill.qmd) Precise true-or-false statements for fast recall
-- [Confusion matrix cost drill](confusion-matrix-drill.qmd) Total cost from false positives and false negatives
+- [Running an experiment](doe-from-scratch.qmd) What should you test when the data does not exist yet?
+- [Simulating chance](simulation-markov-from-scratch.qmd) Why is there a queue when the server can keep up?
+- [The best plan](optimization-from-scratch.qmd) How do you choose when everything has a limit?
+- [Beyond the basics](advanced-topics-from-scratch.qmd) What else is out there?
 
 :::
