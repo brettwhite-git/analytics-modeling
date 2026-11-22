@@ -1,105 +1,390 @@
 ---
-title: "How do you catch the moment a process changed?"
-subtitle: "No single measurement gives the shift away, so you keep a running score and wait for the evidence to pile up."
+title: "How do you notice a small change that lasts?"
+subtitle: "You will catch it by hand first, with a running score, then teach it to a computer. All you need is adding and taking away."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="cusum-figure" data-step="0" data-caption="Fig. 1 · one hundred measurements of a process that should average 10 · made-up data"}
+A mill grinds flour every day. On a normal day it makes about 10 tonnes, but never exactly 10: one day 10.4, the next 9.7. That wobble is ordinary. Then one day something in the machine shifts, and from then on it makes a little more. Not much: about half a tonne a day, no bigger than the ordinary wobble.
+
+Somebody has to notice, and when. Here is the thing nobody has told you yet: one unusual day proves nothing. But if the days keep landing a little above normal, the excess adds up, and a running total will show it long before your eye does.
+
+## Did something change, and when?
+
+Here are fifty days of the mill's output. The level line is the normal amount, 10 tonnes. Somewhere in these fifty days the mill started making more. Click the first day you think was different.
+
+::: {.ink-figure data-figure="change-lab" data-step="0" data-caption="Fig. 1 · fifty days of a mill's output, in tonnes · made-up data"}
 :::
 
-A factory makes bolts that should be exactly 10 cm long. Every hour you measure one. The measurements bounce around a little, which is normal random variation. At some point the machine drifts and starts making bolts that are slightly too long, and you want to know when.
+The mill changed on day 31. From then on an ordinary day made about 10.5 tonnes instead of 10. How far off were you?
 
-You cannot answer by looking at one measurement, because any single value might be high by chance. In the figure the mean does move partway through, by about as much as the noise itself, and each point still looks reasonable on its own. You need a method that accumulates evidence over time and speaks up only when it is confident. That method is CUSUM, short for **cu**mulative **sum**.
+Day 39, at 11.8, is the dot that jumps out, and it is easy to click. But it was a single day. The change was every day from 31 on, each a little high, and most of them no higher than a good day before the change. Your eye looks for one striking day. The change was a small excess that kept coming.
 
-## A running score
+### Now tell a computer
 
-The idea is to keep a score. Start it at zero. At each time step, ask whether the new observation is above what you expect. If it is, add to the score. If it is not, subtract from it, but never let it go below zero. When the score crosses a threshold, declare a change.
+A computer needs the days as numbers. The cell below fetches the same fifty you just saw. `from page import output, normal` gives it two things: `output`, a list of fifty numbers, one per day, and `normal`, which is 10. A list is numbers in a row, in brackets. `output[0]` is the first of them: Python counts from 0, so day 1 is `output[0]` and day 50 is `output[49]`.
 
-It works like a detective building a case. One above-average observation is a small piece of evidence and convinces nobody. When the pieces keep arriving, the case eventually closes.
+Press **Run**. The first time takes a few seconds while Python starts.
 
-::: {.ink-figure data-figure="cusum-figure" data-step="1" data-caption="Fig. 2 · the same measurements, and the score computed from them · made-up data"}
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import output, normal       # the fifty days above, and the normal level
+
+print(len(output), "days. Normal is", normal)
+print("The first four days:", output[0], output[1], output[2], output[3])
+
+dots = []                                     # an empty list, to fill up
+for day in range(len(output)):                # day = 0, 1, 2, ... 49
+    dots.append((day + 1, output[day]))       # one dot: (day number, output that day)
+
+picture = {"points": dots, "hlines": [normal], "xlabel": "day", "ylabel": "output"}
+frames = [picture]                            # the pictures to show in turn: here, just one
+```
 :::
 
-You might try the plain cumulative sum of the deviations from the mean. It shows the trend, but it is noisy before the shift, because random below-average values drag it down. CUSUM adds two things to fix that, an allowance and a floor at zero:
+`print` writes a line under the cell, and `len(output)` counts the list. `for day in range(len(output))` repeats the indented line once for each day, with `day` counting 0, 1, 2 and so on up to 49. `append` adds one thing to the end of a list. `picture` is a dict: each name in quotes is paired with what to draw. `frames` is a list of pictures, shown one after another under the cell. Here there is only one, and it should look like Fig. 1. Later cells will save one picture per day, and you will watch them play.
 
-$$S_t = \max(0, \; S_{t-1} + (x_t - \mu) - C)$$
+## What if you kept a running score?
 
-and you declare a change when $S_t > T$. That is the whole method.
+Ask one question about each day: how far above normal was it? Day 1 made 10.1 tonnes, and 10.1 − 10 = 0.1, so it was 0.1 above. Day 3 made 9.7, and 9.7 − 10 = −0.3. A minus number means below normal. Call this the day's **excess**.
 
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $S_t$ | CUSUM statistic at time $t$ | The running score (accumulated evidence) |
-| $S_{t-1}$ | Previous score | What we had so far |
-| $x_t$ | Current observation | The new measurement |
-| $\mu$ | Expected mean | What the process *should* be producing |
-| $x_t - \mu$ | Deviation | How far this observation is from expected |
-| $C$ | Allowance (critical value) | Filters out normal noise, so only "big enough" deviations count |
-| $\max(0, \dots)$ | Floor at zero | Prevents negative accumulation, so past good behavior doesn't mask future problems |
-| $T$ | Threshold | How much evidence you need before declaring a change |
+Now keep a score. It starts at 0. Each day, add that day's excess to yesterday's score. Here are the first four days, worked out:
 
-Read as a procedure, each time step goes like this. Take the new observation $x_t$. Compute its deviation $x_t - \mu$. Subtract the allowance $C$, which discards small, normal fluctuations. Add the result to the previous score $S_{t-1}$. If the total is negative, reset it to 0. If $S_t > T$, sound the alarm.
+| Day | Output | Excess | Score |
+|:--:|:--:|:--:|:--|
+| 1 | 10.1 | +0.1 | 0 + 0.1 = **0.1** |
+| 2 | 10.4 | +0.4 | 0.1 + 0.4 = **0.5** |
+| 3 | 9.7 | −0.3 | 0.5 − 0.3 = **0.2** |
+| 4 | 9.5 | −0.5 | 0.2 − 0.5 = **−0.3** |
 
-In Fig. 2 the mean moves up by 0.3 cm after $t = 60$, with noise of the same size. With $C = 0.15$ and $T = 2$ the score stays near zero while nothing is wrong, starts climbing right after the change, and crosses the threshold at $t = 72$. The twelve steps in between are the detection delay.
+Press *next day* four times and check the column beside the picture against the table. The short stroke on the output is the day's excess. The score below moves by exactly that much. Then press *run to the end*.
 
-## Two knobs
-
-$C$ is a filter. It is subtracted from every deviation, so that ordinary fluctuations do not accumulate. With a large $C$, only big deviations count: detection is slower and false alarms are fewer. With a small $C$, small deviations count too: detection is faster and false alarms are more frequent. At $C = 0$ every above-average observation adds to the score, which makes it very sensitive.
-
-$T$ sets how certain you need to be before declaring a change. A large $T$ asks for a lot of evidence, which gives fewer false alarms and slower detection. A small $T$ triggers on less evidence, which gives faster detection and more false alarms.
-
-::: {.ink-figure data-figure="cusum-figure" data-step="2" data-steps="2:slide C and T|3:change the shift" data-caption="Fig. 3 · computed live in your browser; the score restarts after each false alarm · made-up data"}
+::: {.ink-figure data-figure="change-lab" data-step="1" data-caption="Fig. 2 · the same fifty days, and a running score kept one day at a time · made-up data"}
 :::
 
-Both knobs therefore turn the same way, and this is the central tradeoff of the method. Small $C$ and small $T$ give fast detection and more false alarms. Large $C$ and large $T$ give slow detection and fewer false alarms. You cannot have both. In Fig. 3, set $C$ to zero and the alarm comes at $t = 64$ instead of 72, at the price of a false alarm early on. Push $C$ to 0.4 and the score never reaches the threshold at all: no false alarms, and no detection either. [Exam trap: "What happens if we increase T?" Fewer false alarms, slower detection. "What happens if we increase C?" The same effect. Neither has a universal best value.]{.side}
+That is the whole rule: **today's score = yesterday's score + (today's output − 10).**
 
-The right values depend on what each kind of mistake costs.
+Before day 31 the score wanders, a little up, a little down. After day 31 it climbs, and keeps climbing. Each day of the new level adds about half a tonne, and half a tonne a day, kept up, is something no ordinary wobble does.
 
-| Scenario | Want | Set |
-|:---------|:-----|:----|
-| Nuclear reactor monitoring | Fast detection (safety!) | Small C, small T |
-| Marketing campaign tracking | Few false alarms (budget!) | Large C, large T |
-| Manufacturing quality | Balance both | Moderate C and T |
+### Now tell a computer
 
-The second button under Fig. 3 changes the size of the shift itself. A small, persistent shift is exactly what CUSUM is for, but the smaller it is, the longer the evidence takes to pile up.
+::: {.ask}
+You are about to write the excess and the running score in code. How would you know the code is right?
 
-## The floor, and the other direction
+- **Run it on all fifty days and look at the picture.** It would draw something, and nothing would tell you whether the something is correct.
+- **Check it against the four days in the table.** Yes. You already know the scores are 0.1, 0.5, 0.2 and −0.3. If the code prints anything else, it is wrong, and you found out straight away.
+:::
 
-The $\max(0, \dots)$ is not decoration. Without it, a long stretch of below-average values would build up a large negative score. When a real shift then happens, the score has to climb back out of that hole before it can trigger an alarm, and detection is late. The proper CUSUM resets to zero whenever it would go negative, so every moment is a potential fresh start for detecting a change.
+First, the excess for one day. `def` gives a set of steps a name, so you can use them again, and `return` hands back the answer. One piece is missing. Replace the blank and press Run.
 
-The formula so far only detects increases. To detect decreases, run a second score with the deviation mirrored:
+::: {.py-cell}
+```python
+def excess(x):
+    return x - ____                   # how far above normal was this day?
 
-$$S_t^+ = \max(0, \; S_{t-1}^+ + (x_t - \mu) - C) \quad \text{(detects increase)}$$
+print(round(excess(output[0]), 2))    # day 1: by hand this was 0.1
+print(round(excess(output[3]), 2))    # day 4: by hand this was -0.5
+```
+::: {.py-solution}
+```python
+def excess(x):
+    return x - normal                 # how far above normal was this day?
 
-$$S_t^- = \max(0, \; S_{t-1}^- - (x_t - \mu) - C) \quad \text{(detects decrease)}$$
+print(round(excess(output[0]), 2))    # day 1: by hand this was 0.1
+print(round(excess(output[3]), 2))    # day 4: by hand this was -0.5
+```
+:::
+:::
 
-and raise the alarm when either $S_t^+ > T$ or $S_t^- > T$. This is the two-sided CUSUM.
+`round(..., 2)` keeps two decimal places. Without it, the first line would print 0.09999999999999964. A computer stores most decimals very slightly wrong, the way 1 ÷ 3 can only be written 0.333 and then you have to stop. It hardly ever matters, but it is why the results are rounded before they are printed.
 
-## What an alarm tells you
+Now the score. The loop goes round once per day. Each time, it adds the day's excess to the score so far, writes the score down, and saves a picture of the line so far. One blank again: what does today's excess get added to?
 
-CUSUM tells you **when** something changed. It does not tell you what changed or why. Suppose it detects a shift in manufacturing quality at day 60. "The machine is broken" is the wrong conclusion. The right one is "something changed around day 60, and we need to investigate what happened." CUSUM is a detection tool, not a diagnosis tool, and the investigation happens after the alarm. [Exam trap: an alarm is a time, not a cause. CUSUM detects; it does not diagnose.]{.side}
+::: {.py-cell data-draw="py-plot"}
+```python
+score = 0                                     # nothing has happened yet
+scores = []                                   # the score after each day
+line = []                                     # the same, as (day, score) for drawing
+frames = []                                   # one picture per day
 
-The same score works wherever a measurement arrives in sequence and has an expected level.
+for day in range(len(output)):
+    score = ____ + excess(output[day])        # today's excess, added to what?
+    scores.append(score)
+    line.append((day + 1, score))
+    frames.append({
+        "lines": [list(line)],                # the score so far (a copy of it)
+        "stars": [(day + 1, score)],          # today
+        "notes": ["day " + str(day + 1), "score " + str(round(score, 2))],
+        "hlines": [0],
+        "xlim": (0, 51), "ylim": (-4, 12), "xlabel": "day", "ylabel": "running score",
+    })
 
-| Application | What $x_t$ measures | What "change" means |
-|:------------|:-------------------|:-------------------|
-| Manufacturing | Part dimension | Machine needs recalibration |
-| Healthcare | Patient vitals | Condition is deteriorating |
-| Finance | Transaction amounts | Potential fraud pattern |
-| Website | Page load times | Server performance degraded |
-| Retail | Daily sales | Market shift or competitor action |
+print("first four days:", round(scores[0], 2), round(scores[1], 2), round(scores[2], 2), round(scores[3], 2))
+print("on day 50:", round(scores[49], 2))
+```
+::: {.py-solution}
+```python
+score = 0                                     # nothing has happened yet
+scores = []                                   # the score after each day
+line = []                                     # the same, as (day, score) for drawing
+frames = []                                   # one picture per day
 
-It also helps to know what CUSUM is not.
+for day in range(len(output)):
+    score = score + excess(output[day])       # yesterday's score, plus today's excess
+    scores.append(score)
+    line.append((day + 1, score))
+    frames.append({
+        "lines": [list(line)],                # the score so far (a copy of it)
+        "stars": [(day + 1, score)],          # today
+        "notes": ["day " + str(day + 1), "score " + str(round(score, 2))],
+        "hlines": [0],
+        "xlim": (0, 51), "ylim": (-4, 12), "xlabel": "day", "ylabel": "running score",
+    })
 
-| Method | Detects | When to use |
-|:-------|:--------|:------------|
-| **CUSUM** | Shift in process mean | Ongoing monitoring, small persistent shifts |
-| **Control chart** | Individual outlier points | Quick spikes, obvious violations |
-| **t-test** | Difference between two groups | Comparing before/after with known breakpoint |
-| **Exponential smoothing** | Trends and patterns | Forecasting future values |
+print("first four days:", round(scores[0], 2), round(scores[1], 2), round(scores[2], 2), round(scores[3], 2))
+print("on day 50:", round(scores[49], 2))
+```
+:::
+:::
 
-Its strength is the small, gradual shift that individual observations cannot reveal. A single point might look normal, but CUSUM accumulates the evidence until the pattern is undeniable.
+Watch the marker in the code as it runs. It goes round the loop fifty times, once per day, and the tally in the margin counts them. Then the picture plays the score back one day at a time. The first four numbers it prints should match the table, and the last should match the end of Fig. 2.
 
-## Run it yourself {.reference}
+`str` turns a number into text, so `+` can join it to words for the notes beside the picture. `list(line)` takes a copy of the line so far. Without the copy, every saved picture would point at the same list, and all fifty would end up showing the whole line.
+
+## What goes wrong with a plain running score?
+
+Look at Fig. 2 again, at the days before 31. Nothing changed then, and yet the score did not sit at zero. Ask the code two questions about it: how low did it go, and after the change, when did it finally get back above zero?
+
+::: {.py-cell data-aside="true"}
+```python
+print("lowest score:", round(min(scores), 2))             # min gives the smallest in the list
+print("score on day 30, the last normal day:", round(scores[29], 2))
+
+for day in range(30, len(output)):                        # from day 31 on
+    if scores[day] > 0:                                   # back above zero?
+        print("back above zero on day", day + 1)
+        break                                             # stop looking
+```
+:::
+
+`if` runs the indented lines only when its question is true, and `break` leaves the loop early: once it has found the day, there is no need to keep looking.
+
+Here is what broke. A stretch of slightly low days dug the score down to −2.7. It was still at −1.4 on day 30, the last normal day. So when the mill changed, the score spent six days just climbing out of that hole before it could show anything. And it would have been worse after a longer quiet stretch: the hole has no bottom.
+
+There is a second problem, smaller in this picture. Around day 9 a few good days, plain noise, pushed the score up to 1.8. Nothing had changed.
+
+::: {.ask data-veil="true"}
+What would you change about the score?
+
+- **Start it at zero on day 31.** That would work beautifully, if you knew it was day 31. Finding that day is the whole problem.
+- **Never let it go below zero.** Good. A quiet stretch can no longer dig a hole. Try it in the picture, and watch what it does to the noise.
+- **Ignore small excesses.** Also good. Take a little off every day, so that an ordinary good day adds almost nothing. Try that too, and then both.
+:::
+
+::: {.ink-figure data-figure="change-lab" data-step="2" data-caption="Fig. 3 · the plain score in grey, and the score with your fixes · made-up data"}
+:::
+
+Each fix alone goes wrong in its own way.
+
+**Never below zero** fills the hole. But now the score can only rise from zero and never fall below it, so ordinary good days pile up: by day 9 it reaches 2.6, on noise alone.
+
+**An allowance** takes 0.25 off every day's excess, so a day must be more than 0.25 above normal to push the score up. Here the allowance is half of the half-tonne rise we are looking for. Alone, it makes the hole far deeper, because every quiet day now costs 0.25 more.
+
+**Both together** do what you want. The score stays near zero for thirty days, because quiet days cannot push it below zero and ordinary good days are mostly cancelled by the allowance. After day 31 a typical day is 0.5 above normal, minus 0.25, so the score climbs about 0.25 a day.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write $x_t$ for the output on day $t$, $\mu$ (read "mu") for the normal level, $C$ for the allowance and $S_t$ for the score after day $t$. Then
+
+$$S_t = \max(0,\; S_{t-1} + (x_t - \mu) - C), \qquad S_0 = 0$$
+
+Read $\max(0, \dots)$ as "whichever is bigger, zero or the rest". With $C = 0$ and no $\max$, this is the plain running score you started with.
+:::
+
+### Now tell a computer
+
+`max(0, total)` gives back whichever is bigger: 0, or the total. So if the total is 1.3 you get 1.3, and if it is −0.4 you get 0. That is "never below zero" in one step. Fill it in.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+allowance = 0.25                              # take this off every day
+score = 0
+fixed = []
+fixed_line = []
+frames = []
+
+for day in range(len(output)):
+    total = score + excess(output[day]) - allowance
+    score = ____                              # never below zero
+    fixed.append(score)
+    fixed_line.append((day + 1, score))
+    frames.append({
+        "lines": [line],                      # the plain score from before, for comparison
+        "accent": list(fixed_line),           # the fixed score so far
+        "hlines": [0],
+        "xlim": (0, 51), "ylim": (-4, 12), "xlabel": "day", "ylabel": "running score",
+    })
+
+print("on day 30, plain:", round(scores[29], 2), " fixed:", round(fixed[29], 2))
+print("on day 50, plain:", round(scores[49], 2), " fixed:", round(fixed[49], 2))
+```
+::: {.py-solution}
+```python
+allowance = 0.25                              # take this off every day
+score = 0
+fixed = []
+fixed_line = []
+frames = []
+
+for day in range(len(output)):
+    total = score + excess(output[day]) - allowance
+    score = max(0, total)                     # never below zero
+    fixed.append(score)
+    fixed_line.append((day + 1, score))
+    frames.append({
+        "lines": [line],                      # the plain score from before, for comparison
+        "accent": list(fixed_line),           # the fixed score so far
+        "hlines": [0],
+        "xlim": (0, 51), "ylim": (-4, 12), "xlabel": "day", "ylabel": "running score",
+    })
+
+print("on day 30, plain:", round(scores[29], 2), " fixed:", round(fixed[29], 2))
+print("on day 50, plain:", round(scores[49], 2), " fixed:", round(fixed[49], 2))
+```
+:::
+:::
+
+The fixed score draws itself in over the plain one. Compare the day-30 number it prints with "on day 30" in Fig. 3 with both fixes on.
+
+## When do you sound the alarm?
+
+A score is not yet an answer. Someone has to decide how high is high enough. Draw a line across the score, the **alarm line**, and ring the alarm the first day the score goes over it. After an alarm someone goes and checks the machine, so the score starts again from zero.
+
+That gives two numbers to watch. How late is the alarm: how many days of the new level went by before it rang? And how many **false alarms** rang before day 31, when nothing had changed at all?
+
+::: {.ask data-veil="true"}
+You make the allowance bigger. Does the alarm come sooner or later?
+
+- **Sooner.** It feels as if a bigger allowance should help. But the allowance is taken off every day, including the days after the change, so the score climbs more slowly and reaches the line later.
+- **Later, with fewer false alarms.** Yes. Less of each day counts, so noise rarely reaches the line, and neither does the real change, for a while. Slide it and see.
+:::
+
+::: {.ink-figure data-figure="change-lab" data-step="3" data-steps="3:slide the two knobs|4:change the size of the rise" data-caption="Fig. 4 · the fixed score, an alarm line, and the two numbers that pull against each other · made-up data"}
+:::
+
+With an allowance of 0.25 and the line at 2.5, the alarm rings on day 42, the twelfth day of the new level, with no false alarms. Slide the allowance down to 0 and it rings on day 36, much sooner, but only after a false alarm on day 9. Push it up to 0.5 and it waits until day 50.
+
+The alarm line works the same way. Lower it and the alarm comes sooner, with more false alarms. Raise it and you wait longer, with fewer. Both knobs trade the same two things, and you cannot have the fastest alarm and the fewest false ones at once.
+
+So there is no best setting. It depends on what each mistake costs. Watching a nuclear reactor, a late alarm is the expensive mistake: use a small allowance and a low line, and put up with checking for nothing now and then. Watching a marketing campaign, every false alarm wastes money and people's time: use a bigger allowance and a higher line, and accept hearing later. In between, as in most factories, you look for a balance.
+
+The second button under Fig. 4 changes the size of the rise itself. A small rise that lasts is exactly what this score is for, but the smaller it is, the longer the evidence takes to pile up.
+
+### Now tell a computer
+
+The cell below fetches the allowance and the alarm line you set in Fig. 4. It is the fixed score from before, with an alarm added. The score is rounded to two places each day, as you would on paper: without that, a score of exactly 2.5 could be stored as 2.5000000000000004 and ring an alarm it should not.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import my_allowance, my_threshold   # what you set in Fig. 4
+
+score = 0
+alarms = []                                   # the days the alarm rang
+alarm_line = []
+rings = []
+frames = []
+
+for day in range(len(output)):
+    score = round(max(0, score + excess(output[day]) - my_allowance), 2)
+    alarm_line.append((day + 1, score))
+    if score > ____:                          # enough evidence?
+        alarms.append(day + 1)                # ring, and write down the day
+        rings.append((day + 1, score))
+        score = 0                             # someone checks the machine: start again
+    frames.append({
+        "lines": [list(alarm_line)],
+        "hlines": [my_threshold],             # the alarm line
+        "stars": list(rings),
+        "xlim": (0, 51), "ylim": (0, 7), "xlabel": "day", "ylabel": "running score",
+    })
+
+print("allowance", my_allowance, " alarm line", my_threshold)
+print("alarms on days:", alarms)
+```
+::: {.py-solution}
+```python
+from page import my_allowance, my_threshold   # what you set in Fig. 4
+
+score = 0
+alarms = []                                   # the days the alarm rang
+alarm_line = []
+rings = []
+frames = []
+
+for day in range(len(output)):
+    score = round(max(0, score + excess(output[day]) - my_allowance), 2)
+    alarm_line.append((day + 1, score))
+    if score > my_threshold:                  # enough evidence?
+        alarms.append(day + 1)                # ring, and write down the day
+        rings.append((day + 1, score))
+        score = 0                             # someone checks the machine: start again
+    frames.append({
+        "lines": [list(alarm_line)],
+        "hlines": [my_threshold],             # the alarm line
+        "stars": list(rings),
+        "xlim": (0, 51), "ylim": (0, 7), "xlabel": "day", "ylabel": "running score",
+    })
+
+print("allowance", my_allowance, " alarm line", my_threshold)
+print("alarms on days:", alarms)
+```
+:::
+:::
+
+Any alarm on day 30 or before is a false alarm. The first one after day 30 is the real catch. Compare the days it prints with Fig. 4: same days, same knobs, so they should agree. Then go back, move a slider, and run the cell again.
+
+## What can the alarm not tell you?
+
+So far the score only catches a rise. To catch a fall, keep a second score that adds how far *below* normal each day was, with the same allowance and the same floor at zero. Watch both, and ring if either one goes over its line.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+The score for a rise, and its mirror image for a fall:
+
+$$S_t^{+} = \max(0,\; S_{t-1}^{+} + (x_t - \mu) - C)$$
+
+$$S_t^{-} = \max(0,\; S_{t-1}^{-} - (x_t - \mu) - C)$$
+
+Ring the alarm when $S_t^{+} > T$ or $S_t^{-} > T$, where $T$ is the alarm line.
+:::
+
+::: {.ask}
+The alarm rings on day 42. What do you now know?
+
+- **The machine is broken.** The score cannot know that. It only saw the numbers go up. A new batch of grain, a recalibrated scale, or a busy week could all do the same.
+- **Something changed, a while before day 42, and somebody should find out what.** Yes. The alarm tells you *when* to look, not *what* changed or *why*. The looking happens after the alarm.
+:::
+
+The same score works wherever measurements arrive one after another and have a normal level: the size of parts coming off a machine, a patient's heart rate, how long a web page takes to load, a shop's daily sales, the amounts on a card that might be used by a thief. Its strength is the small change that lasts, which no single measurement gives away. A big one-day spike is easier to catch by looking at each day on its own.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Watching a series for the moment its level moves | Change detection |
+| The normal level, 10 | The expected mean, $\mu$ |
+| How far above normal one day was | The deviation, $x_t - \mu$ |
+| The running score | The cumulative sum, $S_t$ |
+| Never below zero | The floor, $\max(0, \dots)$ |
+| Taking 0.25 off every day | The allowance, $C$ |
+| The alarm line | The threshold, $T$ |
+| How late the alarm rings | The detection delay |
+| An alarm when nothing had changed | A false alarm |
+| The mirror score for a fall | Two-sided CUSUM |
+| The whole method | CUSUM, short for **cu**mulative **sum** |
+
+You did not need the names to do it. They are for talking to other people and for looking things up. Libraries for monitoring a process have a CUSUM that runs this same loop: one subtraction, one floor at zero, one comparison with a line, every new measurement. You could read one now and recognise every part.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
@@ -427,63 +712,4 @@ if (!is.na(alarm_web)) {
 
 par(mfrow = c(1, 1))
 ```
-
-## On one page {.reference}
-
-```
-THE CUSUM RECIPE
-=================
-
-1. PURPOSE: Detect when a process mean has shifted
-
-2. THE FORMULA:
-   Sₜ = max(0, Sₜ₋₁ + (xₜ - μ) - C)
-
-   Alarm when Sₜ > T
-
-3. SYMBOLS:
-   Sₜ  = accumulated evidence (running score)
-   xₜ  = current observation
-   μ   = expected baseline mean
-   C   = allowance (noise filter)
-   T   = threshold (alarm trigger)
-
-4. KEY PARAMETERS:
-   C → how much noise to ignore
-   T → how much evidence needed for alarm
-   Both: ↑ value = slower detection, fewer false alarms
-         ↓ value = faster detection, more false alarms
-
-5. WHY max(0,...)?
-   Prevents past good behavior from masking future changes.
-   Every moment is a fresh start for detection.
-
-6. TWO-SIDED:
-   S⁺ detects increases, S⁻ detects decreases
-
-7. CUSUM CANNOT:
-   - Tell you WHY something changed
-   - Tell you WHAT changed
-   - Only tells you WHEN
-
-8. COMMON PITFALLS:
-   - No universal best C and T (depends on costs)
-   - "Increase T" → fewer false alarms, slower detection
-   - CUSUM detects, it doesn't diagnose
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What does CUSUM stand for and what does it detect?
-2. Walk through the formula $S_t = \max(0, S_{t-1} + (x_t - \mu) - C)$
-   in plain English.
-3. What does $C$ (allowance) control? What happens if you increase it?
-4. What does $T$ (threshold) control? What happens if you decrease it?
-5. Why is the $\max(0, \dots)$ necessary? What would happen without it?
-6. CUSUM triggers an alarm. Can you conclude the machine is broken? Why
-   or why not?
-7. A nuclear power plant wants fast detection at all costs. A marketing
-   team wants to avoid false alarms. How should each set C and T?
-8. How is CUSUM different from just looking at individual measurements?
+:::

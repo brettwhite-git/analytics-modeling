@@ -1,10 +1,13 @@
-/* Season figure — one series with a trend and a 12-period cycle, forecast three ways.
-   The first 48 points are smoothed in the browser and the last 12 are held out, so each forecast can be scored
-   against what really came next. Simple smoothing, Holt (level + trend) and multiplicative Holt-Winters
-   (level + trend + seasonal factors) are all computed with the update equations in the essay; the forecast
-   error, level, trend and seasonal factors shown are the numbers that are drawn.
-   Steps: 0 simple smoothing forecasts flat · 1 Holt adds the slope · 2 Holt-Winters adds the cycle (gamma slider).
-   Made-up data. Needs InkKit (ink/ink-kit.js). */
+/* Season figure — one series with a steady climb and a 12-step cycle, forecast by the blend with each extra
+   piece switched on or off by the reader.
+   The first 48 points are worked through in the browser and the last 12 are held out, so each forecast can be
+   scored against what really came next. Four forecasters, all computed here:
+     plain blend         one running estimate, moved part of the way toward each value
+     + climb             a second running estimate, the climb per step, added on to every guess
+     + season            one adjustment per place in the cycle (a ratio: 1.2 = 20% above the level)
+     + climb and season  both
+   The average held-out miss, the climb per step and the twelve adjustments shown are the numbers that are drawn.
+   One step. Made-up data. Needs InkKit (ink/ink-kit.js). */
 (function () {
   'use strict';
   if (!window.InkKit) return;
@@ -12,7 +15,7 @@
   var PLOT = { x: 44, y: 34, w: 392, h: 372 };
   var SIDE = 462, SW = 158;
   var N = 60, FIT = 48, L = 12, Y0 = 10, Y1 = 100;
-  var ALPHA = 0.2, BETA = 0.05, GAMMA0 = 0.3;
+  var MOVE = 0.2, MOVE_CLIMB = 0.05, MOVE_SEASON = 0.3;   // how far each running estimate moves per value
 
   function makeSeries(rng) {
     var r = rng(21), x = [], shape = [], mean = 0, m, t;
@@ -21,49 +24,48 @@
     return x;
   }
 
-  /* each returns { level: [...], trend, forecast(h), factors } fitted on x[0 .. FIT-1] */
-  function simple(x) {
-    var s = [x[0]], t;
-    for (t = 1; t < FIT; t++) s.push(ALPHA * x[t] + (1 - ALPHA) * s[t - 1]);
-    return { level: s, trend: null, forecast: function () { return s[FIT - 1]; } };
-  }
-  function holt(x) {
-    var s = [x[0]], tr = 0, t, prev;
-    for (t = 1; t < FIT; t++) {
-      prev = s[t - 1];
-      s.push(ALPHA * x[t] + (1 - ALPHA) * (prev + tr));
-      tr = BETA * (s[t] - prev) + (1 - BETA) * tr;
+  /* returns { level: [...] (null where not yet known), climb, adjust (12 ratios or null), forecast(h) },
+     worked through x[0 .. FIT-1] */
+  function model(x, climbOn, seasonOn) {
+    var s = [], tr = 0, c = null, t, prev, i;
+    if (!seasonOn) {
+      s.push(x[0]);
+      for (t = 1; t < FIT; t++) {
+        prev = s[t - 1];
+        s.push(MOVE * x[t] + (1 - MOVE) * (prev + tr));
+        if (climbOn) tr = MOVE_CLIMB * (s[t] - prev) + (1 - MOVE_CLIMB) * tr;
+      }
+      return { level: s, climb: climbOn ? tr : null, adjust: null, forecast: function (h) { return s[FIT - 1] + h * tr; } };
     }
-    return { level: s, trend: tr, forecast: function (h) { return s[FIT - 1] + h * tr; } };
-  }
-  function holtWinters(x, gamma) {
-    var m1 = 0, m2 = 0, c = [], s = [], tr, t, prev, i;
+    // the first year gives a starting level and a starting adjustment for each place in the cycle
+    var m1 = 0, m2 = 0;
     for (i = 0; i < L; i++) { m1 += x[i] / L; m2 += x[i + L] / L; }
+    c = [];
     for (i = 0; i < L; i++) { c.push(x[i] / m1); s.push(null); }
-    s[L - 1] = m1; tr = (m2 - m1) / L;
+    s[L - 1] = m1; tr = climbOn ? (m2 - m1) / L : 0;
     for (t = L; t < FIT; t++) {
       prev = s[t - 1];
-      s.push(ALPHA * x[t] / c[t - L] + (1 - ALPHA) * (prev + tr));
-      tr = BETA * (s[t] - prev) + (1 - BETA) * tr;
-      c.push(gamma * x[t] / s[t] + (1 - gamma) * c[t - L]);
+      s.push(MOVE * x[t] / c[t - L] + (1 - MOVE) * (prev + tr));
+      if (climbOn) tr = MOVE_CLIMB * (s[t] - prev) + (1 - MOVE_CLIMB) * tr;
+      c.push(MOVE_SEASON * x[t] / s[t] + (1 - MOVE_SEASON) * c[t - L]);
     }
     return {
-      level: s, trend: tr, factors: c.slice(FIT - L),
+      level: s, climb: climbOn ? tr : null, adjust: c.slice(FIT - L),
       forecast: function (h) { return (s[FIT - 1] + h * tr) * c[FIT - L + (h - 1) % L]; }
     };
   }
 
   window.InkKit.define('season-figure', {
-    label: 'A series with a trend and a seasonal cycle, forecast by simple smoothing, by Holt and by Holt-Winters',
-    steps: 3,
+    label: 'A series that climbs and repeats every 12 steps, forecast by the blend with a climb and a season switched on or off',
+    steps: 1,
     seed: 9,
     draw: function (k) {
       var sx = k.scale(0, N + 1, PLOT.x, PLOT.x + PLOT.w), sy = k.scale(Y0, Y1, PLOT.y + PLOT.h, PLOT.y);
-      var x = makeSeries(k.rng), gamma = GAMMA0;
+      var x = makeSeries(k.rng), climbOn = false, seasonOn = false, tried = {}, shown = null, busy = false;
       function P(t, v) { return [sx(t + 1), sy(k.clamp(v, Y0 + 1, Y1 - 1))]; }
 
       k.root.axes({
-        x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'time', ylabel: 'value',
+        x: PLOT.x, y: PLOT.y, w: PLOT.w, h: PLOT.h, xlabel: 'step', ylabel: 'value',
         xticks: [12, 24, 36, 48, 60].map(function (t) { return [sx(t), String(t)]; }),
         yticks: [20, 40, 60, 80].map(function (v) { return [sy(v), String(v)]; })
       });
@@ -85,75 +87,93 @@
       k.root.text(xNow - 6, PLOT.y + 9, 'seen', { kind: 'axis', anchor: 'end' });
       k.root.text(xNow + 6, PLOT.y + 9, 'held out', { kind: 'axis' });
 
-      k.root.line(PLOT.x + 170, PLOT.y + PLOT.h - 16, PLOT.x + 198, PLOT.y + PLOT.h - 16, { w: 1.1, op: 0.85, rough: 0.3 });
-      k.root.text(PLOT.x + 205, PLOT.y + PLOT.h - 12.5, 'the level, S', { kind: 'axis' });
+      k.root.line(PLOT.x + 150, PLOT.y + PLOT.h - 16, PLOT.x + 178, PLOT.y + PLOT.h - 16, { w: 1.1, op: 0.85, rough: 0.3 });
+      k.root.text(PLOT.x + 185, PLOT.y + PLOT.h - 12.5, 'the running estimate', { kind: 'axis' });
 
       /* ---- readouts ---- */
-      k.root.text(SIDE, 46, 'forecast error', { kind: 'label' });
+      k.root.text(SIDE, 46, 'average miss', { kind: 'label' });
       var errVal = k.root.text(SIDE + SW, 46, '', { kind: 'val', anchor: 'end' });
-      k.root.text(SIDE, 66, 'level', { kind: 'label' });
-      var levelVal = k.root.text(SIDE + SW, 66, '', { kind: 'val', anchor: 'end' });
-      k.root.text(SIDE, 86, 'trend per period', { kind: 'label' });
-      var trendVal = k.root.text(SIDE + SW, 86, '', { kind: 'val', anchor: 'end' });
-      k.root.line(SIDE, 98, SIDE + SW, 98, { w: 0.6, op: 0.45, rough: 0.3 });
+      k.root.text(SIDE, 62, 'on the 12 held out', { kind: 'axis' });
+      k.root.text(SIDE, 84, 'climb per step', { kind: 'label' });
+      var climbVal = k.root.text(SIDE + SW, 84, '', { kind: 'val', anchor: 'end' });
+      k.root.line(SIDE, 96, SIDE + SW, 96, { w: 0.6, op: 0.45, rough: 0.3 });
 
-      var live = k.root.layer();
-      var bars = k.root.layer({ steps: [2] });
-      var BASE = 252, BS = 110;                       // the line where a factor is 1, and pixels per 1.0
-      var g2 = k.root.group({ steps: [2], d: 300 });
-      g2.text(SIDE, 158, 'steady', { kind: 'axis' });
-      g2.text(SIDE + SW, 158, 'reactive', { kind: 'axis', anchor: 'end' });
-      g2.text(SIDE, 192, 'seasonal factors', { kind: 'label' });
-      g2.line(SIDE, BASE, SIDE + SW, BASE, { w: 0.8, rough: 0.3 });
-      g2.text(SIDE + 6, BASE + 52, '1', { kind: 'axis', anchor: 'middle' });
-      g2.text(SIDE + 6 + 11 * 13.2, BASE + 52, '12', { kind: 'axis', anchor: 'middle' });
-      g2.text(SIDE + SW / 2, BASE + 52, 'place in the cycle', { kind: 'axis', anchor: 'middle' });
+      var bClimb = k.button(SIDE, 120, 'add the climb', function () { if (!busy) { climbOn = !climbOn; redraw(true); } });
+      var bSeason = k.button(SIDE, 154, 'add the season', function () { if (!busy) { seasonOn = !seasonOn; redraw(true); } });
 
-      function redraw() {
-        var step = k.step();
-        var m = step === 0 ? simple(x) : step === 1 ? holt(x) : holtWinters(x, gamma);
-        var lvl = [], fc = [], e = 0, t, h;
-        for (t = 0; t < FIT; t++) if (m.level[t] != null) lvl.push(P(t, m.level[t]));
-        for (h = 1; h <= N - FIT; h++) {
-          var f = m.forecast(h);
-          fc.push(P(FIT + h - 1, f));
-          e += (x[FIT + h - 1] - f) * (x[FIT + h - 1] - f);
-        }
-        live.clear();
-        live.polyline(lvl, { w: 1.1, op: 0.85 });
-        live.polyline(fc, { w: 1.7, accent: true });
-        errVal.set(Math.sqrt(e / (N - FIT)).toFixed(1));
-        levelVal.set(m.level[FIT - 1].toFixed(1));
-        trendVal.set(m.trend == null ? 'none' : (m.trend >= 0 ? '+' : '−') + Math.abs(m.trend).toFixed(2));
-        if (step === 2) {
-          bars.clear();
-          var hiI = 0;
-          m.factors.forEach(function (c, i) {
-            var bx = SIDE + 2 + i * 13.2, y = BASE - (c - 1) * BS, top = Math.min(y, BASE), ht = Math.abs(y - BASE);
-            if (c > m.factors[hiI]) hiI = i;
-            if (ht < 1.5) return;
-            bars.rect(bx, top, 8, ht, { w: 0.8, rough: 0.3 });
-            if (ht > 6) bars.hatch([[bx, top], [bx + 8, top], [bx + 8, top + ht], [bx, top + ht]], { op: 0.5, gap: 3.5 });
-          });
-          var hx = SIDE + 2 + hiI * 13.2 + 4;
-          bars.text(k.clamp(hx, SIDE + 16, SIDE + SW - 16), BASE - (m.factors[hiI] - 1) * BS - 6, '×' + m.factors[hiI].toFixed(2), { kind: 'val', anchor: 'middle' });
-        }
-      }
-
-      k.slider({
-        x: SIDE, y: 140, w: SW, min: 0.05, max: 0.95, step: 0.05, value: GAMMA0, label: 'gamma', steps: [2],
-        format: function (v) { return v.toFixed(2); },
-        onChange: function (v) { gamma = v; redraw(); }
+      k.root.text(SIDE, 190, 'tried so far', { kind: 'label' });
+      var ROWS = [['plain blend', false, false], ['+ climb', true, false], ['+ season', false, true], ['+ both', true, true]];
+      var rowVals = ROWS.map(function (r, i) {
+        k.root.text(SIDE, 210 + i * 18, r[0], { kind: 'axis' });
+        return k.root.text(SIDE + SW, 210 + i * 18, '–', { kind: 'val', anchor: 'end' });
       });
 
-      var endFlat = P(N - 1, simple(x).forecast(N - FIT)), endHolt = P(N - 1, holt(x).forecast(N - FIT));
-      k.root.group({ steps: [0] }).callout('a', 'a flat forecast', SIDE, 150, { to: [endFlat[0] + 6, endFlat[1] - 3], d: 900 });
-      k.root.group({ steps: [1] }).callout('b', 'the slope, no cycle', SIDE, 150, { to: [endHolt[0] + 6, endHolt[1] + 4], d: 900 });
-      g2.callout('c', 'level × season', SIDE, 344, { d: 400 });
-      g2.text(SIDE, 372, 'the cycle carries', { kind: 'hand', d: 700 });
-      g2.text(SIDE, 394, 'into the forecast.', { kind: 'hand', d: 1100 });
+      var live = k.root.layer();
+      var bars = k.root.layer();
+      var BASE = 350, BS = 100;                       // the line where an adjustment is ×1, and pixels per 1.0
+      var gS = k.root.group({ d: 200 });
+      var sLabel = gS.text(SIDE, 290, 'adjustment per place', { kind: 'label' });
+      var sAxis = gS.line(SIDE, BASE, SIDE + SW, BASE, { w: 0.8, rough: 0.3 });
+      var s1 = gS.text(SIDE + 6, BASE + 48, '1', { kind: 'axis', anchor: 'middle' });
+      var s12 = gS.text(SIDE + 6 + 11 * 13.2, BASE + 48, '12', { kind: 'axis', anchor: 'middle' });
+      var sMid = gS.text(SIDE + SW / 2, BASE + 48, 'in the cycle', { kind: 'axis', anchor: 'middle' });
+      var seasonBits = [sLabel, sAxis, s1, s12, sMid];
+      var callC = k.root.group({ d: 900 });
+      callC.callout('e', 'switch a piece on', SIDE, 290);
 
-      k.onStep(redraw);
+      function forecastOf(m) {
+        var lvl = [], fc = [], e = 0, t, h;
+        for (t = 0; t < FIT; t++) if (m.level[t] != null) lvl.push([t, m.level[t]]);
+        for (h = 1; h <= N - FIT; h++) {
+          var f = m.forecast(h);
+          fc.push([FIT + h - 1, f]);
+          e += Math.abs(x[FIT + h - 1] - f);
+        }
+        return { lvl: lvl, fc: fc, miss: e / (N - FIT) };
+      }
+      function paint(f, adjust) {
+        live.clear();
+        live.polyline(f.lvl.map(function (p) { return P(p[0], p[1]); }), { w: 1.1, op: 0.85 });
+        live.polyline(f.fc.map(function (p) { return P(p[0], p[1]); }), { w: 1.7, accent: true });
+      }
+      function drawBars(adjust) {
+        bars.clear();
+        seasonBits.forEach(function (n) { n.style.display = adjust ? '' : 'none'; });
+        callC.node.style.display = adjust ? 'none' : '';
+        if (!adjust) return;
+        var hiI = 0;
+        adjust.forEach(function (c, i) {
+          var bx = SIDE + 2 + i * 13.2, y = BASE - (c - 1) * BS, top = Math.min(y, BASE), ht = Math.abs(y - BASE);
+          if (c > adjust[hiI]) hiI = i;
+          if (ht < 1.5) return;
+          bars.rect(bx, top, 8, ht, { w: 0.8, rough: 0.3 });
+          if (ht > 6) bars.hatch([[bx, top], [bx + 8, top], [bx + 8, top + ht], [bx, top + ht]], { op: 0.5, gap: 3.5 });
+        });
+        var hx = SIDE + 2 + hiI * 13.2 + 4;
+        bars.text(k.clamp(hx, SIDE + 16, SIDE + SW - 16), BASE - (adjust[hiI] - 1) * BS - 6, '×' + adjust[hiI].toFixed(2), { kind: 'val', anchor: 'middle' });
+      }
+      function redraw(animate) {
+        var m = model(x, climbOn, seasonOn), f = forecastOf(m), key = (climbOn ? 1 : 0) + (seasonOn ? 2 : 0);
+        tried[key] = f.miss;
+        ROWS.forEach(function (r, i) { var kk = (r[1] ? 1 : 0) + (r[2] ? 2 : 0); rowVals[i].set(tried[kk] == null ? '–' : tried[kk].toFixed(1)); });
+        errVal.set(f.miss.toFixed(1));
+        climbVal.set(m.climb == null ? 'none' : (m.climb >= 0 ? '+' : '−') + Math.abs(m.climb).toFixed(2));
+        bClimb.set(climbOn ? 'take the climb off' : 'add the climb');
+        bSeason.set(seasonOn ? 'take the season off' : 'add the season');
+        drawBars(m.adjust);
+        var from = shown;
+        shown = f;
+        if (!animate || !from) { paint(f); return; }
+        // the forecast tweens from the old one to the new one; the estimate line is simply redrawn
+        busy = true;
+        k.animate(650, function (t) {
+          var mid = { lvl: f.lvl, fc: f.fc.map(function (p, i) { return [p[0], from.fc[i][1] + (p[1] - from.fc[i][1]) * t]; }) };
+          paint(mid);
+          if (t >= 1) busy = false;
+        });
+      }
+
+      k.onStep(function () { busy = false; climbOn = false; seasonOn = false; tried = {}; shown = null; redraw(false); });
     }
   });
 })();

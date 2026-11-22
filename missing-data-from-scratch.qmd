@@ -1,90 +1,569 @@
 ---
-title: "What should you do when a value is missing?"
-subtitle: "Every fix changes the data in its own way, and the right one depends on why the value went missing in the first place."
+title: "What do you do with a hole in the table?"
+subtitle: "You will patch the holes by hand first, then teach it to a computer. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="impute-figure" data-step="0" data-caption="Fig. 1 · you know x for every row, but y only for some · made-up data"}
+Here are 24 people who filled in a short survey. Each dot is one person, placed by two numbers: how many years they have worked, and how much they earn in a year, in thousands. Six of them left the income box blank.
+
+Real tables always have holes like these. Sensors fail, forms get skipped, signals drop. Nobody tells you this early on: every way of dealing with a hole changes the data. So you need to know what each one does before you choose.
+
+## Which rows would you throw away?
+
+The easiest thing to do with a row that has a hole is to throw the whole row away. Try it.
+
+The figure cheats, so that you can check what happens. It shows the six blank incomes as squares, at the values those people would have written. In real life you would never see them. The forms that lost their income here lost it by pure chance: say, a cup of coffee went over a few pages.
+
+Click each square to throw that row away. Watch the line: it is the average income of the rows you still have.
+
+::: {.ink-figure data-figure="holes-lab" data-step="0" data-caption="Fig. 1 · 24 made-up people; six incomes went missing by chance"}
 :::
 
-Most introductory examples treat a dataset as if every row is complete and every value is right. Real datasets never are. Sensors fail, forms get skipped, wireless signals drop, and high-income survey respondents leave the "income" field blank.
+The line wobbles a little and ends close to where it started. The dashed line is the true average, of all 24 incomes. Throwing six rows away left you with 18, and those 18 look like the 24 you started with.
 
-So the question is not whether you will have missing data. It is what kind of missingness you have, and what to do about it. Before touching any method, ask *why* the data is missing. The fix depends entirely on the cause.
+Now suppose the blanks did not fall by chance. People who earn a lot are often the ones who skip the income question.
 
-## Why it went missing
+::: {.ask data-veil="true"}
+This time the six blank incomes are mostly the highest ones. You throw those rows away. What does the average of the rows you keep do?
 
-Formal acronyms are not always used, but the distinction between these three cases is crucial.
-
-| Acronym | What it means | Example |
-|---|---|---|
-| **MCAR** (Missing Completely At Random) | Missingness unrelated to any variable | Sensor glitched for an hour; transmission dropped a packet |
-| **MAR** (Missing At Random) | Missingness depends on *observed* variables | Men skip the "weight" field more often than women (depends on gender, which we have) |
-| **MNAR** (Missing Not At Random) | Missingness depends on the *unobserved* value itself | High-income respondents skip the income field; date-of-death missing for living patients (censoring) |
-
-It matters because discarding rows is safe under MCAR, risky under MAR, and dangerous under MNAR. In Fig. 1, press the button under "y goes missing". When values vanish at random, the rows you keep look like the rows you lost, and their mean stays near the truth. When values vanish mostly where y is high, the rows you keep are the low ones, and their mean drops.
-
-The R at the end of the page runs the same experiment on 1,000 made-up incomes. Dropping 20% completely at random barely shifts the mean; that is noise. Letting older people skip more often (MAR) gives only a modest shift, because age has a weak link to income in that data. Letting high earners skip more often (MNAR) noticeably biases the mean downward, because the highest incomes are the ones most likely to be missing. [Exam trap: "the data is missing at random, so just drop the rows" is only safe under MCAR. Under MNAR, the most common real-world case, the model becomes biased and you will not know unless you specifically look.]{.side}
-
-## Throw the rows away
-
-The simplest option is also the most dangerous. Deleting every row that has a missing value is called listwise deletion, and in R it is one call to `na.omit`.
-
-Use it when you have established that the missingness is MCAR, or close to it, and the loss is small enough that you still have an adequate sample size. Both conditions have to hold.
-
-Do not use it when missingness is driven by the value you care about. That is the "kept" column in Fig. 1 with the button on "when high": a smaller dataset, and a biased one.
-
-## Say that it is missing
-
-Instead of discarding the row, you can make "this value is missing" part of the model. For a categorical variable that is easy: add a new level, "missing", alongside the existing ones.
-
-For a numeric variable the move has three parts:
-
-1. Set the missing values to 0 (or some placeholder).
-2. Add a binary indicator `is_missing`.
-3. Interact the indicator with every other predictor.
-
-The third part is what makes this work. The indicator on its own only shifts the intercept. Without the interactions, the coefficients on the other variables get pulled in odd directions to compensate for the placeholder zeros. [Exam trap: an indicator without interactions does not split the model. It only shifts the intercept.]{.side}
-
-With the interactions, the model can respond differently to the other predictors when the value is missing, which is what you want when missingness correlates with other features. You are in effect fitting two parallel models, one for rows with complete data and one for rows where this variable is missing. Think of it as a tree with one branch.
-
-## Fill it in
-
-Imputation means *estimating* the missing values and filling them in. There are three methods, and they trade simplicity against realism. Two of them are in this section.
-
-The simplest replaces each missing value with one typical value from the rows you have: the mean for a numeric variable, the median for a numeric variable when you want something robust to skew, the mode for a categorical one. It keeps the mean of the column where it was, but it collapses all the variance in the missing subset to zero, and that distorts correlations and any model fitted afterwards.
-
-::: {.ink-figure data-figure="impute-figure" data-step="1" data-steps="1:mean|2:regression" data-caption="Fig. 2 · the same rows, filled in two ways; the readouts are computed from what is drawn · made-up data"}
+- **Stays about the same, like before.** That was true when the holes fell at random, because the rows you lost looked like the rows you kept. Here they do not.
+- **Slides down.** Yes. The rows you throw away are the high earners, so what is left is mostly the lower ones.
+- **Slides up.** That would happen if the lowest earners skipped the question. Here it is the highest.
 :::
 
-In Fig. 2 the filled-in values sit in a flat row. With a quarter of the y values gone at random, the standard deviation of y falls from 1.82 to 1.64 and its correlation with x from 0.78 to 0.75. The filled-in rows have no spread and no relationship with x, and they dilute both.
-
-The second method builds a regression model on the rows *without* missing data that predicts the missing factor from the other factors, then uses it to impute. That usually gives a better individual estimate than the global mean. Press "regression" under Fig. 2 and each filled-in value moves to the fitted line. But it still collapses legitimate variation: every 45-year-old with 15 years on the job gets the same predicted income, even though in the real population their incomes span a range. In the figure the standard deviation is still short of the truth, at 1.74, and the correlation is now too high, at 0.84, because the filled-in points fit the line perfectly.
-
-## Put the noise back
-
-The third method fixes the collapse by adding random noise to each prediction, with the size of the noise set by the residual standard error of the regression:
-
-$$\hat{y}_i = \underbrace{a + b\,x_i}_{\text{regression}} + \underbrace{\varepsilon_i}_{\text{perturbation}}, \qquad \varepsilon_i \sim N(0,\ s^2_{\text{residual}})$$
-
-The perturbation looks like it makes each individual estimate worse, since you are adding noise on purpose. What it buys is the spread of the imputed values. When variance or correlations matter downstream, that matters. [Exam trap: mean imputation is the easiest to do and the easiest to critique, because it kills the variance in the imputed subset. Regression imputation needs perturbation if variance or correlations matter downstream.]{.side}
-
-::: {.ink-figure data-figure="impute-figure" data-step="3" data-steps="1:mean|2:regression|3:plus noise" data-caption="Fig. 3 · move the slider and switch how y goes missing; every number is recomputed · made-up data"}
+::: {.ink-figure data-figure="holes-lab" data-step="1" data-caption="Fig. 2 · the same 24 people; this time the six highest earners left it blank"}
 :::
 
-In Fig. 3 the noise is drawn with the residual spread of the fitted line, and the standard deviation and correlation return to about their true values. Then switch the button to "when high". In this figure none of the three ways of filling in brings the mean back to the truth. Each one learns only from the rows that are left, and those rows are the low ones.
+The line slides down with every click and ends about 9 thousand below the truth. Nothing on the screen warns you. You just have a smaller table that gives the wrong answer.
 
-## How much is too much
+So the first question about a hole is not "how do I fix it?" but "**why is it there?**" There are three kinds of answer:
 
-Slide "missing" in Fig. 3 from 5% towards 50% and compare the two columns under each method. At 5% the columns stay close whichever method you pick. The further you go, the further they drift apart.
+- **By pure chance.** The coffee. Throwing those rows away is safe, as long as you still have enough rows left.
+- **Because of something else you did record.** Say men skip a "weight" box more often than women, and you know who is a man. Throwing rows away is risky now.
+- **Because of the missing value itself.** The high earners who skip the income box. Throwing rows away is dangerous, and you will not know unless you go looking.
 
-That is the reason for the course's rule of thumb: do not impute more than about **5% of any single factor**. Imputation introduces error, and adding that error to more than a small slice of the data compounds. Past 5%, switch to the indicator-plus-interaction approach, so that you *model* the missingness explicitly rather than hide it behind a guess. [Exam trap: the 5% rule kicks in before you notice it kicking in. Check the proportion missing per factor before choosing a strategy.]{.side}
+### Now tell a computer
 
-A second worry follows. You have imputed values that carry error, and now you feed them into a model that has error of its own. How do you quantify the total? The honest answer is that there is no clean way. Use a held-out test set to evaluate overall performance, and accept that the test set itself probably has some missingness too.
+A computer cannot see the gaps in a picture. Each person is a pair of numbers, such as `(29, 92)`: 29 years at work and 92 thousand a year. A blank is written `None`, which is Python's word for "nothing here". The cell below fetches the 24 people from Fig. 1.
 
-The practical reframe is that every dataset has errors. Sensors drift, humans type wrong numbers, digital thermometers give different readings 10 seconds apart. The question is not "is my imputation perfect" but "is my imputation worse than the typical error already baked into the data?" Usually it is not.
+Press **Run**. The first time takes a few seconds while Python starts.
 
-## Run it yourself {.reference}
+The code walks through the rows one at a time. `for i in range(len(points))` means "for every row number i, from 0 up to the number of rows". `if` checks something, and `else` says what to do when the check fails. `append` adds one thing to the end of a list. One blank is left: which number should go on the list of holes?
 
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, truth      # the 24 people; truth holds the real incomes, for checking only
+
+complete = []                       # the rows that have both numbers
+holes = []                          # the row numbers that have a blank
+for i in range(len(points)):
+    years, income = points[i]       # take the pair apart
+    if income is None:              # a blank
+        holes.append(____)
+    else:
+        complete.append((years, income))
+
+print(len(points), "rows.", len(holes), "have a hole:", holes)
+print("Row", holes[-1], "is", points[holes[-1]])
+
+picture = {
+    "points": complete,
+    "vlines": [points[i][0] for i in holes],     # a thin line where each hole is
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": [str(len(complete)) + " complete rows", str(len(holes)) + " holes"],
+}
+```
+::: {.py-solution}
+```python
+from page import points, truth      # the 24 people; truth holds the real incomes, for checking only
+
+complete = []                       # the rows that have both numbers
+holes = []                          # the row numbers that have a blank
+for i in range(len(points)):
+    years, income = points[i]       # take the pair apart
+    if income is None:              # a blank
+        holes.append(i)
+    else:
+        complete.append((years, income))
+
+print(len(points), "rows.", len(holes), "have a hole:", holes)
+print("Row", holes[-1], "is", points[holes[-1]])
+
+picture = {
+    "points": complete,
+    "vlines": [points[i][0] for i in holes],     # a thin line where each hole is
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": [str(len(complete)) + " complete rows", str(len(holes)) + " holes"],
+}
+```
+:::
+:::
+
+Python counts rows from 0, so the first row is row 0, and `holes[-1]` means the last one on the list. The thin upright lines in the picture are the holes: you know how long those people have worked, but not what they earn. `[points[i][0] for i in holes]` is a short way to make a list: the years of every row in `holes`. `str` turns a number into text, so it can be joined to words with `+` for the notes beside the picture.
+
+## What would you write in the hole?
+
+Throwing rows away loses everything else those people told you. The other choice is to write something in the hole. Take the last one: a person with 29 years at work.
+
+Drag the star up or down to the income you would write in for them. Then press the buttons beside the picture to see two ideas you might have had.
+
+::: {.ink-figure data-figure="holes-lab" data-step="2" data-caption="Fig. 3 · fill one hole: your guess, the average of the rest, and what a line says"}
+:::
+
+The first idea is **the average of the rest**: 61.1, the typical income in the table. The second uses the other number you do have. People who have worked longer tend to earn more, so draw the line that runs closest to the complete rows, and read off where it is at 29 years.
+
+::: {.ask}
+In real life you never see the true income. How could you tell whether a way of filling is any good?
+
+- **You can't. You just have to trust it.** You can do better. You have 18 incomes you do know.
+- **Hide some values you do know, fill them, and compare.** Yes. That is what the figure's last button lets you do, because this made-up table has the answers. With real data you hide a few known values on purpose and see how close the fill comes.
+:::
+
+Press *show the real value*. The line comes much closer than the average, because it uses what you know about this person: they have worked a long time.
+
+### Now tell a computer
+
+Filling with the average first. `def` gives a set of steps a name, so you can use them again: from now on `average(values)` means "add them up and divide by how many". `[p[1] for p in complete]` makes a list of the second number of every pair, the incomes. One blank: what goes in the hole?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def average(values):
+    return sum(values) / len(values)          # add them up, divide by how many
+
+incomes = [p[1] for p in complete]            # the 18 incomes you have
+avg = average(incomes)
+
+filled = []                                   # a new table, with the holes filled in
+for years, income in points:
+    if income is None:
+        filled.append((years, ____))          # what goes in the hole?
+    else:
+        filled.append((years, income))        # keep what was written
+
+print("Average of the incomes you have:", round(avg, 1))
+print("Row", holes[-1], "is now", (filled[holes[-1]][0], round(filled[holes[-1]][1], 1)))
+
+picture = {
+    "points": complete,
+    "stars": [filled[i] for i in holes],      # the filled-in rows
+    "hlines": [avg],
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": ["average " + str(round(avg, 1)), "6 holes filled"],
+}
+```
+::: {.py-solution}
+```python
+def average(values):
+    return sum(values) / len(values)          # add them up, divide by how many
+
+incomes = [p[1] for p in complete]            # the 18 incomes you have
+avg = average(incomes)
+
+filled = []                                   # a new table, with the holes filled in
+for years, income in points:
+    if income is None:
+        filled.append((years, avg))           # the hole gets the average of the rest
+    else:
+        filled.append((years, income))        # keep what was written
+
+print("Average of the incomes you have:", round(avg, 1))
+print("Row", holes[-1], "is now", (filled[holes[-1]][0], round(filled[holes[-1]][1], 1)))
+
+picture = {
+    "points": complete,
+    "stars": [filled[i] for i in holes],      # the filled-in rows
+    "hlines": [avg],
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": ["average " + str(round(avg, 1)), "6 holes filled"],
+}
+```
+:::
+:::
+
+Compare the average it prints with the one in Fig. 3. All six stars sit in one flat row, whatever their years at work.
+
+Now the line. You met the line that runs closest to the points when you fitted a line: of all the straight lines, it has the smallest total of squared misses. The cell below works it out from the complete rows, in full, so you can read every step. Find the middle of the years and the middle of the incomes. Then the slope, which is how much income goes up for each extra year, comes from one division, and the line is made to pass through both middles.
+
+`for x, y in table` takes each pair in turn and calls its two numbers x and y. One blank, in the last function: where is the line at a given number of years?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def fit(table):
+    xs = [p[0] for p in table]                # the years
+    ys = [p[1] for p in table]                # the incomes
+    mx = average(xs)                          # the middle of the years
+    my = average(ys)                          # the middle of the incomes
+    top = 0
+    bottom = 0
+    for x, y in table:
+        top = top + (x - mx) * (y - my)       # positive when a row is above both middles, or below both
+        bottom = bottom + (x - mx) * (x - mx) # how spread out the years are
+    slope = top / bottom                      # income gained for each extra year
+    height = my - slope * mx                  # the line goes through both middles
+    return height, slope
+
+height, slope = fit(complete)
+
+def on_line(years):
+    return height + slope * ____              # where is the line at this many years?
+
+line_filled = []
+for years, income in points:
+    if income is None:
+        line_filled.append((years, on_line(years)))
+    else:
+        line_filled.append((years, income))
+
+print("Height", round(height, 1), "and slope", round(slope, 2))
+print("At 29 years the line says", round(on_line(29), 1))
+
+from page import my_fill                      # where you left the star in Fig. 3
+i = holes[-1]                                 # the row you filled by hand: 29 years
+print("Row", i, "- you said", my_fill, " average", round(avg, 1), " line", round(on_line(29), 1), " real", truth[i])
+
+frames = []
+for step in range(7):
+    t = step / 6                              # 0 at the start, 1 at the end
+    stars = []
+    for i in holes:
+        y = avg + (line_filled[i][1] - avg) * t    # slide from the average to the line
+        stars.append((points[i][0], y))
+    frames.append({
+        "points": complete, "stars": stars,
+        "lines": [[(0, height), (32, on_line(32))]],
+        "xlim": (0, 32), "ylim": (0, 110),
+        "xlabel": "years at work", "ylabel": "income, thousands",
+        "notes": ["slope " + str(round(slope, 2)), "height " + str(round(height, 1))],
+    })
+```
+::: {.py-solution}
+```python
+def fit(table):
+    xs = [p[0] for p in table]                # the years
+    ys = [p[1] for p in table]                # the incomes
+    mx = average(xs)                          # the middle of the years
+    my = average(ys)                          # the middle of the incomes
+    top = 0
+    bottom = 0
+    for x, y in table:
+        top = top + (x - mx) * (y - my)       # positive when a row is above both middles, or below both
+        bottom = bottom + (x - mx) * (x - mx) # how spread out the years are
+    slope = top / bottom                      # income gained for each extra year
+    height = my - slope * mx                  # the line goes through both middles
+    return height, slope
+
+height, slope = fit(complete)
+
+def on_line(years):
+    return height + slope * years             # start at the height, climb the slope for each year
+
+line_filled = []
+for years, income in points:
+    if income is None:
+        line_filled.append((years, on_line(years)))
+    else:
+        line_filled.append((years, income))
+
+print("Height", round(height, 1), "and slope", round(slope, 2))
+print("At 29 years the line says", round(on_line(29), 1))
+
+from page import my_fill                      # where you left the star in Fig. 3
+i = holes[-1]                                 # the row you filled by hand: 29 years
+print("Row", i, "- you said", my_fill, " average", round(avg, 1), " line", round(on_line(29), 1), " real", truth[i])
+
+frames = []
+for step in range(7):
+    t = step / 6                              # 0 at the start, 1 at the end
+    stars = []
+    for i in holes:
+        y = avg + (line_filled[i][1] - avg) * t    # slide from the average to the line
+        stars.append((points[i][0], y))
+    frames.append({
+        "points": complete, "stars": stars,
+        "lines": [[(0, height), (32, on_line(32))]],
+        "xlim": (0, 32), "ylim": (0, 110),
+        "xlabel": "years at work", "ylabel": "income, thousands",
+        "notes": ["slope " + str(round(slope, 2)), "height " + str(round(height, 1))],
+    })
+```
+:::
+:::
+
+The last line puts your own guess from Fig. 3 beside the two fills and the real income. Check the line by hand: the height is 30.9 and the slope 2.09, so at 29 years the line is at 30.9 + 2.09 × 29 = 91.6. That is the number in Fig. 3. The picture plays the stars sliding from the average onto the line: each person now gets an income that fits how long they have worked.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With $\bar{x}$ for the middle of the years and $\bar{y}$ for the middle of the incomes, the line that runs closest to the complete rows has
+
+$$\text{slope} = \frac{\sum (x - \bar{x})(y - \bar{y})}{\sum (x - \bar{x})^2}, \qquad \text{height} = \bar{y} - \text{slope} \times \bar{x}$$
+
+and a hole at $x$ is filled with $\text{height} + \text{slope} \times x$. Read the big Σ as "add these up, over the complete rows".
+:::
+
+## What did the filling do to the data?
+
+Look at the stars in the last two pictures. Every one sits *exactly* on the average, or *exactly* on the line. Real people never do that. The table now looks tidier than it really is.
+
+Two numbers show how much tidier. The first is the **spread**: how far incomes typically sit from their average. Work one by hand. Two incomes, 2 and 8. The average is 5, and each is 3 away. Square the distances (3 × 3 = 9, twice), take their average (9), and undo the squaring with a square root: which number times itself makes 9? **3**. The two incomes typically sit 3 from their average.
+
+The second is the **typical miss**: the same sum, done on how far each point sits from the closest line instead of from the average. A small typical miss means the points hug the line, so the link between years and income looks strong.
+
+`import math` brings in Python's maths tools; `math.sqrt` is the square root. The cell compares the real incomes (from `truth`, which you would never have) with both filled tables.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import math
+
+def spread(values):
+    m = average(values)
+    total = 0
+    for v in values:
+        total = total + (v - m) * (v - m)     # squared distance from the average
+    return math.sqrt(total / len(values))     # average them, undo the squaring
+
+def typical_miss(table):
+    h, s = fit(table)                         # the closest line for this table
+    total = 0
+    for x, y in table:
+        miss = y - (h + s * x)                # how far the point is from the line
+        total = total + miss * miss
+    return math.sqrt(total / len(table))
+
+real = [(points[i][0], truth[i]) for i in range(len(points))]   # the table with no holes
+
+print("spread of the incomes:   real", round(spread(truth), 1),
+      " average-filled", round(spread([p[1] for p in filled]), 1),
+      " line-filled", round(spread([p[1] for p in line_filled]), 1))
+print("typical miss from line:  real", round(typical_miss(real), 1),
+      " average-filled", round(typical_miss(filled), 1),
+      " line-filled", round(typical_miss(line_filled), 1))
+
+picture = {
+    "points": complete,
+    "stars": [line_filled[i] for i in holes],
+    "lines": [[(0, height), (32, on_line(32))]],
+    "segments": [(line_filled[i], real[i]) for i in holes],   # from each fill to the real value
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": ["spread real " + str(round(spread(truth), 1)),
+              "spread filled " + str(round(spread([p[1] for p in line_filled]), 1)),
+              "miss real " + str(round(typical_miss(real), 1)),
+              "miss filled " + str(round(typical_miss(line_filled), 1))],
+}
+```
+:::
+
+Read the two lines it prints.
+
+- Filling with the average **shrinks the spread**, from 18.9 to 16.1. Six people now sit dead on the middle, so the incomes look more alike than they are. It also blurs the link: the flat row of stars ignores years at work, so the typical miss from the line grows.
+- Filling with the line keeps the spread closer, but **the link looks stronger than it is**. The typical miss falls from 7.1 to 6.0, because six of the points now sit exactly on the line. Anything you work out from this table later will be too sure of itself.
+
+The threads in the picture run from each star to the real income. Each one is a miss that the filled table pretends is not there.
+
+::: {.ask data-veil="true"}
+The stars sit too neatly on the line. How could you make the filled table look like real data again?
+
+- **Fill with the average instead.** That shrinks the spread more, and loses the link with years at work.
+- **Nudge each star up or down by a random amount.** Yes. Real points miss the line by about the typical miss, sometimes up, sometimes down. Add a random nudge of that size and the stars scatter like real points.
+- **Leave the holes empty.** Then you are back to throwing rows away, with the risks from Fig. 2.
+:::
+
+### How do you put the scatter back?
+
+`import random` brings in Python's random numbers. `random.gauss(0, size)` gives a random number around 0: up or down equally often, usually smaller than `size`, now and then bigger. `random.seed(6)` fixes the "random" numbers, so you get the same ones every time you run it. How big should the nudge be? The typical miss of the complete rows from their line, which is about 7.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import random
+random.seed(6)                                # the same "random" nudges every time
+
+size = typical_miss(complete)                 # how far real points usually sit from the line
+
+nudged = []
+for years, income in points:
+    if income is None:
+        nudged.append((years, on_line(years) + random.gauss(0, ____)))
+    else:
+        nudged.append((years, income))
+
+print("size of the nudge:", round(size, 1))
+print("spread:       real", round(spread(truth), 1), " nudged", round(spread([p[1] for p in nudged]), 1))
+print("typical miss: real", round(typical_miss(real), 1), " nudged", round(typical_miss(nudged), 1))
+
+picture = {
+    "points": complete,
+    "stars": [nudged[i] for i in holes],
+    "lines": [[(0, height), (32, on_line(32))]],
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": ["nudge size " + str(round(size, 1)),
+              "spread " + str(round(spread([p[1] for p in nudged]), 1)),
+              "miss " + str(round(typical_miss(nudged), 1))],
+}
+```
+::: {.py-solution}
+```python
+import random
+random.seed(6)                                # the same "random" nudges every time
+
+size = typical_miss(complete)                 # how far real points usually sit from the line
+
+nudged = []
+for years, income in points:
+    if income is None:
+        nudged.append((years, on_line(years) + random.gauss(0, size)))
+    else:
+        nudged.append((years, income))
+
+print("size of the nudge:", round(size, 1))
+print("spread:       real", round(spread(truth), 1), " nudged", round(spread([p[1] for p in nudged]), 1))
+print("typical miss: real", round(typical_miss(real), 1), " nudged", round(typical_miss(nudged), 1))
+
+picture = {
+    "points": complete,
+    "stars": [nudged[i] for i in holes],
+    "lines": [[(0, height), (32, on_line(32))]],
+    "xlim": (0, 32), "ylim": (0, 110),
+    "xlabel": "years at work", "ylabel": "income, thousands",
+    "notes": ["nudge size " + str(round(size, 1)),
+              "spread " + str(round(spread([p[1] for p in nudged]), 1)),
+              "miss " + str(round(typical_miss(nudged), 1))],
+}
+```
+:::
+:::
+
+The spread and the typical miss come back to about their real values. The price looks odd at first: each single star is now probably further from that person's real income than the line was. You made every guess a little worse on purpose. What you bought is a table whose spread, and whose link between the two numbers, look like the real thing. When those matter for what you do next, that is the better deal.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Each hole at $x_i$ is filled with
+
+$$\hat{y}_i = \underbrace{\text{height} + \text{slope} \times x_i}_{\text{the line}} + \underbrace{\varepsilon_i}_{\text{the nudge}}$$
+
+where $\varepsilon_i$ is drawn at random from a bell-shaped spread around 0 whose size is the typical miss of the complete rows from their line.
+:::
+
+## How much filling is too much?
+
+Every star is a guess. Six guesses in 24 rows is a quarter of the incomes. Fig. 4 is a bigger made-up table, 80 rows, so you can push it further. Its two measurements are just called x and y. The buttons under it choose the way of filling, and the side column compares the real table with the filled one: the average, the spread, and the typical miss from the closest line ("line miss").
+
+::: {.ink-figure data-figure="impute-figure" data-step="3" data-steps="1:average|2:line|3:line + nudge" data-caption="Fig. 4 · move the slider and switch how the values go missing; every number is recomputed · made-up data"}
+:::
+
+Slide *missing* from 5% towards 50% and compare the two columns, true and filled, under each way of filling. At 5% they stay close whichever way you pick. The further you go, the further they drift apart.
+
+Then switch *at random* to *when high*. None of the three ways of filling brings the average back to the truth. Each one learns only from the rows that are left, and those are the low ones.
+
+The cell below does the same on the 24 people. It hides more and more of the real incomes, by chance, fills them with the line, and measures the typical miss each time. `random.sample(range(24), 24)` shuffles the row numbers, `order[:m]` takes the first m of them, and `i not in gone` asks whether row i is not on that list.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+random.seed(3)
+order = random.sample(range(len(real)), len(real))   # the 24 row numbers, shuffled
+
+bars = []
+frames = []
+for m in [2, 4, 6, 8, 10, 12]:
+    gone = order[:m]                                 # these rows lose their income
+    left = [real[i] for i in range(len(real)) if i not in gone]
+    h, s = fit(left)                                 # the line from what is left
+    table = []
+    for i in range(len(real)):
+        x, y = real[i]
+        if i in gone:
+            table.append((x, h + s * x))             # fill with the line
+        else:
+            table.append((x, y))
+    share = round(100 * m / len(real))               # out of every 100 incomes, how many are guesses
+    print(m, "filled,", share, "in 100:  typical miss", round(typical_miss(table), 1))
+    bars.append((share, typical_miss(table)))
+    frames.append({
+        "bars": list(bars), "hlines": [typical_miss(real)],
+        "xlim": (0, 55), "ylim": (0, 9),
+        "xlabel": "how many in 100 are guesses", "ylabel": "typical miss from the line",
+        "notes": [str(share) + " in 100 filled", "real miss " + str(round(typical_miss(real), 1))],
+    })
+```
+:::
+
+The bars fall below the level line, the real typical miss, as more of the table is filled. The more you fill, the more of your "data" is your own guesswork, and the more sure of itself it looks.
+
+A common rule of thumb: **fill in no more than about 5 in every 100 values of any one measurement.** Each filled value carries some error, and past a small slice those errors add up. Beyond that, keep the fact that the value was missing as part of the data instead (the next section), rather than hiding it behind a guess.
+
+How do you measure the error from filling, added to the error of whatever you build on the table afterwards? There is no clean way. Test the finished result on rows it never saw, and accept that those rows probably have holes too. Remember that every table has errors already: sensors drift, people type the wrong number, two thermometers disagree. The useful question is not "is my filling perfect?" but "is it worse than the errors already in the data?" Usually it is not.
+
+## Can a blank tell you something?
+
+Go back to the high earners who skipped the income box. That they skipped it is itself a clue. You can keep the clue as a new measurement: a column that says, for every row, "was it missing?", 1 for yes and 0 for no.
+
+The cell below builds that column for Fig. 2's table, where the high earners left it blank, and compares the years at work of the two groups.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points_high                  # Fig. 2: the high earners left it blank
+
+was_missing = []
+for years, income in points_high:
+    if income is None:
+        was_missing.append(1)                 # 1: they left it blank
+    else:
+        was_missing.append(0)                 # 0: they wrote it in
+
+blank = [points_high[i][0] for i in range(len(points_high)) if was_missing[i] == 1]
+given = [points_high[i][0] for i in range(len(points_high)) if was_missing[i] == 0]
+
+print("was it missing?", was_missing)
+print("left it blank: worked", round(average(blank), 1), "years on average")
+print("wrote it in:   worked", round(average(given), 1), "years on average")
+
+picture = {
+    "points": [(points_high[i][0], was_missing[i]) for i in range(len(points_high))],
+    "labels": was_missing,                    # a different mark for each group
+    "vlines": [average(blank), average(given)],
+    "xlim": (0, 32), "ylim": (-0.5, 1.5),
+    "xlabel": "years at work", "ylabel": "was it missing? 1 = yes",
+    "notes": ["blank: " + str(round(average(blank), 1)) + " years",
+              "given: " + str(round(average(given), 1)) + " years"],
+}
+```
+:::
+
+The people who left it blank had worked about twice as long. The blanks are not random noise: they carry information, and a model can use it.
+
+For a measurement that comes in kinds, such as a colour or a town, that is easy: add "missing" as one more kind. For a number, there are three parts:
+
+1. Put a placeholder, such as 0, in each hole, so the row can be used.
+2. Add the "was it missing?" column.
+3. Let every other measurement count differently when the value was missing.
+
+The third part is what makes it work. With only the new column, a line can do no more than move up or down for the rows with a blank. The placeholder zeros then pull the other measurements' slopes in odd directions to make up for it. With the third part, the model is in effect two models: one for rows that have the value, one for rows that do not. Think of a tree with one branch.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Throwing away every row with a hole | Listwise deletion |
+| Holes that fall by pure chance | Missing completely at random (MCAR) |
+| Holes that depend on something else you recorded | Missing at random (MAR) |
+| Holes that depend on the missing value itself | Missing not at random (MNAR) |
+| Writing a value into a hole | Imputation |
+| Filling with the average of the rest | Mean imputation (the median and the most common value are cousins) |
+| Filling with what a line says | Regression imputation |
+| Adding a random nudge the size of the typical miss | Perturbation |
+| The spread | Standard deviation |
+| The typical miss from the line | Residual standard error (near enough) |
+| How tightly points hug the line | Correlation |
+| The "was it missing?" column | A missing-value indicator |
+| Letting other measurements count differently when it was missing | Interaction terms |
+
+The names are for talking to other people and for looking things up. In R, `na.omit` throws away the rows with holes. In Python, the pandas library has `dropna` and `fillna`, and scikit-learn has a `SimpleImputer` that fills with the average, the middle value or the most common one, and can add the "was it missing?" column for you. Its `IterativeImputer` fills each column from the others, much as your line did. Whatever you use, ask first why the values are missing.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every number and plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 A thousand made-up people whose income depends on age and years of experience. Here you have the truth.
@@ -272,33 +751,4 @@ legend("topright",
        col = c("gray30", "#d62828", "#e08a3c", "#2d6a4f"),
        lwd = 2, bty = "n", cex = 0.9)
 ```
-
-## On one page {.reference}
-
-| Situation | Best approach |
-|---|---|
-| Missingness tiny, clearly random | Listwise deletion (`na.omit`) |
-| Missingness correlated with *other variables* | Indicator + interactions |
-| Missingness correlated with *the missing variable itself* | Indicator + interactions. Do NOT drop rows. |
-| Small amount (<5%), value-dependent | Regression imputation, with perturbation if variance matters |
-| >5% missing in one factor | Indicator approach, not imputation |
-
-Common pitfalls:
-
-1. **Listwise delete is not a "safe default."** It is only safe under MCAR.
-2. **Mean imputation is the easiest to do, the easiest to critique.** It kills variance in the imputed subset.
-3. **Regression imputation needs perturbation** if variance or correlations matter downstream.
-4. **The 5% rule** kicks in before you notice it kicking in. Always check the proportion missing per factor before choosing a strategy.
-5. **Indicator without interactions** does not split the model. It only shifts the intercept.
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What separates MCAR, MAR and MNAR, and under which of them is dropping rows safe?
-2. High-income respondents skip the income field. Which case is that, and which way does the mean of the remaining incomes move?
-3. Why does a missing-value indicator need an interaction with every other predictor?
-4. What does mean imputation do to the variance of a column, and to its correlation with other columns?
-5. What does perturbation add to regression imputation, and what is the size of the noise based on?
-6. How much of a single factor is it reasonable to impute, and what do you do beyond that?
-7. Your imputed values have error and so does your model. How do you assess the total?
+:::

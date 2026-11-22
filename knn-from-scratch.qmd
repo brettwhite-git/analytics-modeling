@@ -1,119 +1,444 @@
 ---
-title: "How does k nearest neighbours decide?"
-subtitle: "No line, no fitting, no model: a new point is labelled by asking the labelled points closest to it."
+title: "How do you name something new by its neighbours?"
+subtitle: "You will do it by hand first, then teach it to a computer. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="knn-figure" data-step="0" data-caption="Fig. 1 · labelled points, a formula and five lines of R, not yet connected · illustration, made-up points"}
+Here are 29 plants of two kinds. Each one is a point, placed by two numbers: how long its leaves are, and how wide. Someone who knows plants has already marked each one as a circle or a cross.
+
+A new plant arrives with no mark. You have to say which kind it is. Nobody has given you a rule. You are going to find that you already have one.
+
+## What would you call this new plant?
+
+The new plant is the ringed point with a question mark. Drag it anywhere you like. Then, before reading on, press *a circle* or *a cross* to say what you think it is.
+
+::: {.ink-figure data-figure="neighbours-lab" data-step="0" data-caption="Fig. 1 · 29 made-up plants of two kinds, and a new one for you to name"}
 :::
 
-You have labelled data: points that already belong to known groups, say loan applications marked approve or deny. A new, unlabelled point shows up. Which group does it belong to?
+That was quick, and you did not do any sums. You looked at the plants around the question mark and went with what most of them were.
 
-K nearest neighbours, KNN for short, gives the plainest answer there is. Look at the closest points you already have and go with the majority. That is the whole algorithm, and the rest of this page is about the three choices hiding inside it: what "closest" means, how many neighbours to ask, and what units to measure in.
+### Now tell a computer
 
-## Ask the neighbours
+A computer cannot look at a picture. It needs the plants as numbers. Each one is a pair, such as `(3.4, 3.9)`: 3.4 across and 3.9 up. The kinds are numbers too: 0 for a circle, 1 for a cross. The cell below fetches the same 29 plants, their kinds, and the new plant where you left it.
 
-Pick a number $k$, say 5. Measure the distance from the new point to **every** training point. Keep the $k$ closest. Count how many of them belong to each class. The new point gets the class with the most votes.
+Press **Run**. The first time takes a few seconds while Python starts.
 
-::: {.ink-figure data-figure="knn-figure" data-step="1" data-caption="Fig. 2 · the k nearest points vote, and the boundary is wherever the vote tips · made-up points"}
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, kinds, new_point    # the plants above, their kinds, and your new plant
+
+print("There are", len(points), "plants.")
+print("The first is", points[0], "and its kind is", kinds[0])
+print("The new plant is at", new_point)
+
+picture = {"points": points, "labels": kinds, "stars": [new_point],
+           "xlabel": "leaf length", "ylabel": "leaf width"}
+```
 :::
 
-Written as a formula, the predicted class is
+`print` writes its words and numbers out, and `len` counts how many things a list holds. `points[0]` is the first plant in the list: counting starts at 0. The last lines leave a `picture` behind, and the page draws it under the cell from your code's own numbers.
 
-$$\hat{y} = \text{mode}(\{y_i : \mathbf{x}_i \in N_k(\mathbf{x})\})$$
+## Who did you look at?
 
-where $\hat{y}$ is the prediction for the new point $\mathbf{x}$, $y_i$ is the known class of training point $i$, $N_k(\mathbf{x})$ is the set of the $k$ nearest neighbours of $\mathbf{x}$, and the mode is the most frequent value. In words: the most common class among the $k$ neighbours wins.
+You did not look at all 29. Plants far away, in a corner, told you nothing about the new one. You looked at the few closest to it.
 
-If $k$ is even, the vote can tie. The common fixes are to use an odd $k$, to weight each vote by distance so that closer neighbours count more, or to break ties at random.
-
-Notice what did not happen. Nothing was fitted. KNN has no training phase at all; it stores the data and does all its work when a question arrives, which is why it is called a **lazy learner**. [If a scenario says "no training phase" or "lazy learner", it is describing KNN. "Maximum margin" or "support vectors" means SVM.]{.side}
-
-## What "near" means
-
-The only maths KNN needs is a way to say how far apart two points are. The default is Euclidean distance:
-
-$$d(\mathbf{x}, \mathbf{x}') = \sqrt{\sum_{j=1}^{p} (x_j - x_j')^2}$$
-
-Here $\mathbf{x}$ is the new point, the thing you are classifying, and $\mathbf{x}'$ is a training point, one of the known, labelled examples. $p$ is the number of features, that is, how many measurements each point has. $x_j$ is feature $j$ of the new point (income, for example) and $x_j'$ is the same feature of the training point (that person's income).
-
-With two features this is just the Pythagorean theorem:
-
-$$d = \sqrt{(x_1 - x_1')^2 + (x_2 - x_2')^2}$$
-
-A point that differs by 3 in one feature and 4 in the other is at distance $\sqrt{3^2 + 4^2} = 5$. Other rulers exist, and the choice depends on the kind of data.
-
-| Metric | Formula | When to use |
-|:------:|:--------|:------------|
-| **Euclidean** | $\sqrt{\sum(x_j - x_j')^2}$ | Continuous features (default) |
-| **Manhattan** | $\sum |x_j - x_j'|$ | Grid-like data, robust to outliers |
-| **Hamming** | Count of differing features | Categorical/binary features |
-
-On this page, and in the course unless you are told otherwise, the distance is Euclidean.
-
-## How many neighbours
-
-$k$ is the **only** parameter in KNN. It controls the bias-variance tradeoff, just as C does in an SVM.
-
-With $k = 1$ every training point rules its own patch of the plane. The boundary is jagged, it memorises the training data, noise included, and it would look different with a different sample. With a large $k$ each prediction averages over many points, the boundary smooths out, and real structure starts to get voted away.
-
-| Small k (e.g., 1) | Large k (e.g., 50) |
-|:-------------------|:--------------------|
-| Jagged, complex boundary | Smooth, simple boundary |
-| Memorizes training data | Averages over many points |
-| Low bias, high variance | High bias, low variance |
-| **Overfitting risk** | **Underfitting risk** |
-
-::: {.ink-figure data-figure="knn-figure" data-step="1" data-steps="1:slide k|2:move a point" data-caption="Fig. 3 · classified live in your browser: change k, then drag a point · made-up points"}
+::: {.ink-figure data-figure="neighbours-lab" data-step="1" data-caption="Fig. 2 · threads from the new plant to its nearest few, and their vote"}
 :::
 
-You **cannot** calculate the best $k$ from a formula. You try different values and see which performs best on held-out data. That is cross-validation (Module 3), the standard way to tune any hyperparameter. [Exam trap: small k is the complex model, so it carries the overfitting risk. Large k is the simple model, so it carries the underfitting risk. More neighbours means smoother, not more flexible.]{.side}
+Threads run from the new plant to its 5 nearest neighbours, nearest first. The dotted circle reaches as far as the fifth: everything inside it is nearer than that. Each neighbour gets one vote for its own kind, and the kind with more votes wins.
 
-Some rules of thumb give you a place to start. Begin near $k = \sqrt{n}$, where $n$ is the number of training points. Use an odd $k$ for two classes so the vote cannot tie. Typical values run from 3 to 20.
+That is the whole rule: **look at the few known points nearest to the new one, and go with the majority.**
 
-## Scale first
+Now move the slider. With 1 neighbour, only the very nearest plant decides. With the plant where it starts, that nearest one is a stray cross sitting among the circles, so the answer flips to *cross*. Drag the new plant around too, and watch which threads change.
 
-KNN is built entirely on distance, and distance adds up differences in whatever units the features happen to use. If one feature has a range of 0–100,000 and another has a range of 0–1, the large-range feature **completely dominates** the calculation. Take income in dollars and a credit score: a gap of \$2,000 in income, which is nothing, outweighs a gap of 200 points in credit score, which is nearly the whole scale.
+The slider only stops at odd numbers. With two kinds and an odd number of votes, one kind always has more, so there is never a tie.
 
-::: {.ink-figure data-figure="knn-scale-figure" data-step="0" data-caption="Fig. 4 · the 5 nearest applicants to the square, measured in raw dollars and score points. The hatched band is everything as near as the 5th · made-up data"}
+## How far is each plant from the new one?
+
+"Nearest" means measuring distance, so that comes first. Try one by hand. The new plant starts at (4.4, 3.6). The stray cross is at (5.1, 3.5). It is 0.7 across and 0.1 down.
+
+Multiply each by itself and add: 0.7 × 0.7 = 0.49, and 0.1 × 0.1 = 0.01, and 0.49 + 0.01 = **0.5**. That is the squared distance. Up or down makes no difference: a number times itself is never negative. The circle at (3.4, 3.9) is 1.0 across and 0.3 up: 1.0 × 1.0 = 1.0, and 0.3 × 0.3 = 0.09, so **1.09**. The cross is nearer.
+
+You never need the true distance, only which is smaller. Squaring keeps the order, so the squared distance will do.
+
+The code below does the same sum. One piece is missing. Replace the blank and press Run.
+
+::: {.py-cell}
+```python
+def dist2(p, q):
+    across = p[0] - q[0]          # p[0] is the first number of the pair
+    up = p[1] - q[1]              # p[1] is the second
+    return across * across + ____
+
+print(dist2((0, 0), (3, 4)))                        # 3 across and 4 up: 9 + 16 is 25
+print(round(dist2((4.4, 3.6), (5.1, 3.5)), 2))     # by hand this was 0.5
+```
+::: {.py-solution}
+```python
+def dist2(p, q):
+    across = p[0] - q[0]          # p[0] is the first number of the pair
+    up = p[1] - q[1]              # p[1] is the second
+    return across * across + up * up
+
+print(dist2((0, 0), (3, 4)))                        # 3 across and 4 up: 9 + 16 is 25
+print(round(dist2((4.4, 3.6), (5.1, 3.5)), 2))     # by hand this was 0.5
+```
+:::
 :::
 
-In raw units the five "nearest" applicants are simply the five with the closest incomes. Their credit scores are barely consulted, and the vote follows. The fix is **standardisation**, also called z-score scaling:
+`def` gives a set of steps a name, so you can use them again, and `return` hands back the answer. From now on, `dist2(a, b)` means "do that sum for a and b". `round(x, 2)` keeps two decimals, because a computer works out 0.7 × 0.7 as 0.48999999999999994.
 
-$$x_j^{\text{scaled}} = \frac{x_j - \bar{x}_j}{s_j}$$
+Now measure from the new plant to every one of the 29. A list can start empty, `[]`, and grow: `append` puts one more thing on its end. `for p in points` takes each plant in turn.
 
-Subtract the feature's mean $\bar{x}_j$ and divide by its standard deviation $s_j$. Each feature then has mean 0 and standard deviation 1, and all features contribute equally to the distance.
+::: {.py-cell data-draw="py-plot"}
+```python
+def distances(q, points):
+    out = []                                  # an empty list, to fill in
+    for p in points:                          # take each known plant in turn
+        out.append(dist2(q, p))               # put its distance on the end
+    return out
 
-::: {.ink-figure data-figure="knn-scale-figure" data-step="1" data-steps="1:scaled|2:stretch income" data-caption="Fig. 5 · the same applicants after scaling, then with the income axis stretched back toward raw dollars · computed live · made-up data"}
+dists = distances(new_point, points)
+print(len(dists), "distances. The first five:")
+for i in range(5):                            # i is 0, 1, 2, 3, 4
+    print("plant", i, "at", points[i], "is", round(dists[i], 2), "away")
+
+# the picture: one more thread each time round
+frames = []
+threads = []
+for p in points:
+    threads.append((new_point, p))
+    frames.append({"points": points, "labels": kinds, "stars": [new_point],
+                   "segments": list(threads)})          # list(...) makes a copy of the threads so far
+```
 :::
 
-Same points, same new applicant, same $k$. Only the ruler changed, and with it the neighbours and the answer. Scaling is not an optional polish for KNN; when features have different ranges it decides the result. [Exam trap: scale before any distance-based method. KNN, SVM and k-means all measure distance, so an unscaled large-range feature dominates each of them.]{.side}
+The picture plays back the loop: one thread for every plant, 29 in all. The computer measures them all. It has no way to know which are close until it has measured every one.
 
-## Averaging instead of voting
+## Which few are nearest?
 
-KNN can also predict **continuous values**, not just classes. Instead of a majority vote, take the **average** of the neighbours' values:
+By hand, you would find the smallest distance and tick that plant. Then you would find the smallest of the ones left, and tick that. Five times, for five neighbours.
 
-$$\hat{y} = \frac{1}{k} \sum_{i \in N_k(\mathbf{x})} y_i$$
+::: {.ask}
+When the code below finishes, how would you know it picked the right five?
 
-The tradeoff is the same one. A small $k$ gives a noisy curve that chases every point (overfits). A large $k$ gives a smooth curve that flattens the real shape (underfits).
+- **Check that it printed five plants.** That only shows it picked five. They could be the wrong five.
+- **Check that the distances it prints are small.** Small compared with what? Without the other 24 to compare, you cannot tell.
+- **Compare with Fig. 2.** Yes. Set the slider there to 5 and leave the new plant where it is. You picked the same plants by eye. The plants the code prints should be the ones at the end of the threads.
+:::
 
-## What it costs
+The code below is that ticking, written out. `chosen` is the list of plants ticked so far. `best` is the nearest one found so far in this round; it starts as `None`, Python's word for "nothing yet". `i in chosen` asks whether plant `i` is already ticked, and `if` runs the lines under it only when its test is true.
 
-KNN's strengths come from having no model. It is dead simple, with no training time and no assumptions about the shape of the data. It is non-linear for free, since the boundary naturally curves around the data, and multi-class for free, since you just count votes. The price is paid at prediction time and in memory, which is clearest next to an SVM.
+::: {.py-cell data-draw="py-plot"}
+```python
+def nearest_few(dists, k):
+    chosen = []                                       # plants ticked so far
+    for pick in range(k):                             # k rounds, one tick each
+        best = None                                   # nothing found yet this round
+        for i in range(len(dists)):                   # look at every plant
+            if i not in chosen:                       # skip the ones already ticked
+                if best is None or dists[i] < dists[best]:
+                    best = ____                       # nearer than any so far: remember which
+        chosen.append(best)
+    return chosen
 
-| | KNN | SVM |
-|:--|:----|:----|
-| **Training** | None — just stores data | Solves optimization to find boundary |
-| **Prediction** | Slow — computes distance to every point | Fast — just evaluate $\mathbf{w} \cdot \mathbf{x} + b$ |
-| **Memory** | Stores entire training set | Stores only support vectors |
-| **Multi-class** | Natural (majority vote) | Needs workarounds (one-vs-one) |
-| **Interpretability** | Low (no model, just neighbors) | Moderate (weight vector shows feature importance) |
-| **Non-linear** | Inherently non-linear | Needs kernel trick |
-| **Best for** | Small datasets, quick prototyping | Large datasets, clear margin between classes |
+near = nearest_few(dists, 5)
+for i in near:
+    print("plant", i, "at", points[i], "kind", kinds[i], "distance", round(dists[i], 2))
 
-The deeper weakness is the **curse of dimensionality**. As the number of features grows, distances become meaningless: in high dimensions all points are roughly the same distance from each other, so the ratio of the farthest neighbour's distance to the nearest's heads toward 1 and "nearest" stops distinguishing anything. The fix is to reduce the dimensions first, with PCA (Module 9), and then apply KNN.
+# the picture: one thread for each tick
+frames = []
+threads = []
+for i in near:
+    threads.append((new_point, points[i]))
+    frames.append({"points": points, "labels": kinds, "stars": [new_point], "segments": list(threads)})
+```
+::: {.py-solution}
+```python
+def nearest_few(dists, k):
+    chosen = []                                       # plants ticked so far
+    for pick in range(k):                             # k rounds, one tick each
+        best = None                                   # nothing found yet this round
+        for i in range(len(dists)):                   # look at every plant
+            if i not in chosen:                       # skip the ones already ticked
+                if best is None or dists[i] < dists[best]:
+                    best = i                          # nearer than any so far: remember which
+        chosen.append(best)
+    return chosen
 
-## Run it yourself {.reference}
+near = nearest_few(dists, 5)
+for i in near:
+    print("plant", i, "at", points[i], "kind", kinds[i], "distance", round(dists[i], 2))
 
+# the picture: one thread for each tick
+frames = []
+threads = []
+for i in near:
+    threads.append((new_point, points[i]))
+    frames.append({"points": points, "labels": kinds, "stars": [new_point], "segments": list(threads)})
+```
+:::
+:::
+
+Watch the margin of the cell as it runs: the line that looks at every plant runs 29 times in each of the 5 rounds. The picture adds the threads in the order they were ticked, nearest first, just as Fig. 2 sewed them.
+
+## Who wins the vote?
+
+Now count. Each of the nearest few adds one vote to its own kind. `counts` holds two tallies: `counts[0]` for circles and `counts[1]` for crosses. One blank is left: what should the crosses beat?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+names = ["circle", "cross"]                           # names[0] is "circle", names[1] is "cross"
+
+def vote(q, points, kinds, k):
+    near = nearest_few(distances(q, points), k)
+    counts = [0, 0]                                   # votes for circles, votes for crosses
+    for i in near:
+        counts[kinds[i]] = counts[kinds[i]] + 1       # one more vote for this plant's kind
+    if counts[1] > ____:                              # more crosses than circles?
+        return 1, near, counts
+    return 0, near, counts
+
+answer, near, counts = vote(new_point, points, kinds, 5)
+print("Votes:", counts[0], "circles,", counts[1], "crosses. It is a", names[answer])
+
+threads = []
+for i in near:
+    threads.append((new_point, points[i]))
+picture = {"points": points, "labels": kinds, "stars": [new_point], "segments": threads,
+           "notes": [str(counts[0]) + " circles", str(counts[1]) + " crosses", "says: " + names[answer]]}
+```
+::: {.py-solution}
+```python
+names = ["circle", "cross"]                           # names[0] is "circle", names[1] is "cross"
+
+def vote(q, points, kinds, k):
+    near = nearest_few(distances(q, points), k)
+    counts = [0, 0]                                   # votes for circles, votes for crosses
+    for i in near:
+        counts[kinds[i]] = counts[kinds[i]] + 1       # one more vote for this plant's kind
+    if counts[1] > counts[0]:                         # more crosses than circles?
+        return 1, near, counts
+    return 0, near, counts
+
+answer, near, counts = vote(new_point, points, kinds, 5)
+print("Votes:", counts[0], "circles,", counts[1], "crosses. It is a", names[answer])
+
+threads = []
+for i in near:
+    threads.append((new_point, points[i]))
+picture = {"points": points, "labels": kinds, "stars": [new_point], "segments": threads,
+           "notes": [str(counts[0]) + " circles", str(counts[1]) + " crosses", "says: " + names[answer]]}
+```
+:::
+:::
+
+A function can hand back several things at once: `vote` returns the answer, the neighbours and the tallies, and the line under it catches all three. Compare the vote it prints with Fig. 2 with the slider at 5. Same plants, same new plant, same rule: they should agree. Change the 5 in the code to 1 and run it again. It should flip, just as the slider did.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+For two points $p$ and $q$, each with two numbers, the squared distance is
+
+$$d^2(p, q) = (p_1 - q_1)^2 + (p_2 - q_2)^2$$
+
+With more measurements you add one more square for each. The ordinary distance is the square root of this, $\sqrt{3^2 + 4^2} = 5$, and it puts the points in the same order. Other rulers exist. Adding the gaps without squaring them, $|p_1 - q_1| + |p_2 - q_2|$, measures as if walking along a street grid. For yes-or-no measurements, people count how many of them differ.
+
+With $N_k(x)$ for the $k$ known points nearest to a new point $x$, and $y_i$ for the kind of point $i$, the answer is
+
+$$\hat{y} = \text{the most common } y_i \text{ among the points in } N_k(x)$$
+
+Read $\hat{y}$ as "the guess for y". If $k$ is even, the vote can tie. Use an odd $k$, break the tie at random, or let nearer neighbours count for more.
+:::
+
+## How many neighbours should vote?
+
+Five was handed to you. Nothing says it must be five.
+
+::: {.ask data-veil="true"}
+What happens if only 1 neighbour votes? And if all 29 do?
+
+- **One is best: the nearest plant is the most like the new one.** It is the most alike, and that is the trouble. If the nearest plant is a stray, the answer is a stray too.
+- **All 29 is best: more opinions are safer.** With all 29 voting, the answer is the same everywhere: whichever kind has more plants. There are 16 circles and 13 crosses, so everything becomes a circle.
+- **Somewhere in between.** Yes. Too few and one odd plant decides. Too many and the plants far away outvote the ones nearby.
+:::
+
+::: {.ink-figure data-figure="neighbours-lab" data-step="2" data-caption="Fig. 3 · the vote at every spot on the page: hatched where crosses win"}
+:::
+
+This picture asks the vote at every spot on the page, not just at your new plant. The line is the border, where the vote tips from one kind to the other. Press *slide from 1 to 29* and watch it.
+
+At 1, the border bends around every stray plant and gives each one its own island. It would be different with a different 29 plants. Between about 5 and 15 it settles into a calmer line between the two groups. Near 29, the border has nowhere left to go: the bigger group wins everywhere.
+
+No sum tells you the best number. You try a few, test each one on plants whose kind you know but kept back, and keep the number that names them best. A later lesson, *Testing on unseen data*, shows how. Until then, two habits help: use an odd number when there are two kinds, and start near the square root of how many points you have. For 29 plants that is about 5.
+
+## What if one measurement is in big numbers?
+
+Here is a new set of points: 28 people who asked a bank for a loan. Each is placed by their income, in dollars, and their credit score, a number from about 300 to 850 that says how reliably they have paid back before. Some were approved (+), some were turned down (o). A new person asks: income $62,000, score 720.
+
+::: {.ask data-veil="true"}
+Which of the two measurements will decide who counts as nearest?
+
+- **Both, equally.** They are both in the sum. But look at the sizes. A gap of $2,000 in income adds 2,000 × 2,000 = 4,000,000. A gap of 200 in score, nearly the whole range, adds 200 × 200 = 40,000.
+- **The income.** Yes. Its numbers are in thousands, so its gaps swamp everything else. The score barely counts.
+- **The credit score.** It says much more about paying back, so you would hope so. But the sum does not know that. It only sees numbers, and the income numbers are far bigger.
+:::
+
+::: {.ink-figure data-figure="knn-scale-figure" data-step="2" data-caption="Fig. 4 · 28 made-up loan applicants, the new one (the square), and its 5 nearest. The slider sets how much income counts"}
+:::
+
+The slider starts where the sum leaves it: income in dollars, score in points. The hatched strip is every spot as near as the fifth neighbour. It is a thin upright strip, so the "nearest" five are just the five with the closest incomes, wherever their scores are. Four were turned down, so the vote says *deny*. The *income share* says how much of the distance comes from income: nearly all of it. The number by the slider says how many times more income counts here than it will once both are scaled: about 257 times.
+
+Now drag the slider to the left, toward *scaled*, so income counts less. The strip widens into a circle and takes in people whose income and score are both like the new person's. All five were approved. Same people, same new person, same rule. Only the units changed, and with them the answer.
+
+### How does it break?
+
+Here is the same thing in code. The cell fetches the 28 applicants and runs your `vote` on the raw numbers, as they come.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+from page import applicants, approved, applicant    # (income, score) pairs, 1 or 0, and the new person
+
+answer, near, counts = vote(applicant, applicants, approved, 5)
+for i in near:
+    print("income", applicants[i][0], " score", applicants[i][1], " approved:", approved[i])
+print("Votes:", counts[0], "deny,", counts[1], "approve")
+
+threads = []
+for i in near:
+    threads.append((applicant, applicants[i]))
+picture = {"points": applicants, "labels": approved, "stars": [applicant], "segments": threads,
+           "xlabel": "income", "ylabel": "score", "notes": ["raw units", str(counts[1]) + " of 5 approve"]}
+```
+:::
+
+Nothing goes wrong that Python can see. It runs, and it prints an answer. Look at the five it chose: every income is within $3,000 of $62,000, and the scores run all the way from 614 to 713. Four of the five have scores well below the new person's 720. The code has quietly ignored the score. That is the worst kind of break: a wrong answer that looks like a right one.
+
+::: {.ask}
+What should you do about it?
+
+- **Leave the income out.** Then the score decides alone. That is the same mistake the other way round, and it throws away something that matters.
+- **Use more neighbours.** The neighbours would still be picked by income, just more of them. The trouble is the ruler, not the count.
+- **Put both on the same footing first.** Yes. Measure each one in steps of its own typical spread, so a usual gap in income and a usual gap in score count the same.
+:::
+
+The fix is two small steps for each measurement. Take away its average, so the middle sits at 0. Then divide by its spread, the typical distance from that average. Incomes here average about $61,000, with a spread of about $16,000. So an income of $69,000 becomes (69,000 − 61,000) ÷ 16,000 = 0.5: half a typical step above the middle. Scores average about 661 with a spread of about 63, so the new person's 720 becomes (720 − 661) ÷ 63, a little under 1. Scores get the same treatment with their own average and spread. After that, a 1 in income and a 1 in score mean the same thing: one typical step.
+
+`sum` adds up a list. `math.sqrt` is the square root, which undoes a square: `math.sqrt(25)` is 5. The new person is scaled with the same average and spread as everyone else. That is the blank.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import math
+from page import applicants, approved, applicant    # the same applicants as above
+
+def average_and_spread(values):
+    avg = sum(values) / len(values)                  # the average
+    total = 0
+    for v in values:
+        total = total + (v - avg) * (v - avg)        # how far from the average, squared
+    spread = math.sqrt(total / len(values))          # the typical distance from the average
+    return avg, spread
+
+incomes = []
+scores = []
+for p in applicants:
+    incomes.append(p[0])
+    scores.append(p[1])
+avg_i, spread_i = average_and_spread(incomes)
+avg_s, spread_s = average_and_spread(scores)
+print("income: average", round(avg_i), " spread", round(spread_i))
+print("score:  average", round(avg_s), " spread", round(spread_s))
+
+scaled = []
+for p in applicants:
+    scaled.append(((p[0] - avg_i) / spread_i, (p[1] - avg_s) / spread_s))
+new_scaled = ((applicant[0] - avg_i) / spread_i, ____)
+
+answer, near, counts = vote(new_scaled, scaled, approved, 5)
+print("Votes:", counts[0], "deny,", counts[1], "approve")
+
+threads = []
+for i in near:
+    threads.append((new_scaled, scaled[i]))
+picture = {"points": scaled, "labels": approved, "stars": [new_scaled], "segments": threads,
+           "xlabel": "income, scaled", "ylabel": "score, scaled",
+           "notes": ["scaled", str(counts[1]) + " of 5 approve"]}
+```
+::: {.py-solution}
+```python
+import math
+from page import applicants, approved, applicant    # the same applicants as above
+
+def average_and_spread(values):
+    avg = sum(values) / len(values)                  # the average
+    total = 0
+    for v in values:
+        total = total + (v - avg) * (v - avg)        # how far from the average, squared
+    spread = math.sqrt(total / len(values))          # the typical distance from the average
+    return avg, spread
+
+incomes = []
+scores = []
+for p in applicants:
+    incomes.append(p[0])
+    scores.append(p[1])
+avg_i, spread_i = average_and_spread(incomes)
+avg_s, spread_s = average_and_spread(scores)
+print("income: average", round(avg_i), " spread", round(spread_i))
+print("score:  average", round(avg_s), " spread", round(spread_s))
+
+scaled = []
+for p in applicants:
+    scaled.append(((p[0] - avg_i) / spread_i, (p[1] - avg_s) / spread_s))
+new_scaled = ((applicant[0] - avg_i) / spread_i, (applicant[1] - avg_s) / spread_s)
+
+answer, near, counts = vote(new_scaled, scaled, approved, 5)
+print("Votes:", counts[0], "deny,", counts[1], "approve")
+
+threads = []
+for i in near:
+    threads.append((new_scaled, scaled[i]))
+picture = {"points": scaled, "labels": approved, "stars": [new_scaled], "segments": threads,
+           "xlabel": "income, scaled", "ylabel": "score, scaled",
+           "notes": ["scaled", str(counts[1]) + " of 5 approve"]}
+```
+:::
+:::
+
+Compare the vote with Fig. 4 with the slider all the way to *scaled*. Both should say 5 approve. Your `vote` did not change at all. Only the numbers you gave it did.
+
+Any method that measures distance has this weakness, so scale first whenever the measurements come in different units.
+
+## What else can it do, and what does it cost?
+
+**It can predict a number, not just a kind.** Say each known point were a house, placed by its size and its distance from town, with the price it sold for. For a new house, find the nearest few and take the average of their prices instead of a vote. If the three nearest sold for 200, 240 and 220 thousand, the guess is (200 + 240 + 220) ÷ 3 = 220 thousand. How many to ask works the same way: 1 neighbour follows every odd sale, and all of them gives the same average price for every house.
+
+**It does nothing until you ask, and then it does everything.** There is no step where it learns. It keeps every known point and, for each new question, measures the distance to all of them, just as your `distances` did. With 29 plants that is 29 sums. With a million known points and a thousand questions, it is a thousand million.
+
+**It struggles with many measurements.** With two numbers per point, "nearest" means something. With hundreds, nearly every point ends up about as far from the new one as every other, and the nearest few are hardly nearer than the rest. A common cure is to boil the measurements down to a few first. A later lesson, *Reshaping data*, shows one way.
+
+In return it is simple, it needs no guess about the shape of the groups, the border bends wherever the points send it, and it works the same for three or ten kinds: you just count more tallies.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| Naming the kind of a new point from points whose kind you know | Classification |
+| The plants whose kind you were told | Training data, with labels |
+| Look at the nearest few, go with the majority | k nearest neighbours (KNN) |
+| How many get a vote | *k* |
+| Across times across, plus up times up | Squared Euclidean distance |
+| The line on the map where the vote tips | The decision boundary |
+| One voter, an island for every stray | Overfitting: too sensitive to the sample (high variance) |
+| Everyone votes, the bigger group always wins | Underfitting: too blunt (high bias) |
+| Taking away the average, dividing by the spread | Standardising, or z-scores (the spread is the standard deviation) |
+| Averaging the neighbours' numbers instead of voting | KNN regression |
+| Doing no work until a question arrives | A lazy learner |
+| "Nearest" meaning less as measurements pile up | The curse of dimensionality |
+
+You did not need the names to do it. A library such as scikit-learn has a `KNeighborsClassifier` that does exactly this: it stores the points, and when asked, finds the nearest *k* and counts. It does not scale the measurements for you, so that step is still yours. To save time on big data, it can file the points in a tree beforehand so it does not have to measure to every single one.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 Two groups of labelled points and one new point without a label.
@@ -492,53 +817,4 @@ abline(h = 1, lty = 2, col = "red")
 text(6, 1.3, "ratio → 1 means all distances are similar\n(KNN can't distinguish neighbors)",
      col = "red", cex = 0.8)
 ```
-
-## On one page {.reference}
-
-```
-THE KNN RECIPE
-==============
-
-1. ALGORITHM:
-   - Compute distance from new point to all training points
-   - Find k closest neighbors
-   - Classification: majority vote
-   - Regression: average of neighbors' values
-
-2. THE FORMULA:
-
-   Euclidean distance:  d = √(Σ(xⱼ - xⱼ')²)
-   Prediction:          ŷ = mode of k nearest labels
-
-3. KEY PARAMETER:
-   k → number of neighbors  (tune via cross-validation)
-     small k = overfit (jagged boundary, memorizes noise)
-     large k = underfit (smooth boundary, misses patterns)
-     Rule of thumb: start with k = √n
-
-4. MANDATORY: SCALE YOUR FEATURES
-   Same reason as SVM — distance-based method
-
-5. STRENGTHS:
-   - No training needed (lazy learner)
-   - Handles non-linear boundaries naturally
-   - Multi-class without modification
-
-6. WEAKNESSES:
-   - Slow prediction (computes all distances)
-   - Stores entire training set
-   - Curse of dimensionality (fails with many features)
-   - No model to interpret
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. In one sentence, what does KNN do?
-2. Why is KNN called a "lazy learner"?
-3. What happens to the decision boundary when you increase $k$? Decrease it?
-4. Why is scaling mandatory for KNN?
-5. What is the curse of dimensionality and how does it affect KNN?
-6. When would you pick KNN over SVM? When would you pick SVM over KNN?
-7. How do you choose the best $k$? (Hint: not a formula)
+:::

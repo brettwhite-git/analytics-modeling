@@ -63,6 +63,7 @@
       return;
     }
 
+    host.inkApi = api;      // so a question above the figure can replay its draw-in when it is unveiled
     if (steps.length > 1) {
       var bar = document.createElement('div');
       bar.className = 'ink-figure__steps';
@@ -100,6 +101,77 @@
       loadFigure(host.getAttribute('data-figure')).then(function () { mountFigure(host); }, function (err) {
         if (window.console) console.error(err);
       });
+    });
+  }
+
+  /* ---------- questions: predict before you see ----------
+     ::: {.ask data-veil="true"}
+     The question, as a paragraph.
+
+     - **A choice.** What the page says back if the reader picks it.
+     - **Another choice.** Its reply.
+     :::
+     The list becomes buttons; picking one shows its reply. With data-veil, the figure that follows stays
+     faint until the reader has committed to an answer (or asks to see it anyway): never a locked door. */
+  function addAsks() {
+    Array.prototype.forEach.call(document.querySelectorAll('.ask'), function (ask) {
+      var list = ask.querySelector('ul');
+      if (!list) return;
+      var choices = document.createElement('div');
+      choices.className = 'ask__choices';
+      choices.setAttribute('role', 'group');
+      choices.setAttribute('aria-label', 'Your answer');
+      var reply = document.createElement('div');
+      reply.className = 'ask__reply';
+      reply.setAttribute('aria-live', 'polite');
+      var buttons = [];
+      Array.prototype.forEach.call(list.children, function (item) {
+        var strong = item.querySelector('strong');
+        if (!strong) return;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'ask__choice';
+        b.setAttribute('aria-pressed', 'false');
+        b.textContent = strong.textContent.replace(/[.:]\s*$/, '');
+        strong.parentNode.removeChild(strong);
+        var answer = document.createElement('div');
+        answer.className = 'ask__answer';
+        answer.hidden = true;
+        while (item.firstChild) answer.appendChild(item.firstChild);
+        reply.appendChild(answer);
+        b.addEventListener('click', function () {
+          buttons.forEach(function (other) { other.setAttribute('aria-pressed', other === b ? 'true' : 'false'); });
+          Array.prototype.forEach.call(reply.children, function (a) { a.hidden = a !== answer; });
+          ask.setAttribute('data-answered', 'true');
+          unveil();
+        });
+        buttons.push(b);
+        choices.appendChild(b);
+      });
+      list.parentNode.replaceChild(choices, list);
+      ask.appendChild(reply);
+
+      var figure = null;
+      function unveil() {
+        if (!figure || !figure.classList.contains('is-veiled')) return;
+        figure.classList.remove('is-veiled');
+        var skip = figure.querySelector('.ink-figure__unveil');
+        if (skip) skip.parentNode.removeChild(skip);
+        if (figure.inkApi && figure.inkApi.replay) figure.inkApi.replay();
+      }
+      if (ask.getAttribute('data-veil')) {
+        figure = ask.nextElementSibling;
+        while (figure && !figure.classList.contains('ink-figure')) figure = figure.nextElementSibling;
+        if (figure) {
+          figure.classList.add('is-veiled');
+          var skip = document.createElement('button');
+          skip.type = 'button';
+          skip.className = 'ink-figure__unveil';
+          skip.textContent = 'Answer above, or show it anyway';
+          skip.addEventListener('click', unveil);
+          figure.insertBefore(skip, figure.firstChild);
+        }
+      }
     });
   }
 
@@ -238,6 +310,7 @@
 
   function start() {
     addShell();
+    addAsks();
     mountFigures();
     addSeams();
     addRuler();

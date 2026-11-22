@@ -1,98 +1,521 @@
 ---
-title: "How do you reshape data so a model can use it?"
-subtitle: "Turn correlated predictors until they stop repeating each other, bend a lopsided response until its spread is even, and take out a shared trend before it passes for a relationship."
+title: "Is there a better way to look at the same numbers?"
+subtitle: "You will turn a ruler through a cloud of points by hand, then teach it to a computer. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="pca-figure" data-step="0" data-caption="Fig. 1 · two predictors that mostly repeat each other · made-up data, centred, same units"}
+Here are 30 people. Each dot is one person, placed by two numbers: their height, and their arm span (fingertip to fingertip, arms stretched out). Both are in centimetres.
+
+Look at the shape. Tall people have long arms, short people have short arms. The two numbers rise and fall together, so in a sense they are saying one thing twice. Sometimes the measurements you are handed are an awkward way to look at the data. This lesson is about finding a better way.
+
+## If you could keep only one number per person, which would you keep?
+
+Suppose you had room for one number per person, not two. You want to keep as much as you can of what tells these people apart.
+
+::: {.ask data-veil="true"}
+Which one number would you keep?
+
+- **Their height.** A fair choice: it is a real measurement and easy to explain. Press *keep across* and see how much it keeps.
+- **Their arm span.** Also fair. Press *keep up* and compare it with height.
+- **Something in between.** Good instinct. The dots lie along a slant, not along either edge. Press *keep a slanted one*.
 :::
 
-You are building a regression model and you have 50 predictors. Many of them measure nearly the same thing, the way an assessment score and a homework score do. That overlap causes three problems at once. Correlated predictors make the coefficients unstable, which is **multicollinearity**. Many predictors relative to the number of data points invite overfitting. And some of the predictors are mostly noise.
-
-If two features carry almost the same information, you do not need both. Look at the figure: neither axis runs along the cloud. The points spread along a diagonal, and each axis only sees part of that spread. Principal component analysis, PCA, finds the directions the data really varies along and lets you keep only those.
-
-## Turning the axes
-
-Draw a line through the centre of the cloud and drop every point straight onto it. Those landing spots are the **projections**, and their variance tells you how much of the spread that line captures. Turn the line and the number changes.
-
-::: {.ink-figure data-figure="pca-figure" data-step="1" data-caption="Fig. 2 · turn the line and watch the variance of the projections · computed live · made-up data"}
+::: {.ink-figure data-figure="reshape-ruler" data-step="0" data-caption="Fig. 1 · 30 made-up people: height across, arm span up"}
 :::
 
-One angle gives the largest variance. That direction is the first principal component, **PC1**. The second, **PC2**, is perpendicular to it and takes the most of whatever spread is left, and so on for as many dimensions as you have. PCA is a rotation of the coordinate system: nothing is stretched and no point moves relative to the others. In the rotated space the components are uncorrelated with each other, which is what removes the multicollinearity.
+Each button lays a ruler through the middle of the cloud. Every dot drops a thread straight onto the ruler, meeting it at a right angle, and the spot where it lands is that person's one number. Try all three.
 
-You do not have to search by turning a line. The recipe is: standardise the data so each feature has mean 0 and standard deviation 1, compute the covariance matrix ($\mathbf{X}^T \mathbf{X}$), find its eigenvalues and eigenvectors, and sort them by eigenvalue, largest first. The first eigenvector is PC1, the second is PC2.
+To judge a choice you need a way to say how spread out the landing spots are. Use the one that goes with the average: the **spread** is the average of the squared distances from the middle. By hand, with four spots at −3, −1, 1 and 3 (the middle is 0): 9 + 1 + 1 + 9 = 20, and 20 divided by 4 is **5**.
 
-| Concept | What it is | Plain English |
-|:--------|:-----------|:-------------|
-| **Eigenvector** | A direction in feature space | Which way does the data spread? |
-| **Eigenvalue** | A number paired with each eigenvector | How much variance is in that direction? |
+Keeping height keeps 42.8% of the spread. Keeping arm span keeps 57.2%. The slanted ruler keeps 92.9%. So the rule for this lesson: **the best single number is the one whose ruler spreads the dots out the most.** Spread is what tells people apart. If every landing spot were in the same place, the one number would tell you nothing.
 
-## What an eigenvalue describes
+## What about a slanted ruler at any angle?
 
-The eigenvector with the largest eigenvalue points in the direction of maximum variance. In the curve beside Fig. 2, the top of the hill is the first eigenvalue and the bottom of the valley is the second. Divide an eigenvalue by the sum of all of them and you have the share of the total variance that component carries.
+The slanted ruler in Fig. 1 sat at 45 degrees, half way between across and up. Nothing says that is the best slant.
 
-::: {.ink-figure data-figure="pca-figure" data-step="2" data-steps="2:both components|3:keep only PC1" data-caption="Fig. 3 · the components from the covariance matrix, then the cloud reduced to one of them · made-up data"}
+::: {.ink-figure data-figure="reshape-ruler" data-step="1" data-caption="Fig. 2 · turn the ruler; the curve fills in wherever you have been · made-up data"}
 :::
 
-Now read the two lines of arithmetic beside the figure. PC1 is some amount of $x_1$ plus some amount of $x_2$. So is PC2. Neither component is one of your original variables; each is a blend of all of them. The eigenvalue is the variance along that blend. [Exam trap: eigenvalues describe the components, not the original covariates. PCA rotates the space, and every component mixes all the original variables. A large first eigenvalue tells you PC1 matters. It does not tell you that $x_1$, or any single covariate, matters.]{.side}
+Drag the ring at the end of the ruler, or the slider, and watch two things: the threads, and the spread in the side column. When the ruler lies along the cloud, the threads are short and the landings are spread far apart. Turn it across the cloud and the landings bunch up in the middle.
 
-With correlated data, PC1 often carries so much that you can drop PC2 and lose very little. Press "keep only PC1" and each point slides onto the line: two numbers per point become one, and the variance you gave up is exactly the second eigenvalue. Two features are easy to draw, but the method earns its keep when it compresses many features into a few components. In the R below, ten correlated features driven by two hidden factors need only a handful of components to hold 90% of the variance. The rest is mostly noise.
+The small chart fills in as you explore: the spread at every angle you have visited. Press *try every angle* to sweep the ruler all the way round. It comes to rest at the top of the curve, at 50 degrees: a little better than 45. Leave it wherever you like before you move on: the code below will start from your angle.
 
-To choose how many to keep, plot the eigenvalues (or the percent of variance) for each component. This is the **scree plot**, and it is read like the elbow plot for k-means: look for the place where the curve flattens and keep the components before the drop-off. The alternative rule is to keep components until the cumulative variance explained reaches 80 to 90%.
+### Where does a dot land?
 
-## What PCA cannot see
+Before any code, work one landing by hand. Put a dot at 3 across and 4 up from the middle. Take a ruler that, for every 1 you go along it, goes 0.6 across and 0.8 up. (It really is 1 long: 0.6 × 0.6 + 0.8 × 0.8 = 0.36 + 0.64 = 1.)
 
-PCA ranks components by variance in X. It never looks at the response, so it does not rank them by predictive power for Y. A high-variance component might be irrelevant noise, and a low-variance component might hold the signal you need. The R below builds exactly that case: PC1 has the most variance and the least correlation with the response, and PC3 has the least variance and the most. [Exam trap: "keep the components with the most variance" and "keep the components that predict best" are different rules. Do not drop low-variance components blindly.]{.side}
+The landing spot is the dot's across times the ruler's across, plus the dot's up times the ruler's up: 3 × 0.6 + 4 × 0.8 = 1.8 + 3.2 = **5**. The dot lands 5 along the ruler. That makes sense: this dot sits exactly on the ruler, 5 from the middle, so its thread has no length at all.
 
-So treat PCA as a preprocessing step. The usual workflow is: start with many correlated predictors, run PCA to get uncorrelated components, use cross-validation to decide how many to keep, feed those components into regression (or SVM, KNN and so on), and validate the final model on test data. In the ten-feature example, three components reach a similar adjusted $R^2$ to all ten predictors, with a simpler model, less overfitting risk and no multicollinearity.
+::: {.ask}
+You are about to teach this to a computer. How would you know the code is right?
 
-Three things have to hold before PCA is worth running. Scaling is the one that bites: with income in the tens of thousands and age in the tens, unscaled PCA simply reports that income has bigger numbers.
+- **Run it on the 30 people and look at the picture.** The picture would look plausible whether the arithmetic was right or slightly off. You could not tell.
+- **Give it the dot and the ruler I just did by hand.** Yes. You know the answer is 5. If the code prints anything else, it is wrong, and you know straight away.
+:::
 
-| Requirement | Why | What happens if violated |
-|:------------|:----|:------------------------|
-| **Standardize first** | Features with larger ranges dominate | PCA reflects scale, not importance |
-| **Continuous features** | PCA assumes linear relationships | Binary/categorical features need other methods |
-| **Some correlation** | If features are uncorrelated, PCA can't compress | You get back the same features |
+### Now tell a computer
 
-## Bending the response
+First, one tidy-up. The ruler turns about the middle of the cloud, so measure every dot from the middle: take the average height away from each height, and the average arm span away from each arm span. The averages here are 172 cm and 173 cm, so a person 169 cm tall with a 171 cm arm span becomes (−3, −2): 3 cm shorter than average, and 2 cm less arm span.
 
-A different problem needs a different fix. Regression assumes **constant variance**: the residuals should be spread about equally everywhere. Real data often breaks this. Plot the residuals against the fitted values and you see a funnel, tight on the left and wide on the right. That is **heteroscedasticity**, and it makes the model's predictions unreliable: accurate for small values, wildly off for large ones.
+The cell below fetches the same 30 people you saw in Fig. 1, and the angle you left the ruler at. Fill in the blank and press **Run**. The first run takes a few seconds while Python starts.
 
-The Box-Cox transformation fixes it by transforming the response:
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, my_angle      # the 30 people in Fig. 1, and your angle from Fig. 2
+
+def centre(pairs):
+    n = len(pairs)                                  # how many pairs there are
+    avg_across = sum(p[0] for p in pairs) / n       # add up the first numbers, divide
+    avg_up = sum(p[1] for p in pairs) / n           # add up the second numbers, divide
+    return [(p[0] - avg_across, ____) for p in pairs]
+
+centred = centre(points)
+print("First person:", points[0], "becomes", centred[0])
+
+picture = {"points": centred, "hlines": [0], "vlines": [0], "xlim": (-30, 30), "ylim": (-30, 30),
+           "xlabel": "height - average", "ylabel": "arm span - average"}
+```
+::: {.py-solution}
+```python
+from page import points, my_angle      # the 30 people in Fig. 1, and your angle from Fig. 2
+
+def centre(pairs):
+    n = len(pairs)                                  # how many pairs there are
+    avg_across = sum(p[0] for p in pairs) / n       # add up the first numbers, divide
+    avg_up = sum(p[1] for p in pairs) / n           # add up the second numbers, divide
+    return [(p[0] - avg_across, p[1] - avg_up) for p in pairs]
+
+centred = centre(points)
+print("First person:", points[0], "becomes", centred[0])
+
+picture = {"points": centred, "hlines": [0], "vlines": [0], "xlim": (-30, 30), "ylim": (-30, 30),
+           "xlabel": "height - average", "ylabel": "arm span - average"}
+```
+:::
+:::
+
+A few Python words. `def` gives a set of steps a name, and `return` hands back the answer. `p[0]` is the first number of a pair and `p[1]` the second. The square brackets with a `for` inside build a new list, one entry for every pair. The picture is the same cloud, slid so that the middle sits where the two lines cross.
+
+Now the landing spot, and the ruler. `import math` brings in a toolbox with `sin` and `cos`: for a ruler at a given angle, they say how far across and how far up it points.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import math
+
+def land(p, ruler):
+    return p[0] * ruler[0] + ____         # across times the ruler's across, plus up times the ruler's up
+
+print(land((3, 4), (0.6, 0.8)))           # by hand this was 5
+
+def ruler_at(angle):
+    a = math.radians(angle)               # sin and cos want the angle in their own unit, not degrees
+    return (math.cos(a), math.sin(a))     # how far across, and how far up, a ruler at this angle points
+
+r = ruler_at(53.13)
+print("A ruler at 53.13 degrees points", round(r[0], 2), "across and", round(r[1], 2), "up")
+
+# only for drawing: the cloud, your ruler, and a thread from every point to where it lands
+def ruler_picture(pairs, angle):
+    r = ruler_at(angle)
+    reach = 0
+    threads = []
+    for p in pairs:
+        reach = max(reach, math.sqrt(p[0] * p[0] + p[1] * p[1]))   # the furthest any point is from the middle
+        s = land(p, r)
+        threads.append((p, (s * r[0], s * r[1])))        # from the point to its landing spot
+    return {"points": pairs, "segments": threads,
+            "accent": [(-reach * r[0], -reach * r[1]), (reach * r[0], reach * r[1])],
+            "xlim": (-1.1 * reach, 1.1 * reach), "ylim": (-1.1 * reach, 1.1 * reach),
+            "notes": ["angle " + str(angle)]}
+
+picture = ruler_picture(centred, my_angle)
+```
+::: {.py-solution}
+```python
+import math
+
+def land(p, ruler):
+    return p[0] * ruler[0] + p[1] * ruler[1]     # across times the ruler's across, plus up times the ruler's up
+
+print(land((3, 4), (0.6, 0.8)))           # by hand this was 5
+
+def ruler_at(angle):
+    a = math.radians(angle)               # sin and cos want the angle in their own unit, not degrees
+    return (math.cos(a), math.sin(a))     # how far across, and how far up, a ruler at this angle points
+
+r = ruler_at(53.13)
+print("A ruler at 53.13 degrees points", round(r[0], 2), "across and", round(r[1], 2), "up")
+
+# only for drawing: the cloud, your ruler, and a thread from every point to where it lands
+def ruler_picture(pairs, angle):
+    r = ruler_at(angle)
+    reach = 0
+    threads = []
+    for p in pairs:
+        reach = max(reach, math.sqrt(p[0] * p[0] + p[1] * p[1]))   # the furthest any point is from the middle
+        s = land(p, r)
+        threads.append((p, (s * r[0], s * r[1])))        # from the point to its landing spot
+    return {"points": pairs, "segments": threads,
+            "accent": [(-reach * r[0], -reach * r[1]), (reach * r[0], reach * r[1])],
+            "xlim": (-1.1 * reach, 1.1 * reach), "ylim": (-1.1 * reach, 1.1 * reach),
+            "notes": ["angle " + str(angle)]}
+
+picture = ruler_picture(centred, my_angle)
+```
+:::
+:::
+
+It should print 5.0, the answer you got by hand. The second line is a check on `ruler_at`: the ruler from the hand example, 0.6 across and 0.8 up, is the one at about 53 degrees. The picture under the cell is your ruler from Fig. 2, with every thread, drawn from the code's own numbers.
+
+## Which angle spreads them out the most?
+
+By hand you turned the ruler and watched a number. The computer will do the same, one degree at a time, and remember the best angle so far. `for angle in range(180)` repeats the indented lines with `angle` set to 0, then 1, then 2, up to 179. (At 180 degrees the ruler is back where it started, pointing the other way.) `if` runs its lines only when the test is true.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def spread(values):
+    total = 0
+    for v in values:
+        total = total + v * v                # the middle is 0, so v is the distance from it
+    return total / len(values)
+
+def best_ruler(pairs):
+    best_angle = 0
+    best_spread = 0
+    for angle in range(180):                 # 0, 1, 2, ... up to 179 degrees
+        s = spread([land(p, ruler_at(angle)) for p in pairs])
+        if s > best_spread:
+            best_spread = s
+            best_angle = ____                # a bigger spread: which angle should it remember?
+    return best_angle, best_spread
+
+mine = spread([land(p, ruler_at(my_angle)) for p in centred])
+best_angle, best_spread = best_ruler(centred)
+total = spread([p[0] for p in centred]) + spread([p[1] for p in centred])
+
+print("Your angle:", my_angle, "  spread", round(mine, 1))
+print("Best angle:", best_angle, "  spread", round(best_spread, 1), "of", round(total, 1))
+
+frames = [ruler_picture(centred, a) for a in range(0, 180, 6)]    # the ruler at every 6th angle
+frames.append(ruler_picture(centred, best_angle))                  # and at the best one
+```
+::: {.py-solution}
+```python
+def spread(values):
+    total = 0
+    for v in values:
+        total = total + v * v                # the middle is 0, so v is the distance from it
+    return total / len(values)
+
+def best_ruler(pairs):
+    best_angle = 0
+    best_spread = 0
+    for angle in range(180):                 # 0, 1, 2, ... up to 179 degrees
+        s = spread([land(p, ruler_at(angle)) for p in pairs])
+        if s > best_spread:
+            best_spread = s
+            best_angle = angle               # a bigger spread: remember this angle
+    return best_angle, best_spread
+
+mine = spread([land(p, ruler_at(my_angle)) for p in centred])
+best_angle, best_spread = best_ruler(centred)
+total = spread([p[0] for p in centred]) + spread([p[1] for p in centred])
+
+print("Your angle:", my_angle, "  spread", round(mine, 1))
+print("Best angle:", best_angle, "  spread", round(best_spread, 1), "of", round(total, 1))
+
+frames = [ruler_picture(centred, a) for a in range(0, 180, 6)]    # the ruler at every 6th angle
+frames.append(ruler_picture(centred, best_angle))                  # and at the best one
+```
+:::
+:::
+
+`best_ruler` hands back two answers at once, and `best_angle, best_spread = best_ruler(centred)` catches them in two names. Watch the margin while it runs: the lines inside the loop run 180 times. The picture then turns the ruler round and lets it settle on the best angle. Compare what it prints with Fig. 2 after *try every angle*: the best angle is 50 degrees, with a spread of 132.1 out of 141.3. Same dots, same rule, same answer.
+
+`total` is the spread across plus the spread up: everything there is to keep. Your own angle's spread is printed beside the best, so you can see how close your hand got.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write a centred point as $(x_i, y_i)$ and a ruler at angle $\theta$ as $(\cos\theta, \sin\theta)$. The landing spot of point $i$ is
+
+$$t_i = x_i \cos\theta + y_i \sin\theta$$
+
+and the spread along the ruler is
+
+$$\frac{1}{n} \sum_{i=1}^{n} t_i^2$$
+
+Read the big Σ as "add these up, for every point from 1 to $n$". The best ruler is the $\theta$ that makes this as large as possible.
+:::
+
+## What did you lose?
+
+The best ruler keeps 93.5% of the spread. The other 6.5% has not vanished: it lies across the ruler, in the threads.
+
+::: {.ink-figure data-figure="reshape-ruler" data-step="2" data-caption="Fig. 3 · the best ruler, the one at a right angle to it, and every person collapsed onto the first · made-up data"}
+:::
+
+The thin line crosses the best ruler at a right angle. Measure the spread along it and you get 9.2. Add the two: 132.1 + 9.2 = 141.3, exactly the total. That is no accident. Any two rulers at a right angle split the total spread between them, the same way 3 × 3 + 4 × 4 makes 5 × 5. The best ruler takes as much of it as it can, and the one at a right angle holds whatever is left.
+
+Press *keep one number*. Every person slides along their thread onto the best ruler. Two numbers per person have become one, and the short threads you watched disappear are all that was lost.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+first = ruler_at(best_angle)
+second = ruler_at(best_angle + 90)               # at a right angle to the first
+s1 = spread([land(p, first) for p in centred])
+s2 = spread([land(p, second) for p in centred])
+
+print("Along the best ruler:", round(s1, 1))
+print("At a right angle:    ", round(s2, 1))
+print("Together:            ", round(s1 + s2, 1), "  the total was", round(total, 1))
+print("Share kept:", round(100 * s1 / ____, 1), "%")
+
+frames = []
+for step in range(9):                            # slide every point a little further onto the ruler
+    t = step / 8                                 # 0 at the start, 1 when it has landed
+    moved = []
+    for p in centred:
+        s = land(p, first)
+        moved.append((p[0] + t * (s * first[0] - p[0]), p[1] + t * (s * first[1] - p[1])))
+    frames.append({"points": moved, "xlim": (-30, 30), "ylim": (-30, 30),
+                   "accent": [(-27 * first[0], -27 * first[1]), (27 * first[0], 27 * first[1])],
+                   "lines": [[(-27 * second[0], -27 * second[1]), (27 * second[0], 27 * second[1])]]})
+```
+::: {.py-solution}
+```python
+first = ruler_at(best_angle)
+second = ruler_at(best_angle + 90)               # at a right angle to the first
+s1 = spread([land(p, first) for p in centred])
+s2 = spread([land(p, second) for p in centred])
+
+print("Along the best ruler:", round(s1, 1))
+print("At a right angle:    ", round(s2, 1))
+print("Together:            ", round(s1 + s2, 1), "  the total was", round(total, 1))
+print("Share kept:", round(100 * s1 / total, 1), "%")
+
+frames = []
+for step in range(9):                            # slide every point a little further onto the ruler
+    t = step / 8                                 # 0 at the start, 1 when it has landed
+    moved = []
+    for p in centred:
+        s = land(p, first)
+        moved.append((p[0] + t * (s * first[0] - p[0]), p[1] + t * (s * first[1] - p[1])))
+    frames.append({"points": moved, "xlim": (-30, 30), "ylim": (-30, 30),
+                   "accent": [(-27 * first[0], -27 * first[1]), (27 * first[0], 27 * first[1])],
+                   "lines": [[(-27 * second[0], -27 * second[1]), (27 * second[0], 27 * second[1])]]})
+```
+:::
+:::
+
+`append` adds one more entry to the end of a list. The picture plays the collapse that Fig. 3 showed, worked out by your code: 9 small slides, each a little closer to the ruler.
+
+With two measurements, going from two numbers to one is a small saving. With fifty measurements that mostly rise and fall together, a handful of rulers can keep nearly all of the spread. You find them the same way: the first ruler takes the most, the next one, at a right angle to it, takes the most of what is left, and so on until you have kept enough.
+
+## How does it break?
+
+Nothing so far cared what units the measurements were in, because both were centimetres. Suppose the height had been written down in metres instead: 1.69 rather than 169. Same people, same tape measure. Run it.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+mixed = centre([(p[0] / 100, p[1]) for p in points])    # height in metres, arm span still in cm
+
+print("First person in cm:", centred[0])
+print("Height in metres:  ", (round(mixed[0][0], 2), mixed[0][1]))
+print("Best angle, all in cm:        ", best_ruler(centred)[0])
+print("Best angle, height in metres: ", best_ruler(mixed)[0])
+
+picture = ruler_picture(mixed, best_ruler(mixed)[0])
+```
+:::
+
+`best_ruler(...)[0]` takes the first of the two answers it hands back, the angle. In metres, every height is within 0.2 of the middle, while arm spans still wander by many centimetres. So the best ruler points almost straight up: it keeps arm span and ignores height. The data did not change. Only the way one number was written down. The picture shows it: drawn on the same scale both ways, the heights have squashed into a thin column.
+
+::: {.ask}
+What would you do about it?
+
+- **Make sure both are in the same units.** That works here. It does not work for age in years and income in dollars, which can never share a unit.
+- **Scale each measurement first.** Yes. Divide each centred measurement by its own typical distance from the middle. Then a "1" means "one typical step" for every measurement, whatever its units.
+- **Leave out the measurement with small numbers.** That is what the ruler just did, without being asked. It is the problem, not the cure.
+:::
+
+The typical distance from the middle is the square root of the spread (`math.sqrt`: the number that, times itself, gives the one you started with). You met this tidy-up as scaling.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def scaled(pairs):
+    across = math.sqrt(spread([p[0] for p in pairs]))    # typical distance from the middle, across
+    up = math.sqrt(spread([p[1] for p in pairs]))        # and up
+    return [(p[0] / across, p[1] / ____) for p in pairs]
+
+mixed = centre([(p[0] / 100, p[1]) for p in points])    # the same people, height in metres
+
+print("Scaled, starting from cm:    ", best_ruler(scaled(centred))[0])
+print("Scaled, starting from metres:", best_ruler(scaled(mixed))[0])
+
+picture = ruler_picture(scaled(mixed), best_ruler(scaled(mixed))[0])
+```
+::: {.py-solution}
+```python
+def scaled(pairs):
+    across = math.sqrt(spread([p[0] for p in pairs]))    # typical distance from the middle, across
+    up = math.sqrt(spread([p[1] for p in pairs]))        # and up
+    return [(p[0] / across, p[1] / up) for p in pairs]
+
+mixed = centre([(p[0] / 100, p[1]) for p in points])    # the same people, height in metres
+
+print("Scaled, starting from cm:    ", best_ruler(scaled(centred))[0])
+print("Scaled, starting from metres:", best_ruler(scaled(mixed))[0])
+
+picture = ruler_picture(scaled(mixed), best_ruler(scaled(mixed))[0])
+```
+:::
+:::
+
+After scaling, metres and centimetres give the same answer, and the cloud has its slant back. The angle is 45 degrees rather than 50, because now each measurement counts equally instead of in centimetres.
+
+### What the ruler does not know
+
+Two more limits, and neither is a bug.
+
+The ruler is chosen for spread, nothing else. It never asks whether the new number is useful for predicting anything. Sometimes the most spread-out direction is also the useful one. Sometimes it is mostly noise, and the thing you care about hides in a direction with very little spread, which a ruler chosen for spread would throw away. If you plan to predict with the new numbers, test the predictions, as in the lesson on unseen data.
+
+Each new number is a blend. The best ruler points 0.64 across and 0.77 up, so every landing is a bit of height plus a bit of arm span. You cannot read it as "height matters most" or "arm span matters most". The ruler turned the picture. It did not rank your measurements.
+
+## What about a lopsided measurement?
+
+A different awkward measurement. Here are 60 made-up waiting times at a clinic, in minutes. Most people wait a few minutes. A few wait half an hour or more. Piled up, they make a heap on the left and a long thin tail on the right.
+
+The average gets dragged out by the tail: 41 of the 60 waits are below it. A pile that was balanced would have about half on each side.
+
+::: {.ask data-veil="true"}
+How could you pull that tail in without throwing anyone out?
+
+- **Leave out the long waits.** They are real people who really waited. Removing them changes the facts, not the way you look at them.
+- **Subtract something from every wait.** That slides the whole pile along. The tail is just as long as before.
+- **Squeeze the big numbers more than the small ones.** Yes. A stretch that pulls 50 in a lot and 2 in a little brings the tail back toward the heap.
+:::
+
+::: {.ink-figure data-figure="boxcox-figure" data-step="0" data-caption="Fig. 4 · 60 made-up waiting times, and a stretch you control"}
+:::
+
+Slide the strength and watch the pile even out, or press *take the logarithm*. The numbers under the axis stay in minutes, so you can see what is happening: 2, 5, 10, 20 and 50 start far apart at the right and get pulled together.
+
+The **logarithm** counts how many times you multiply by 10 to get there. 10 is one ten, so its logarithm is 1. 100 is 10 × 10, so its logarithm is 2. And 1 needs no tens at all, so its logarithm is 0. A number between 10 and 100, such as 20, lands between 1 and 2 (about 1.3). So the logarithm turns "times 10" into "plus 1": the gap from 5 to 50 becomes the same size as the gap from 0.5 to 5. Long waits get pulled in hard, short ones hardly at all.
+
+At the log, the lopsidedness number in the side column is close to 0 and 32 of the 60 waits sit below the average: nearly half. Slide past it and the pile tips the other way. The stretch can be overdone.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import waits                         # the 60 waiting times in Fig. 4, in minutes
+
+print(math.log10(10), math.log10(100), math.log10(1))     # 1, 2 and 0, as worked by hand
+
+logs = [math.log10(w) for w in waits]
+
+def below_average(values):
+    avg = sum(values) / len(values)
+    count = 0
+    for v in values:
+        if v < avg:
+            count = count + 1
+    return count
+
+print("In minutes:", below_average(waits), "of 60 below the average")
+print("After log: ", below_average(____), "of 60 below the average")
+
+bars = []
+for i in range(18):                            # boxes 0 to 0.1, 0.1 to 0.2, ... up to 1.8
+    low = i / 10
+    count = 0
+    for v in logs:
+        if low <= v < low + 0.1:
+            count = count + 1
+    bars.append((low + 0.05, count))
+picture = {"bars": bars, "vlines": [sum(logs) / len(logs)],
+           "xlabel": "logarithm of minutes", "ylabel": "how many"}
+```
+::: {.py-solution}
+```python
+from page import waits                         # the 60 waiting times in Fig. 4, in minutes
+
+print(math.log10(10), math.log10(100), math.log10(1))     # 1, 2 and 0, as worked by hand
+
+logs = [math.log10(w) for w in waits]
+
+def below_average(values):
+    avg = sum(values) / len(values)
+    count = 0
+    for v in values:
+        if v < avg:
+            count = count + 1
+    return count
+
+print("In minutes:", below_average(waits), "of 60 below the average")
+print("After log: ", below_average(logs), "of 60 below the average")
+
+bars = []
+for i in range(18):                            # boxes 0 to 0.1, 0.1 to 0.2, ... up to 1.8
+    low = i / 10
+    count = 0
+    for v in logs:
+        if low <= v < low + 0.1:
+            count = count + 1
+    bars.append((low + 0.05, count))
+picture = {"bars": bars, "vlines": [sum(logs) / len(logs)],
+           "xlabel": "logarithm of minutes", "ylabel": "how many"}
+```
+:::
+:::
+
+The counts should match Fig. 4 at the log: 41 below the average before, 32 after. The pile under the cell is the stretched waits, boxed in tenths, with the average drawn through it. The figure uses a different logarithm (one built on 2.718 rather than 10), but any logarithm gives the same shape, only a different scale along the bottom.
+
+Why bother? When you fit a line to a lopsided measurement, the misses are usually small where the values are small and large where they are big. Plotted, the misses fan out like a funnel. Methods that fit lines work best when the misses are about the same size everywhere, and the stretch often closes the funnel. It only works on numbers above zero: there is no logarithm of 0 or of a negative number.
+
+A related tidy-up, for measurements taken over time. If two things both drift steadily upward month by month, such as ice cream sales and drownings over a warming year, they will rise together even if neither has anything to do with the other. Fit a straight line to each against time, take it away, and compare what is left. Once the shared drift is gone, the false link usually goes with it.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+The stretch in Fig. 4 slides through a family of powers. With $y$ the original value and $\lambda$ (read "lambda") the power,
 
 $$T(y) = \begin{cases} \dfrac{y^{\lambda} - 1}{\lambda} & \text{if } \lambda \neq 0 \\[6pt] \log(y) & \text{if } \lambda = 0 \end{cases}$$
 
-Here $y$ is the original response, the thing you are predicting, $T(y)$ is the stabilised version, and the power $\lambda$ controls the shape of the transformation. A few values of $\lambda$ are worth knowing by name. [At λ = 0 the top formula would divide by zero, so the log takes its place. The response has to be positive for any of this to work.]{.side}
+The slider's strength is $1 - \lambda$. A few powers have names:
 
-| $\lambda$ | Transform | Effect |
-|:---------:|:----------|:-------|
-| 1 | $y$ (no change) | Data is fine as-is |
-| 0.5 | $\sqrt{y}$ | Mild compression of large values |
-| 0 | $\log(y)$ | Strong compression — common in practice |
-| -1 | $1/y$ | Very aggressive compression |
+| $\lambda$ | Stretch | Effect |
+|:---------:|:--------|:-------|
+| 1 | $y$ (no change) | none |
+| 0.5 | $\sqrt{y}$ | mild pull on the large values |
+| 0 | $\log(y)$ | strong pull, the most common choice |
+| −1 | $1/y$ | very strong |
 
-::: {.ink-figure data-figure="boxcox-figure" data-step="0" data-caption="Fig. 4 · a lopsided sample at λ = 1, with the bell curve of the same mean and spread · made-up data"}
+At $\lambda = 0$ the top line would divide by zero, so the logarithm takes its place. Taking out a drift over time is
+
+$$y_{\text{without drift}} = y - (a_0 + a_1 \cdot \text{time})$$
+
+where $a_0 + a_1 \cdot \text{time}$ is the straight line fitted to $y$ against time.
 :::
 
-You do not pick $\lambda$ by eye. Box-Cox finds the best value automatically by trying different values and taking the one that makes the residuals most normally distributed. Fig. 4 shows the starting point on a single lopsided sample: at $\lambda = 1$ the large values trail off in a long tail and a bell curve does not fit.
+## What you just built
 
-::: {.ink-figure data-figure="boxcox-figure" data-step="1" data-steps="1:the log|2:slide λ" data-caption="Fig. 5 · the same sample, transformed live in your browser · made-up data"}
-:::
+Everything you did has a name:
 
-As $\lambda$ falls, the large values are pulled in harder and the tail shortens. Slide it and watch the skewness: somewhere near the log it crosses zero, and if you keep going the transform overshoots. Applied to a real response, the right $\lambda$ makes the funnel in the residual plot disappear and leaves residuals that are more uniform and more normal.
+| What you did | What it is called |
+|:--|:--|
+| Measuring every dot from the middle | Centring |
+| The spread: average squared distance from the middle | Variance |
+| The slanted ruler that keeps the most spread | The first principal component (PC1) |
+| The ruler at a right angle to it | The second principal component (PC2) |
+| How far across and how far up the ruler points | The loadings, or an eigenvector |
+| The spread along the best ruler | The first eigenvalue |
+| Where a dot lands on the ruler | Its score, or projection |
+| The share of the spread kept | Proportion of variance explained |
+| Keeping one number instead of two | Principal component analysis (PCA), a kind of dimension reduction |
+| Dividing by the typical distance from the middle | Standardising (z-scores) |
+| Stretching a lopsided measurement | A transformation: the log, or the Box-Cox family of powers |
+| The lopsidedness number | Skewness |
+| Taking a steady drift out of a series | Detrending |
 
-## Taking out the trend
+A library does not try 180 angles. For two or for fifty measurements, it finds every ruler at once with some linear algebra: the rulers are the eigenvectors of a table of how each pair of measurements varies together, and the spreads along them are the eigenvalues. You decide how many to keep by plotting the spread each one holds and looking for where the drop flattens (a scree plot), or by keeping rulers until they hold 80 to 90% of the total. Measurements that move together cause trouble for a fitted line, because the line cannot tell which one deserves the credit. Rulers at right angles do not move together, which is why PCA is often run before fitting. It only saves anything when some measurements move together; if none do, the best rulers are just your original measurements again. And it needs measurements that are numbers on a scale, not categories. Box-Cox, likewise, tries many powers and picks the one that leaves the misses most balanced.
 
-Sometimes the trouble is time. When you want to study the relationship between X and Y but both are trending over time, the shared trend creates a **spurious correlation**. Ice cream sales and drownings both climb through the months of the example below, and they correlate strongly without one having anything to do with the other.
-
-The fix is to remove the trend first and analyse what is left. Fit a line against time and subtract it:
-
-$$y_{\text{detrended}} = y - (\hat{a}_0 + \hat{a}_1 \cdot \text{time})$$
-
-Do this to both variables and compare the detrended versions. Once the time trend is gone, the spurious correlation goes with it.
-
-## Run it yourself {.reference}
-
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 Two features that carry overlapping information.
@@ -496,76 +919,4 @@ cat(sprintf("  Adj R² = %.3f\n", summary(fit_pca)$adj.r.squared))
 cat("\n10 predictors → 3 components with similar Adj R²")
 cat("\nSimpler model, less overfitting risk, no multicollinearity")
 ```
-
-## On one page {.reference}
-
-```
-PCA RECIPE
-==========
-
-1. PURPOSE: Compress many correlated features into fewer uncorrelated components
-
-2. ALGORITHM:
-   Standardize → Covariance matrix → Eigenvalues/vectors → Sort by variance
-
-3. KEY CONCEPTS:
-   Eigenvector = direction of spread (becomes a component)
-   Eigenvalue = how much variance in that direction
-   PC1 = most variance, PC2 = second most, etc.
-
-4. HOW MANY COMPONENTS?
-   Scree plot elbow OR cumulative variance ≥ 80-90%
-
-5. CRITICAL TRAP:
-   PCA ranks by VARIANCE in X, not by PREDICTIVE POWER for Y
-   High-variance PC might be noise. Low-variance PC might be the signal.
-   ALWAYS validate with cross-validation.
-
-6. REQUIREMENTS:
-   - ALWAYS standardize first (scale. = TRUE)
-   - Continuous features
-   - Some correlation among features (otherwise PCA can't compress)
-
-7. EIGENVALUES DESCRIBE COMPONENTS, NOT ORIGINAL VARIABLES:
-   PCA rotates the space. Every component is a mix of all the original features,
-   so an eigenvalue alone says nothing about one original feature's importance.
-
-BOX-COX RECIPE
-==============
-
-1. PURPOSE: Stabilize variance (fix heteroscedasticity)
-
-2. FORMULA: T(y) = (y^λ - 1) / λ
-
-3. SPECIAL CASES:
-   λ = 1  → no transform     λ = 0   → log(y)
-   λ = 0.5 → √y              λ = -1  → 1/y
-
-4. HOW: R finds optimal λ automatically (boxcox function)
-
-5. WHEN: Residual plot shows funnel shape (variance not constant)
-
-DETRENDING
-==========
-Remove time trend before analyzing relationships:
-  y_detrended = y - (a₀ + a₁ × time)
-Prevents spurious correlations caused by shared time trends.
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What problem does PCA solve? When would you use it?
-2. What is an eigenvector in PCA terms? What does the eigenvalue tell you?
-3. Why must you standardize before PCA?
-4. You run PCA and keep only PC1 and PC2 (85% variance). A colleague says
-   you're losing important information. Could they be right? Why?
-5. What does Box-Cox fix? How do you detect the problem it solves?
-6. $\lambda = 0$ in Box-Cox means you should apply which transformation?
-7. You find a strong correlation between umbrella sales and car accidents.
-   What should you do before concluding umbrellas cause accidents?
-8. PCA gives you 5 components from 20 features. How do you decide which
-   components to keep?
-9. The first eigenvalue is much larger than the rest. Can you conclude that
-   the first original covariate is the most important one? Why not?
+:::

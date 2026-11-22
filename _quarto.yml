@@ -47,37 +47,38 @@ format:
       - ink/site.css
       - ink/ink-kit.css
 
-# The contents of the site: a few chapters, each a group of lessons, in the order to read them.
-# The template draws the left-hand contents from this list; ink/ink.js uses the same markup for the
-# breadcrumb, the lesson number and the previous / next links.
+# The contents of the site: a few chapters, each a group of lessons, in the order to read them,
+# from the simplest idea to the hardest. The template draws the left-hand contents from this list;
+# ink/ink.js uses the same markup for the breadcrumb, the lesson number and the previous / next links.
 ink-parts:
-  - title: "Sorting and grouping"
+  - title: "Foundations"
     chapters:
-      - { href: "svm-from-scratch.html", title: "Support vector machines" }
-      - { href: "knn-from-scratch.html", title: "K nearest neighbours" }
-      - { href: "cross-validation-from-scratch.html", title: "Cross-validation" }
-      - { href: "kmeans-from-scratch.html", title: "K-means" }
+      - { href: "points-and-distance.html", title: "Points and distance" }
+      - { href: "a-better-guess.html", title: "A better guess" }
+  - title: "Predicting a number"
+    chapters:
+      - { href: "regression-from-scratch.html", title: "Fitting a line" }
+      - { href: "variable-selection-from-scratch.html", title: "Choosing what to keep" }
+  - title: "Sorting into classes"
+    chapters:
+      - { href: "knn-from-scratch.html", title: "Nearest neighbours" }
+      - { href: "svm-from-scratch.html", title: "The widest gap" }
+      - { href: "cart-from-scratch.html", title: "Decision trees" }
+  - title: "Trusting a model"
+    chapters:
+      - { href: "cross-validation-from-scratch.html", title: "Testing on unseen data" }
+  - title: "Finding structure"
+    chapters:
+      - { href: "kmeans-from-scratch.html", title: "Finding groups" }
+      - { href: "pca-boxcox-from-scratch.html", title: "Reshaping data" }
+      - { href: "missing-data-from-scratch.html", title: "Missing values" }
   - title: "Data over time"
     chapters:
-      - { href: "cusum-from-scratch.html", title: "CUSUM" }
-      - { href: "time-series-from-scratch.html", title: "Smoothing, ARIMA and GARCH" }
-  - title: "Predicting an outcome"
+      - { href: "cusum-from-scratch.html", title: "Spotting a change" }
+      - { href: "time-series-from-scratch.html", title: "Forecasting" }
+  - title: "Deciding"
     chapters:
-      - { href: "regression-from-scratch.html", title: "Linear and logistic regression" }
-      - { href: "variable-selection-from-scratch.html", title: "LASSO, ridge and stepwise" }
-      - { href: "cart-from-scratch.html", title: "CART" }
-  - title: "Preparing the data"
-    chapters:
-      - { href: "pca-boxcox-from-scratch.html", title: "PCA and Box-Cox" }
-      - { href: "missing-data-from-scratch.html", title: "Missing data" }
-  - title: "Experiments and decisions"
-    chapters:
-      - { href: "doe-from-scratch.html", title: "A/B tests, factorials and bandits" }
-      - { href: "simulation-markov-from-scratch.html", title: "Queues and Markov chains" }
-      - { href: "optimization-from-scratch.html", title: "Linear and integer programs" }
+      - { href: "doe-from-scratch.html", title: "Running an experiment" }
+      - { href: "simulation-markov-from-scratch.html", title: "Simulating chance" }
+      - { href: "optimization-from-scratch.html", title: "The best plan" }
       - { href: "advanced-topics-from-scratch.html", title: "Beyond the basics" }
-  - title: "Practice"
-    chapters:
-      - { href: "comprehensive-quiz.html", title: "Comprehensive quiz" }
-      - { href: "binary-choice-drill.html", title: "Binary choice drill" }
-      - { href: "confusion-matrix-drill.html", title: "Confusion matrix drill" }

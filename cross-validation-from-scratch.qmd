@@ -1,78 +1,517 @@
 ---
 title: "How do you know a model will work on data it has not seen?"
-subtitle: "A score measured on the points a model was fitted to tells you almost nothing. The fix is to be strict about which rows are allowed to do which job."
+subtitle: "You will score models by hand first, then teach a computer to do it. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="cv-figure" data-step="0" data-caption="Fig. 1 · scored on the same points it was fitted to, the wiggly curve wins · made-up data"}
+You run a lemonade stand. Each dot below is one day: how many hours the sun shone, and how many jugs you sold. You want a model that, given tomorrow's sunshine, guesses tomorrow's sales.
+
+The tree in the last lesson ended perfect on the data it learned from, and worse on fresh data. That is not bad luck. It happens to every model that is scored on the data it learned from. This lesson is about how to score a model honestly.
+
+## Which of these two would you trust?
+
+Two people fitted a curve to the same ten days. One drew a gentle curve. The other drew a wiggly one that passes through every dot.
+
+::: {.ink-figure data-figure="unseen-fits" data-step="0" data-caption="Fig. 1 · ten days at a lemonade stand, and two curves fitted to them · made-up data"}
 :::
 
-You build a model and it predicts your training data almost perfectly. That does not make it good. It may have memorised the data, like a student who has memorised the answers to last year's paper and cannot solve a new problem.
+Press *measure the gentle one*. A thread grows from each dot to the curve. Each thread is one miss: the jugs you really sold, minus the jugs the curve guessed.
 
-In the figure, each cell in the strip is one observation, and both curves were fitted to all forty. The wiggly one has the lower error on those forty points, 0.40 against 0.62. On new points from the same source it is the worse of the two, 1.02 against 0.73. Nothing in the training score warns you. To tell the two models apart you need data the model has never seen.
+To score a curve, square each miss and take the average. Squaring makes every miss count as positive, and makes big misses count more. Try two misses by hand, 1 and 3: 1 × 1 = 1, 3 × 3 = 9, and (1 + 9) ÷ 2 = **5**. Call this the **average squared miss**. Smaller is better.
 
-## Hold some data back
+Now press *measure the wiggly one*. It touches every dot, so every thread has length zero. Its score is 0.00, the best a score can be.
 
-The simplest fix is to split the data in two before you fit anything. The **training set**, about 70 to 80 percent of the rows, is used to build the model. The **test set**, the remaining 20 to 30 percent, is used to evaluate it. The model never sees the test rows during fitting, so its performance on them tells you how it will do on new data.
+::: {.ask data-veil="true"}
+Tomorrow brings a new day. Which curve would you trust to guess its sales?
 
-Scored this way, an overfit model gives itself away: excellent on the training rows, poor on the held-out rows. A sound model performs about the same on both. That gap is the signal to look for. High training accuracy with low held-out accuracy means overfitting, and when the two numbers are close the model generalises. The held-out number is the one that matters. [Exam trap: "our model is 98% accurate" means nothing until you ask on what data. A model that memorises gets 100% on its own training set.]{.side}
-
-A single split has a catch. Which rows land in the held-out part is random, and a different random split gives a different score. Run the same model on twenty different splits and you get twenty different answers, so one split leaves your evaluation partly down to luck. The cure is to make many splits and average them, which is what cross-validation does.
-
-## Three sets, three jobs
-
-Usually you are not scoring one model. You are choosing: which $k$ in KNN, which C in an SVM, which degree of polynomial. Choosing is a second job, and it needs its own data. So the rows are given three roles. The **training set** fits every candidate. The **validation set** compares the fitted candidates so you can pick one. The **test set** estimates how good the chosen model is, once, at the very end.
-
-::: {.ink-figure data-figure="cv-figure" data-step="1" data-caption="Fig. 2 · one data set, three jobs · made-up data"}
+- **The wiggly one.** Its score says it never misses. But it was fitted to these ten days, and then scored on the same ten days. That is like marking your own homework with the answers in front of you. Look at what it does between the dots.
+- **The gentle one.** It misses every day by a little. But look at the wiggly one between the dots: it swoops up and down where there is no day to support it. A new day will land somewhere in those gaps.
 :::
 
-You cannot reuse the validation score of the winner as your estimate of its quality. Each candidate's validation error is partly real quality and partly luck in which rows happened to be in the validation set. When you pick the lowest of several scores, you tend to pick a model whose luck was good, so the winning score is optimistically biased: it looks better than the model really is. In the figure, the winner's validation error on this data set is 0.38 and its test error is 1.00. Repeating the whole recipe on 300 fresh data sets, the winner's validation error averages 0.71 and its test error 1.61.
+## What happens on points it has not seen?
 
-The test set exists to remove that bias, and it only works if it played no part in any choice. Try twenty values of $k$ on the test set and keep the best, and you have fitted to the test set. It is no longer a fair evaluation. [Exam trap: the test set is used once, at the very end, on the one model you have already chosen. Tuning on it turns it into a validation set and leaves you with no honest estimate.]{.side}
-
-## Folds inside the training set
-
-A fixed validation set brings back the problem of the single split: its score depends on which rows it happens to hold. **k-fold cross-validation** replaces the fixed validation set with a rotation. Set the test set aside first. Divide the training data into $k$ equal groups, called folds. Hold out fold 1, fit on the other folds, and score the model on fold 1. Then hold out fold 2, fit on the rest, and score on fold 2. Repeat until every fold has had its turn, and average the $k$ scores. Every training row is held out exactly once.
-
-::: {.ink-figure data-figure="cv-figure" data-step="2" data-steps="2:step through the folds|3:change k" data-caption="Fig. 3 · folds inside the training cells, refitted live in your browser · made-up data"}
+::: {.ink-figure data-figure="unseen-fits" data-step="1" data-caption="Fig. 2 · the same two curves, scored on new days from the same stand · made-up data"}
 :::
 
-The cross-validation estimate is the average error across the folds:
+Press *bring 5 new days* a few times. The new days come from the same stand and the same weather, so they are drawn as crosses on the same picture. The threads now show the wiggly curve's misses on days it never saw.
 
-$$\text{CV}(k) = \frac{1}{k} \sum_{i=1}^{k} \text{Error}_i$$
+Watch the "new" column. After ten new days the gentle curve's miss is about 0.7 and the wiggly one's is about 1.8. After all thirty it is 0.86 against 1.42. The curve with the perfect score loses.
 
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $k$ | Number of folds | How many splits you make |
-| $\text{Error}_i$ | Error on fold $i$ when it is the one held out | How badly the model did on that fold |
-| $\text{CV}(k)$ | Cross-validation score | The averaged, reliable performance estimate |
+The wiggly curve did not learn how sunshine sells lemonade. It learned these ten days, noise and all. The gentle curve learned less about these ten days, and more about the stand.
 
-For classification, the error is usually the misclassification rate, the percentage wrong. For regression it is usually RMSE or MSE; the figure uses mean squared error.
+So here is the rule for this whole lesson: **a model's score on the data it learned from flatters it. To know how it will do next time, score it on days it never saw.**
 
-Notice where the folds are. Cross-validation is a method, something you do, and it is done within the training data. The folds take over the job of the validation set, and the data is still split into just two parts: training, where cross-validation happens, and test, which is held out. [Exam trap: cross-validation is a METHOD, not a data partition. It is never a third box beside training and test. The split is training (cross-validation happens in here, via folds) plus test (held out).]{.side}
+## You do not have fresh points. Now what?
 
-That gives the full workflow. Set aside about 20 percent as the test set and lock it away. Use k-fold cross-validation on the remaining 80 percent to choose the parameters. Refit the final model on all of that 80 percent with the best parameters. Then evaluate once on the test set, and report that number. If you tune on the test data you are indirectly fitting to it, so it must stay unseen until the end.
+In Fig. 2 you could ask for new days whenever you liked. Real life is not so kind. You have the days you have: here, twenty of them.
 
-## What it is for, and how many folds
+So make some days new. Before the model sees anything, hide a few. Fit the model on the rest. Then score it on the ones you hid. To the model, the hidden days are as good as new.
 
-Cross-validation answers two questions. The first is how good a model is: what accuracy will this SVM get on new data? Run it through the folds and report the average. The second, and the main use in this guide, is which parameter value is best: what $k$ in KNN, what C in an SVM, how many components in PCA, which variables in a regression. You cross-validate each candidate value and keep the one with the best average score.
+Click cells in the strip to hide those days. You can click the dots too. Each time, the line is fitted again on the days you left showing, and scored on the ones you hid.
 
-You also have to choose the number of folds. [This $k$ is the number of folds. It is a different $k$ from the number of neighbours in KNN.]{.side}
+::: {.ink-figure data-figure="cv-figure" data-step="0" data-caption="Fig. 3 · twenty days: hide some, fit a line on the rest, score it on the hidden ones · made-up data"}
+:::
 
-| Folds | Name | Train size | Test size | Pros | Cons |
-|:-----:|:-----|:-----------|:----------|:-----|:-----|
-| 5 | 5-fold | 80% | 20% | Fast, good balance | Moderate variance |
-| 10 | 10-fold | 90% | 10% | Better estimate | Slower |
-| $n$ | Leave-one-out (LOO) | $n-1$ | 1 | Uses max training data | Very slow, high variance |
+Look at the two scores beside the plot. Usually the miss on the hidden days is bigger than the miss on the days the line saw. The hidden score is the honest one.
 
-In this table "train size" and "test size" are the two parts of each round: the folds fitted on, and the one fold held out. More folds give a more stable estimate, with diminishing returns past 10.
+### Now tell a computer
 
-Leave-one-out is the limit, where the number of folds equals the number of data points. Each round fits on $n-1$ points and scores on the one left out; you repeat $n$ times and average the $n$ errors. It uses the most training data per round, but it runs $n$ times, which is slow on large data, and its estimate has high variance. Use it for small data sets where every point matters.
+A computer needs the days as numbers. Each day is a pair, such as `(2.53, 2.89)`: 2.53 hours of sun and 2.89 jugs. `p[0]` is the first number of a pair and `p[1]` is the second.
 
-Small folds are a risk in general. With $n = 20$ and $k = 10$, each held-out fold has only 2 points, which is not enough for a reliable error estimate, so use fewer folds on small data sets. The rule of thumb for this guide is 5-fold or 10-fold. They are the standard choices and almost always sufficient.
+The cell below fetches the twenty days, and the days you hid in Fig. 3. If you hid none, it uses five chosen for you. Python counts from 0, so the first cell in the strip is day 0.
 
-## Run it yourself {.reference}
+Some Python words first. `def` gives a set of steps a name, so you can use them again. `for i in range(20)` repeats the indented lines with `i` set to 0, then 1, up to 19. `if` and `else` pick one of two paths. `[]` is an empty list, and `.append(x)` adds `x` to the end of it. `return` hands back the answer.
 
+One blank is left. Replace it and press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, hidden          # the 20 days, and the days you hid in Fig. 3
+
+def split(points, hidden):
+    fit_on = []                          # days the model may learn from
+    score_on = []                        # days kept out of its sight
+    for i in range(len(points)):         # i counts the days: 0, 1, 2, ... 19
+        if i in hidden:
+            score_on.append(points[i])
+        else:
+            ____.append(points[i])       # every other day: which list does it go in?
+    return fit_on, score_on
+
+fit_on, score_on = split(points, hidden)
+print("You hid days", hidden)
+print("Fit on", len(fit_on), "days. Score on", len(score_on), "days.")
+
+picture = {"points": fit_on + score_on,
+           "labels": [0] * len(fit_on) + [2] * len(score_on),   # o to learn from, x hidden
+           "xlim": (0, 10), "ylim": (0, 9), "xlabel": "hours of sun", "ylabel": "jugs sold"}
+```
+::: {.py-solution}
+```python
+from page import points, hidden          # the 20 days, and the days you hid in Fig. 3
+
+def split(points, hidden):
+    fit_on = []                          # days the model may learn from
+    score_on = []                        # days kept out of its sight
+    for i in range(len(points)):         # i counts the days: 0, 1, 2, ... 19
+        if i in hidden:
+            score_on.append(points[i])
+        else:
+            fit_on.append(points[i])     # every other day: the model may learn from it
+    return fit_on, score_on
+
+fit_on, score_on = split(points, hidden)
+print("You hid days", hidden)
+print("Fit on", len(fit_on), "days. Score on", len(score_on), "days.")
+
+picture = {"points": fit_on + score_on,
+           "labels": [0] * len(fit_on) + [2] * len(score_on),   # o to learn from, x hidden
+           "xlim": (0, 10), "ylim": (0, 9), "xlabel": "hours of sun", "ylabel": "jugs sold"}
+```
+:::
+:::
+
+`len` counts what is in a list, and `[0] * 15` is a list of fifteen zeros: the picture uses those numbers to give each day its mark. The picture under the cell is drawn from the code's two lists: circles for the days the model may learn from, crosses for the hidden ones. It should match Fig. 3.
+
+### Fit on the days it may see
+
+Here are two models to compare. The **flat** model ignores the sun and always guesses the average sales. The **line** is the straight line you met in the lesson on fitting a line.
+
+Both are stored the same way: a pair `(start, slope)`. The guess for a day with `x` hours of sun is start + slope × x. The flat model is just a line with slope 0.
+
+The best line always passes through the middle of the days: the average sunshine and the average sales. Its slope comes from two sums, worked out in the code. Then the start has to put the line through the middle. Try it by hand. Say the middle is 5 hours and 4 jugs, and the slope is 0.5 jugs per hour. Going back from 5 hours to 0 hours loses 5 × 0.5 = 2.5 jugs, so the line starts at 4 − 2.5 = **1.5**.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def fit_flat(pts):
+    total = 0
+    for p in pts:
+        total = total + p[1]              # add up the jugs sold
+    return (total / len(pts), 0)          # start at the average, and never climb
+
+def fit_line(pts):
+    n = len(pts)
+    total_x = 0
+    total_y = 0
+    for p in pts:
+        total_x = total_x + p[0]
+        total_y = total_y + p[1]
+    mid_x = total_x / n                   # the average hours of sun
+    mid_y = total_y / n                   # the average jugs sold
+    together = 0                          # how sun and sales stray from the middle together
+    spread = 0                            # how far the sun strays on its own
+    for p in pts:
+        dx = p[0] - mid_x
+        dy = p[1] - mid_y
+        together = together + dx * dy
+        spread = spread + dx * dx
+    slope = together / spread             # extra jugs for each extra hour of sun
+    start = ____                          # the line must pass through (mid_x, mid_y)
+    return (start, slope)
+
+flat = fit_flat(fit_on)
+line = fit_line(fit_on)
+print("flat: always", round(flat[0], 2), "jugs")
+print("line: starts at", round(line[0], 2), "and climbs", round(line[1], 2), "jugs per hour")
+
+picture = {"points": fit_on,
+           "lines": [[(0, flat[0]), (10, flat[0])]],
+           "accent": [(0, line[0]), (10, line[0] + 10 * line[1])],
+           "notes": ["level: the flat model", "sloped: the line"],
+           "xlim": (0, 10), "ylim": (0, 9), "xlabel": "hours of sun", "ylabel": "jugs sold"}
+```
+::: {.py-solution}
+```python
+def fit_flat(pts):
+    total = 0
+    for p in pts:
+        total = total + p[1]              # add up the jugs sold
+    return (total / len(pts), 0)          # start at the average, and never climb
+
+def fit_line(pts):
+    n = len(pts)
+    total_x = 0
+    total_y = 0
+    for p in pts:
+        total_x = total_x + p[0]
+        total_y = total_y + p[1]
+    mid_x = total_x / n                   # the average hours of sun
+    mid_y = total_y / n                   # the average jugs sold
+    together = 0                          # how sun and sales stray from the middle together
+    spread = 0                            # how far the sun strays on its own
+    for p in pts:
+        dx = p[0] - mid_x
+        dy = p[1] - mid_y
+        together = together + dx * dy
+        spread = spread + dx * dx
+    slope = together / spread             # extra jugs for each extra hour of sun
+    start = mid_y - slope * mid_x         # the line must pass through (mid_x, mid_y)
+    return (start, slope)
+
+flat = fit_flat(fit_on)
+line = fit_line(fit_on)
+print("flat: always", round(flat[0], 2), "jugs")
+print("line: starts at", round(line[0], 2), "and climbs", round(line[1], 2), "jugs per hour")
+
+picture = {"points": fit_on,
+           "lines": [[(0, flat[0]), (10, flat[0])]],
+           "accent": [(0, line[0]), (10, line[0] + 10 * line[1])],
+           "notes": ["level: the flat model", "sloped: the line"],
+           "xlim": (0, 10), "ylim": (0, 9), "xlabel": "hours of sun", "ylabel": "jugs sold"}
+```
+:::
+:::
+
+Notice that both models were fitted on `fit_on` only. Neither has seen a hidden day.
+
+### How far off is it on the hidden days?
+
+Scoring means the average squared miss from the start of the lesson.
+
+::: {.ask}
+Before you write code for it: how would you check that the code scores correctly?
+
+- **Run it on the twenty days.** You would get a number, and no way of telling whether it is right.
+- **Try a case I can do by hand.** Yes. Take the line that starts at 2 and climbs 1 per hour. A day with 1 hour of sun and 4 jugs: the line guesses 2 + 1 = 3, a miss of 1. A day with 3 hours and 8 jugs: it guesses 5, a miss of 3. Squared and averaged, that is (1 + 9) ÷ 2 = 5. If the code says anything else, it is wrong.
+:::
+
+The first line the cell prints is that hand example. The function at the end, `drawing`, only builds the picture under the cell; you can skim it. (`str` turns a number into text, so it can be written beside the plot.)
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def predict(model, x):
+    return model[0] + model[1] * x        # start, plus slope times the hours of sun
+
+def miss(model, pts):
+    total = 0
+    for p in pts:
+        off = p[1] - ____                 # the jugs really sold, minus the model's guess
+        total = total + off * off         # square it and add it up
+    return total / len(pts)               # the average squared miss
+
+print(miss((2, 1), [(1, 4), (3, 8)]))     # by hand this was 5
+
+print("line, on the days it saw: ", round(miss(line, fit_on), 2))
+print("line, on the hidden days: ", round(miss(line, score_on), 2))
+print("flat, on the hidden days: ", round(miss(flat, score_on), 2))
+
+def drawing(seen, unseen, model, notes):
+    threads = []
+    for p in unseen:
+        threads.append((p, (p[0], predict(model, p[0]))))     # from the day to the line
+    return {"points": seen + unseen,
+            "labels": [0] * len(seen) + [2] * len(unseen),
+            "accent": [(0, predict(model, 0)), (10, predict(model, 10))],
+            "segments": threads, "notes": notes,
+            "xlim": (0, 10), "ylim": (0, 9), "xlabel": "hours of sun", "ylabel": "jugs sold"}
+
+picture = drawing(fit_on, score_on, line, ["hidden: " + str(round(miss(line, score_on), 2))])
+```
+::: {.py-solution}
+```python
+def predict(model, x):
+    return model[0] + model[1] * x        # start, plus slope times the hours of sun
+
+def miss(model, pts):
+    total = 0
+    for p in pts:
+        off = p[1] - predict(model, p[0]) # the jugs really sold, minus the model's guess
+        total = total + off * off         # square it and add it up
+    return total / len(pts)               # the average squared miss
+
+print(miss((2, 1), [(1, 4), (3, 8)]))     # by hand this was 5
+
+print("line, on the days it saw: ", round(miss(line, fit_on), 2))
+print("line, on the hidden days: ", round(miss(line, score_on), 2))
+print("flat, on the hidden days: ", round(miss(flat, score_on), 2))
+
+def drawing(seen, unseen, model, notes):
+    threads = []
+    for p in unseen:
+        threads.append((p, (p[0], predict(model, p[0]))))     # from the day to the line
+    return {"points": seen + unseen,
+            "labels": [0] * len(seen) + [2] * len(unseen),
+            "accent": [(0, predict(model, 0)), (10, predict(model, 10))],
+            "segments": threads, "notes": notes,
+            "xlim": (0, 10), "ylim": (0, 9), "xlabel": "hours of sun", "ylabel": "jugs sold"}
+
+picture = drawing(fit_on, score_on, line, ["hidden: " + str(round(miss(line, score_on), 2))])
+```
+:::
+:::
+
+Compare the two line scores it prints with the two scores beside Fig. 3. Same days, same hidden ones, same sums: they should agree. And the flat model does worse on the hidden days than the line, which is what you would hope from a model that ignores the sun.
+
+## Would a different split give the same score?
+
+You chose which days to hide. Someone else would have hidden different ones. Does that change the score?
+
+Here is the same line, scored on eight different splits. Each time, `random.sample(range(20), 5)` picks five of the twenty days at random to hide. `random.seed(4)` makes the "random" picks the same every time you run it, and `min` and `max` find the smallest and largest score.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+import random
+random.seed(4)                            # the same "random" picks on every run
+
+scores = []
+bars = []
+for attempt in range(8):
+    held = random.sample(range(20), 5)    # five days, picked at random, to hide
+    fit_part, score_part = split(points, held)
+    model = fit_line(fit_part)            # fit on the other 15
+    score = round(miss(model, score_part), 2)
+    scores.append(score)
+    bars.append((attempt + 1, score))     # one bar for each split
+
+print(scores)
+print("lowest", min(scores), "and highest", max(scores))
+
+picture = {"bars": bars,
+           "xlabel": "split", "ylabel": "miss on the hidden days",
+           "notes": ["lowest " + str(min(scores)), "highest " + str(max(scores))]}
+```
+:::
+
+Same days. Same line. Same recipe. The scores run from 0.16 to 1.15: the highest is seven times the lowest. In Fig. 3 you saw the same thing: hide different days and the hidden score jumps.
+
+So one split is partly luck. Hide a few easy days and the model looks great. Hide a few odd ones and it looks poor.
+
+::: {.ask}
+Eight splits, eight scores. Which one is the line's real score?
+
+- **The lowest one.** Tempting, and wrong for the reason the whole lesson is about: picking the best-looking number flatters the model.
+- **The first one.** That is what you get with a single split. It is no more right than the other seven. It just came first.
+- **None of them on its own.** Yes. Each score is the true score plus some luck from which days were hidden. Use many scores and the luck starts to cancel out. And make sure every day gets hidden once, so no day is left out of the scoring.
+:::
+
+## How do you use every day for scoring?
+
+Take turns. Cut the twenty days into parts, say five parts of four days. Hide part 1, fit on the other four parts, score on part 1. Then hide part 2 and do the same. Carry on until every part has been hidden once. The final score is the average of the five.
+
+Every day is hidden exactly once. Every day is learned from four times.
+
+::: {.ink-figure data-figure="cv-figure" data-step="1" data-caption="Fig. 4 · taking turns: each part of the strip is hidden once · made-up data"}
+:::
+
+Press *next part* and watch the hatching move along the strip. The line moves too, because each turn it is fitted on different days. The small chart in the column collects each part's miss, and the tall tick marks their average. Press *run all* to finish the round.
+
+The parts disagree with each other, just like the random splits did. But now you are not trusting any one of them. You are averaging all of them, and every day took part.
+
+In code, `take_turns` is the same loop. It is handed a fitting function, `fit_line` or `fit_flat`, and uses whichever it is given; a function can be passed around like any other value. `20 // 5` is whole-number division: 4.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def take_turns(points, k, fit):
+    size = len(points) // k               # days in each part: 20 // 5 is 4
+    scores = []
+    pictures = []
+    for part in range(k):                 # part 0, then 1, ... up to k - 1
+        first = part * size               # where this part starts in the strip
+        held = range(first, first + size) # the days in this part
+        fit_part, score_part = split(points, held)
+        model = fit(fit_part)             # learn from the other parts
+        scores.append(miss(model, score_part))
+        note = "part " + str(part + 1) + ": " + str(round(scores[part], 2))
+        pictures.append(drawing(fit_part, score_part, model, [note]))
+    return scores, pictures
+
+scores, frames = take_turns(points, 5, fit_line)
+for part in range(5):
+    print("part", part + 1, "hidden, miss", round(scores[part], 2))
+print("average of the 5:", round(sum(scores) / ____, 2))
+```
+::: {.py-solution}
+```python
+def take_turns(points, k, fit):
+    size = len(points) // k               # days in each part: 20 // 5 is 4
+    scores = []
+    pictures = []
+    for part in range(k):                 # part 0, then 1, ... up to k - 1
+        first = part * size               # where this part starts in the strip
+        held = range(first, first + size) # the days in this part
+        fit_part, score_part = split(points, held)
+        model = fit(fit_part)             # learn from the other parts
+        scores.append(miss(model, score_part))
+        note = "part " + str(part + 1) + ": " + str(round(scores[part], 2))
+        pictures.append(drawing(fit_part, score_part, model, [note]))
+    return scores, pictures
+
+scores, frames = take_turns(points, 5, fit_line)
+for part in range(5):
+    print("part", part + 1, "hidden, miss", round(scores[part], 2))
+print("average of the 5:", round(sum(scores) / len(scores), 2))
+```
+:::
+:::
+
+The picture plays back each turn: the crosses move from part to part, and the line is refitted each time. Compare the five scores and their average with Fig. 4 after *run all*. They should be the same numbers.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With $y_i$ for the jugs really sold on day $i$, $\hat y_i$ for the model's guess, and $n$ days, the average squared miss is
+
+$$\text{miss} = \frac{1}{n} \sum_{i=1}^{n} (y_i - \hat y_i)^2$$
+
+With $k$ parts and $\text{miss}_j$ for the score when part $j$ is hidden, the score from taking turns is
+
+$$\text{score}(k) = \frac{1}{k} \sum_{j=1}^{k} \text{miss}_j$$
+
+Read the big Σ as "add these up", and the hat on $\hat y$ as "the model's guess for".
+:::
+
+### How many parts?
+
+Slide *parts* in Fig. 4. With 2 parts, each line learns from only half the days, so it is a weaker line than the one you will finally use. With 20 parts, one day each, every line learns from 19 days, but you have to fit twenty lines, and each score rests on a single day, so the scores jump about.
+
+Five or ten parts is the usual choice. It almost always works well enough. On a small data set use fewer, so that each part still has a few days in it.
+
+## What if you use the hidden data to choose between models?
+
+So far you scored one model. Usually you are choosing: the flat model or the line? A line or a curve? How many neighbours, how wide a gap, how deep a tree? You take turns with each candidate, and keep the one with the lowest score.
+
+::: {.ask data-veil="true"}
+Five candidates take turns. The lowest score wins. Is the winner's score a fair guess of how it will do next time?
+
+- **Yes, it was scored on hidden days.** It was. But you looked at five scores and picked the smallest. Each score is part skill and part luck, and the smallest is likely to be the one with the best luck. Now it is the winner's score that flatters it.
+- **No, it is still too kind.** Right. Picking the lowest of several scores picks good luck along with skill. To find out how the winner really does, you need days that played no part in picking it.
+:::
+
+::: {.ink-figure data-figure="cv-figure" data-step="2" data-caption="Fig. 5 · fit and choose inside the first fifteen days; the last five stay locked until the end · made-up data"}
+:::
+
+The last five cells are locked before anything else happens. Inside the first fifteen, five candidates take turns, three parts of five days each: the flat model, the line, and curves that can bend more and more. "Curve 2" can bend once, like the gentle curve in Fig. 1. The lowest score wins.
+
+Then the winner is fitted once more, on all fifteen days, and *open the final part* scores it on the five locked days. That is the only time those days are used.
+
+Beside it, the same recipe runs on 300 more made-up stands. On average the winner's score from taking turns is 0.78, and its final check is 0.96. The score you chose by looks better than the model really is. The final check is the honest number.
+
+So there are three jobs, and each one needs days the earlier jobs did not use:
+
+1. **Fit.** Each candidate learns from some days.
+2. **Choose.** Each candidate is scored on days it did not learn from, by taking turns. The lowest score wins.
+3. **Final check.** The winner is scored once on days that were locked away from the start.
+
+The taking turns happens *inside* the first fifteen days. The final five are never part of a turn. They are not a third kind of part. They sit outside the whole fit-and-choose process, and they are opened once, at the very end. If you look at them earlier and change your choice, they have become part of the choosing, and you have no honest number left.
+
+Here is the whole recipe in code. `points[:15]` means the first fifteen days, and `points[15:]` means from day 15 to the end. One blank: which days does the final check use?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+fitting_days = points[:15]                # fit and choose happen in here
+final_days = points[15:]                  # locked away until the very end
+
+flat_scores, flat_pictures = take_turns(fitting_days, 3, fit_flat)
+line_scores, line_pictures = take_turns(fitting_days, 3, fit_line)
+flat_score = sum(flat_scores) / 3
+line_score = sum(line_scores) / 3
+print("taking turns, flat:", round(flat_score, 2))
+print("taking turns, line:", round(line_score, 2))
+
+if line_score < flat_score:               # choose: the lower score wins
+    winner = fit_line(fitting_days)       # fit the winner again, on all 15 days
+    won_with = line_score
+else:
+    winner = fit_flat(fitting_days)
+    won_with = flat_score
+
+final_score = miss(winner, ____)          # the one and only look at the locked days
+print("the winner's score when chosen:", round(won_with, 2))
+print("its final check:", round(final_score, 2))
+
+frames = line_pictures + [drawing(fitting_days, final_days, winner, ["final check: " + str(round(final_score, 2))])]
+```
+::: {.py-solution}
+```python
+fitting_days = points[:15]                # fit and choose happen in here
+final_days = points[15:]                  # locked away until the very end
+
+flat_scores, flat_pictures = take_turns(fitting_days, 3, fit_flat)
+line_scores, line_pictures = take_turns(fitting_days, 3, fit_line)
+flat_score = sum(flat_scores) / 3
+line_score = sum(line_scores) / 3
+print("taking turns, flat:", round(flat_score, 2))
+print("taking turns, line:", round(line_score, 2))
+
+if line_score < flat_score:               # choose: the lower score wins
+    winner = fit_line(fitting_days)       # fit the winner again, on all 15 days
+    won_with = line_score
+else:
+    winner = fit_flat(fitting_days)
+    won_with = flat_score
+
+final_score = miss(winner, final_days)    # the one and only look at the locked days
+print("the winner's score when chosen:", round(won_with, 2))
+print("its final check:", round(final_score, 2))
+
+frames = line_pictures + [drawing(fitting_days, final_days, winner, ["final check: " + str(round(final_score, 2))])]
+```
+:::
+:::
+
+The flat and line scores it prints are the first two rows beside Fig. 5. Your code tried only two candidates, so the line wins, where the figure, with five, picked curve 2. The pattern is the same in both: the final check is worse than the score the winner was chosen by. The picture plays the line's three turns, then the final check, with the locked days as crosses.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| The average squared miss | Mean squared error (MSE) |
+| Perfect on the days it learned from, worse on new days | Overfitting |
+| The days a model learns from | The training set |
+| Hiding some days, fitting on the rest, scoring on the hidden ones | A train/test split, or holdout |
+| The parts of the strip | Folds |
+| Taking turns, then averaging the scores | *k*-fold cross-validation |
+| One day per part | Leave-one-out cross-validation |
+| Scoring candidates to pick one | Validation, or model selection (tuning) |
+| The final part, locked away until the end | The test set |
+| The winner's score flattering it | Optimistic bias |
+| Curve 2, curve 3, curve 4 | Polynomials of degree 2, 3 and 4 |
+
+The training data, where cross-validation happens, and the test set, held out, are the only two piles. Cross-validation is something you do inside the training data, not a third pile. A common split keeps 70 to 80 percent of the rows for training and 20 to 30 percent for the test set. When the model sorts things into classes instead of guessing a number, the miss on each part is usually the fraction it got wrong.
+
+A library such as scikit-learn has all of this ready: `train_test_split` hides the rows, `KFold` cuts the parts, and `cross_val_score` takes the turns and hands back the scores. It can shuffle the rows before cutting the parts (your twenty days were already in no particular order), and it works with any kind of model. You could now read what it does and recognise every step.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
 Twenty noisy points from a simple curve, with a degree-15 polynomial and a degree-3 polynomial fitted to all of them.
@@ -489,60 +928,4 @@ for (i in 1:6) {
 }
 par(mfrow = c(1, 1))
 ```
-
-## On one page {.reference}
-
-```
-CROSS-VALIDATION RECIPE
-========================
-
-1. PURPOSE: Estimate how well a model generalizes to unseen data
-
-2. k-FOLD CV (a METHOD, done INSIDE the training data):
-   - Split the training data into k equal folds
-   - Each fold takes a turn as the held-out fold
-   - Average the k scores
-   - Standard choice: k = 5 or k = 10
-
-3. THE FORMULA:
-   CV(k) = (1/k) × Σ Errorᵢ
-
-4. PRIMARY USE: Tune hyperparameters
-   - KNN: which k (neighbors)?        → CV over k = 1,3,5,7,...
-   - SVM: which C (cost)?             → CV over C = 0.01, 0.1, 1, 10,...
-   - Regression: which variables?     → CV with different subsets
-   - PCA: how many components?        → CV with 1, 2, 3, ... components
-
-5. THREE JOBS:
-   Training (fit model) → Validation (choose / tune) → Test (final eval)
-   With CV, the folds do the validation job, so the data is split in two:
-   Training (CV happens in here) + Test (held out)
-   Test set: touched ONCE, at the very end
-   The winner's validation score is optimistic — report the test score
-
-6. OVERFITTING DETECTION:
-   Training accuracy >> Validation accuracy = OVERFIT
-   Training accuracy ≈ Validation accuracy = GOOD
-
-7. COMMON PITFALLS:
-   - Never evaluate on training data
-   - Never tune on test data
-   - High training accuracy alone means NOTHING
-   - The validation/CV score is what matters
-   - Too many folds on a small data set = too few points per fold
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. Why can't you evaluate a model on its training data?
-2. What does k-fold cross-validation do, step by step?
-3. What's the difference between the validation set and the test set?
-4. How do you use cross-validation to choose $k$ in KNN?
-5. You build a model that gets 95% training accuracy and 62% validation
-   accuracy. What's happening? What would you do?
-6. Why is leave-one-out CV sometimes worse than 10-fold, despite using
-   more training data per round?
-7. A classmate says "I tried 50 different models on the test set and picked
-   the best one." What's wrong with this?
+:::

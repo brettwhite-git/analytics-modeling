@@ -1,0 +1,355 @@
+---
+title: "How do you know one guess is better than another?"
+subtitle: "You will score guesses by hand, then teach a computer to improve one. All you need is arithmetic and the average."
+engine: knitr
+---
+
+A small shop sold this many cakes over the last seven days: 10, 12, 9, 15, 11, 16 and 18. How many will it sell tomorrow? You have to say one number, so the baker knows how many to bake.
+
+Any number you say is a guess. Some guesses are clearly worse than others: 40 would be silly. But is 12 better than 14? To answer that, you need a way to give every guess a score. That score, and what you do with it, is the idea underneath every method in this guide.
+
+## How wrong is a guess?
+
+Here are the seven days, one dot each. The blue line is a guess: the same number for every day. Drag it up and down.
+
+::: {.ink-figure data-figure="guess-miss" data-step="0" data-caption="Fig. 1 · seven days of sales, and your guess · made-up data"}
+:::
+
+On each day, the guess missed by some amount: the gap between the dot and the line. That gap is drawn as a square, with the gap as its side. Add up the squares and you have one number for the whole guess. Call it **the total miss**.
+
+That is the rule for this whole lesson: **square each miss, and add them up. Smaller is better.**
+
+Try it by hand with a guess of 10. Day 2 sold 12, so the guess was 2 too low. Two times two is 4. Day 3 sold 9, so the guess was 1 too high, and one times one is 1. Do all seven and you get 0 + 4 + 1 + 25 + 1 + 36 + 64 = **131**. Fig. 1 shows the same sum beside the picture.
+
+### Now tell a computer
+
+A computer needs the steps written out, in a language it understands. This guide uses Python. Each grey box below is a small piece of Python you can run: press **Run**. The first time takes a few seconds while Python starts.
+
+First, one miss. The miss is the sales minus the guess. It is positive when the guess was too low, and negative when it was too high. One piece is missing: replace the blank and press Run.
+
+::: {.py-cell}
+```python
+from page import sales, days, my_guess   # the seven days above, and where you left the line
+
+def miss(value, guess):
+    return ____                          # sales minus guess
+
+print(sales)
+print(miss(12, 10))                      # by hand: 12 - 10 = 2
+print(miss(9, 10))                       # by hand: 9 - 10 = -1
+```
+::: {.py-solution}
+```python
+from page import sales, days, my_guess   # the seven days above, and where you left the line
+
+def miss(value, guess):
+    return value - guess                 # sales minus guess
+
+print(sales)
+print(miss(12, 10))                      # by hand: 12 - 10 = 2
+print(miss(9, 10))                       # by hand: 9 - 10 = -1
+```
+:::
+:::
+
+The first line fetches the numbers from the figure above, including the guess you left it on. `def` gives a set of steps a name, so you can use them again; `return` hands back the answer. `print` writes a value under the cell. `sales` is a list: several values in order, inside square brackets.
+
+Next, the total. By hand you went through the days one at a time, squared each miss, and kept a running sum. The computer does exactly that.
+
+::: {.ask}
+Before you run it: how would you check this code is right?
+
+- **Run it on the seven days and see if the number looks sensible.** Any number could look sensible. You would have no way to tell whether 131 or 113 is correct.
+- **Try a tiny example I can do by hand.** Yes. Three days that sold 12, 15 and 9, with a guess of 10, miss by 2, 5 and −1. The squares are 4, 25 and 1, so the total is **30**. If the code says anything else, it is wrong.
+:::
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def total_miss(values, guess):
+    total = 0
+    for value in values:                 # go through the values one at a time
+        m = miss(value, guess)
+        total = total + ____             # square the miss and add it on
+    return total
+
+print(total_miss([12, 15, 9], 10))       # by hand this was 30
+print(total_miss(sales, my_guess))       # compare with the total in Fig. 1
+
+def picture_of(guess, notes):            # only makes the drawing: a dot per day, a thread to the guess
+    dots, threads = [], []
+    for i in range(len(sales)):          # i is 0, 1, 2, ... 6
+        dots.append((days[i], sales[i]))
+        threads.append(((days[i], sales[i]), (days[i], guess)))
+    return {"points": dots, "segments": threads, "accent": [(0, guess), (8, guess)],
+            "xlim": (0, 8), "ylim": (0, 24), "xlabel": "day", "ylabel": "sales", "notes": notes}
+
+frames = [picture_of(my_guess, ["guess " + str(my_guess), "total miss " + str(total_miss(sales, my_guess))])]
+```
+::: {.py-solution}
+```python
+def total_miss(values, guess):
+    total = 0
+    for value in values:                 # go through the values one at a time
+        m = miss(value, guess)
+        total = total + m * m            # square the miss and add it on
+    return total
+
+print(total_miss([12, 15, 9], 10))       # by hand this was 30
+print(total_miss(sales, my_guess))       # compare with the total in Fig. 1
+
+def picture_of(guess, notes):            # only makes the drawing: a dot per day, a thread to the guess
+    dots, threads = [], []
+    for i in range(len(sales)):          # i is 0, 1, 2, ... 6
+        dots.append((days[i], sales[i]))
+        threads.append(((days[i], sales[i]), (days[i], guess)))
+    return {"points": dots, "segments": threads, "accent": [(0, guess), (8, guess)],
+            "xlim": (0, 8), "ylim": (0, 24), "xlabel": "day", "ylabel": "sales", "notes": notes}
+
+frames = [picture_of(my_guess, ["guess " + str(my_guess), "total miss " + str(total_miss(sales, my_guess))])]
+```
+:::
+:::
+
+`for value in values:` repeats the indented lines once for each value in the list, and the margin counts how often each line ran. The second number printed is the total for your own guess from Fig. 1: the two should agree.
+
+The last few lines only make the picture under the cell. `range(len(sales))` counts 0, 1, 2 up to 6, one number for each day (`len` is how many there are), and `append` adds something to the end of a list. A pair of numbers in round brackets, such as `(2, 12)`, is one place on the picture: 2 across and 12 up. The curly brackets hold the parts of a drawing, each under a name. `str` turns a number into text, so `+` can join it to words. `frames` is the list of pictures the drawing under the cell shows; here there is only one.
+
+## Why square the misses?
+
+Squaring is not the only way to score a guess, so it is worth asking why.
+
+::: {.ask}
+Why not just add up the misses as they are, plus and minus?
+
+- **That would work just as well.** Try two days that sold 5 and 21, and a guess of 13. The misses are −8 and +8. Added up: 0, which says the guess is perfect. It missed by 8 both times.
+- **The pluses and minuses would cancel.** Yes. A guess that is far too high one day and far too low the next would look perfect. Squaring makes every miss count, whichever side it is on: 64 + 64 = 128.
+:::
+
+Squaring does a second thing. One miss of 4 costs 4 × 4 = 16. Two misses of 2 cost 4 + 4 = 8. The same total distance, but the single big miss costs twice as much. So squaring prefers a guess that is a little off on many days to one that is badly off on one day. Look at the big squares in Fig. 1: they are the ones a better guess must shrink.
+
+## Which guess misses least?
+
+Every guess now has a score. So there must be a best one.
+
+::: {.ask data-veil="true"}
+Which guess will have the smallest total miss?
+
+- **The middle day, once they are sorted.** Sorted, the days are 9, 10, 11, 12, 15, 16, 18, and the middle one is 12. A good guess, but drag the line to 12 and then one above it.
+- **The average.** Seven days add up to 91, and 91 ÷ 7 = 13. Drag the line to 13 and see.
+- **The latest day, 18.** Sales do seem to be rising. But a single number for every day pays for every past day it misses, and 18 misses the early days badly.
+:::
+
+::: {.ink-figure data-figure="guess-miss" data-step="1" data-caption="Fig. 2 · the total for every guess you try · made-up data"}
+:::
+
+Drag the line through every height and watch the small chart fill in. Each guess you try adds a tick: its total. The ticks make a bowl, and the bottom of the bowl is at **13**, the average, with a total of 68. The middle day, 12, scores 75.
+
+That is no accident. With misses squared, the average is always the single number with the smallest total miss.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With $y_1, y_2, \dots, y_n$ for the values and $g$ for the guess, the total miss is
+
+$$\text{total}(g) = \sum_{i=1}^{n} (y_i - g)^2$$
+
+Read the big Σ as "add these up, for every value from the first to the n-th". With $\bar{y}$ for the average, a little algebra turns it into
+
+$$\text{total}(g) = \text{total}(\bar{y}) + n\,(g - \bar{y})^2$$
+
+The second part is never negative, and it is zero only when $g = \bar{y}$. So the bottom of the bowl is the average. Check it on the cakes: total(10) = 68 + 7 × 3² = 131.
+:::
+
+### Now tell a computer
+
+Trying guesses is easy for a computer. The cell tries seven of them, prints each total, and remembers the best so far. `if` runs the indented line only when the test is true.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+guesses = [8, 10, 12, 13, 14, 16, 18]
+pairs = []
+best = guesses[0]                              # start by assuming the first guess is best
+for g in guesses:
+    t = total_miss(sales, g)
+    print("guess", g, "total miss", t)
+    pairs.append((g, t))
+    if t < total_miss(sales, best):            # a smaller total: remember this guess
+        best = g
+
+print("best:", best, " the average:", sum(sales) / len(sales))
+
+frames = [{"points": pairs, "lines": [pairs], "xlabel": "guess", "ylabel": "total miss",
+           "notes": ["best guess " + str(best), "total " + str(total_miss(sales, best))]}]
+```
+:::
+
+The picture is the bowl from Fig. 2, drawn from the code's own totals. `sum(sales) / len(sales)` adds up the list and divides by how many there are: the average.
+
+## Can you get better without trying every number?
+
+Trying every guess works when there is one number to choose and a few sensible values. Most methods later in this guide have to choose many numbers at once, and there are far too many combinations to try them all. So here is a way to improve a guess step by step instead.
+
+Look at the misses, keeping their signs. If most are positive, the sales are mostly above the guess: it is too low, so move it up. If most are negative, move it down. The **average miss** says which way, and how far off you are. So:
+
+**Nudge the guess by the average miss, times a small number called the step size.**
+
+By hand, from a guess of 10: the misses are 0, 2, −1, 5, 1, 6, 8. They add up to 21, and 21 ÷ 7 = 3. With a step size of 0.5, move up by 0.5 × 3 = 1.5. The new guess is **11.5**, and its total miss falls from 131 to 83.75.
+
+::: {.ink-figure data-figure="guess-nudge" data-step="0" data-caption="Fig. 3 · nudge the guess, and watch the total fall · made-up data"}
+:::
+
+Press *nudge* a few times. Check the first one against the sum you just did. Each nudge is smaller than the last, because the closer the guess gets, the smaller the average miss. You do not have to tell it to slow down: it does so by itself. The small bowl shows the path: down one side, settling at the bottom. Drag the line to start from somewhere else, above 13 or below it: the nudges find the same bottom.
+
+### Now tell a computer
+
+The nudge in code. One blank: the size of the move.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def average_miss(values, guess):
+    total = 0
+    for value in values:
+        total = total + miss(value, guess)     # signs kept: too low counts plus, too high minus
+    return total / len(values)
+
+guess = 10                                     # where to start
+step = 0.5                                     # the step size
+frames = []                                    # one picture per nudge
+for n in range(10):
+    guess = guess + ____                       # the nudge: step size times the average miss
+    t = total_miss(sales, guess)
+    print("nudge", n + 1, "guess", round(guess, 2), "total", round(t, 2))
+    frames.append(picture_of(guess, ["nudge " + str(n + 1), "guess " + str(round(guess, 2)), "total " + str(round(t, 2))]))
+```
+::: {.py-solution}
+```python
+def average_miss(values, guess):
+    total = 0
+    for value in values:
+        total = total + miss(value, guess)     # signs kept: too low counts plus, too high minus
+    return total / len(values)
+
+guess = 10                                     # where to start
+step = 0.5                                     # the step size
+frames = []                                    # one picture per nudge
+for n in range(10):
+    guess = guess + step * average_miss(sales, guess)   # the nudge: step size times the average miss
+    t = total_miss(sales, guess)
+    print("nudge", n + 1, "guess", round(guess, 2), "total", round(t, 2))
+    frames.append(picture_of(guess, ["nudge " + str(n + 1), "guess " + str(round(guess, 2)), "total " + str(round(t, 2))]))
+```
+:::
+:::
+
+The first line it prints should say 11.5 and 83.75, the nudge you did by hand. `round(x, 2)` keeps two decimal places. This time `frames` holds one picture per nudge, and the drawing plays them back in order: the line slides up and stops at 13.
+
+For one number there is a shortcut, of course: just work out the average. The nudge never needed it. It only needed to know which way the misses lean. That is why it still works when there is no shortcut.
+
+## What if the nudges are too big?
+
+A bigger step size should get there faster. Here is the same figure with a step size of 2.2.
+
+::: {.ink-figure data-figure="guess-nudge" data-step="1" data-caption="Fig. 4 · the same nudges, with a step size that is too big · made-up data"}
+:::
+
+Press *nudge*. The guess jumps right past 13 and lands further away on the other side. The next nudge jumps back, further still. The total goes **up**, and the path on the bowl climbs out in a zigzag.
+
+Now slide the step size down to 0.05 and press *ten nudges*. The guess crawls. It is going the right way, but it would take a hundred nudges to arrive.
+
+### How does it break?
+
+Here is the too-big step in code. Run it.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+guess = 10
+step = 2.2                                     # a bigger step
+frames = []
+for n in range(10):
+    guess = guess + step * average_miss(sales, guess)
+    t = total_miss(sales, guess)
+    print("nudge", n + 1, "guess", round(guess, 2), "total", round(t, 2))
+    frames.append(picture_of(guess, ["nudge " + str(n + 1), "guess " + str(round(guess, 2)), "total " + str(round(t, 2))]))
+```
+:::
+
+Nothing stops it, and that is the trouble. The guess swings from one side to the other, further each time, and after ten nudges it has left the picture. Every total is bigger than the one before. The code did exactly what it was told.
+
+Here is why. The average miss is exactly how far the guess is from 13. So each nudge multiplies that distance by one minus the step size. With 0.5, the distance halves every time. With 0.05, it shrinks by only a twentieth. With 2.2, it is multiplied by −1.2: it flips to the other side and grows.
+
+::: {.ask}
+You cannot know the right step size in advance. What should the code do?
+
+- **Always use a tiny step.** It is safe, but it crawls, as you saw at 0.05. With many numbers to choose, it could take millions of nudges.
+- **Check the total after each nudge. If it went up, throw the nudge away and halve the step.** Yes. You keep only nudges that make things better, and the step shrinks until it fits.
+- **Start closer to the answer.** That would help if you knew where the answer was. If you knew that, you would not need to nudge.
+:::
+
+The careful version below does that. `else` runs the line under it when the `if` test is false. One blank: what happens to the step size when a nudge made things worse.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+guess = 10
+step = 2.2                                     # the same step that broke it
+frames = []
+for n in range(10):
+    new = guess + step * average_miss(sales, guess)
+    if total_miss(sales, new) < total_miss(sales, guess):
+        guess = new                            # the total went down: keep the nudge
+    else:
+        step = ____                            # it went up: throw it away and take smaller steps
+    t = total_miss(sales, guess)
+    print("nudge", n + 1, "step", round(step, 2), "guess", round(guess, 2), "total", round(t, 2))
+    frames.append(picture_of(guess, ["nudge " + str(n + 1), "step " + str(round(step, 2)), "total " + str(round(t, 2))]))
+```
+::: {.py-solution}
+```python
+guess = 10
+step = 2.2                                     # the same step that broke it
+frames = []
+for n in range(10):
+    new = guess + step * average_miss(sales, guess)
+    if total_miss(sales, new) < total_miss(sales, guess):
+        guess = new                            # the total went down: keep the nudge
+    else:
+        step = step / 2                        # it went up: throw it away and take smaller steps
+    t = total_miss(sales, guess)
+    print("nudge", n + 1, "step", round(step, 2), "guess", round(guess, 2), "total", round(t, 2))
+    frames.append(picture_of(guess, ["nudge " + str(n + 1), "step " + str(round(step, 2)), "total " + str(round(t, 2))]))
+```
+:::
+:::
+
+The first nudge is thrown away and the step drops to 1.1. After that every nudge is kept, and the guess settles at 13 with a total of 68, the same answer as the bowl. The total never goes up. Compare the printed lines with what Fig. 4 did at 2.2.
+
+## What if there are two numbers to choose?
+
+The sales are rising, so one number for every day is a poor fit: it is too high early in the week and too low at the end. A line that slopes upward could do better. A line needs two numbers: its **height**, where it stands at day 0, and its **tilt**, how much it rises for each day.
+
+The score does not change. Each day's miss is the gap between the dot and the line, square it, add them up.
+
+::: {.ink-figure data-figure="guess-line" data-step="0" data-caption="Fig. 5 · a line with a height and a tilt, scored the same way · made-up data"}
+:::
+
+It starts flat, at height 13 with tilt 0: the best one-number guess, with a total of 68. Slide the tilt up and the squares at both ends shrink. You will find the height has to come down as the tilt goes up. Try to beat 30.
+
+Then press *let the nudges do it*. Each round nudges the height by the average miss, then the tilt by whether the misses on later days are bigger than on earlier ones, each times a step size. The total falls to about 26.71, far below the 68 that a single number could reach.
+
+That is the whole idea, and every method from here on uses it: **make a guess, score it with one number, change the guess to make the number smaller, repeat.** The next lesson takes the line seriously.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| One number standing in for every day | The simplest model |
+| How far off the guess was on one day | The error, or residual |
+| Square the misses and add them up | The sum of squared errors, a kind of loss function |
+| The single number with the smallest total | The mean, the least-squares estimate |
+| The bowl of total against guess | The loss curve |
+| Nudge by step size times the average miss | Gradient descent |
+| The direction the average miss points | Downhill: the negative of the gradient, the slope of the bowl |
+| The step size | The learning rate |
+| Throwing away a nudge and halving the step | A simple form of backtracking |
+| The line's height and tilt | The intercept and the slope |
+
+You did not need the names to do any of it. Libraries that train models, from scikit-learn's `SGDRegressor` to the tools that train neural networks, run this same loop: score, nudge downhill, repeat, with a learning rate that someone has to choose. They work out the downhill direction for thousands of numbers at once, but the nudge is the one you just did by hand.

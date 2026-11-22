@@ -1,173 +1,477 @@
 ---
-title: "How do you forecast the next value of a series?"
-subtitle: "Average the past so that recent points count most, and choose how fast the old ones fade. Most of this chapter is that one choice."
+title: "How do you guess the next value of a series?"
+subtitle: "You will play the guessing game by hand first, then teach the winning rule to a computer. All you need is arithmetic."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="smoothing-figure" data-step="0" data-caption="Fig. 1 · sixty noisy observations of something that moves slowly · made-up data"}
+A shop counts its customers every day: 48, then 43, then 51, then 51 again. The count wobbles. Some of the wobble is real, because the shop is getting busier or quieter. Some of it is luck: a rainy morning, a bus that came late.
+
+Tomorrow's number is not on the page yet. Guessing it from the numbers you already have is called forecasting. You are going to try it by hand, keep score, and find a rule that guesses well.
+
+## What would you guess for tomorrow?
+
+Twelve days are drawn below. Drag the ring up or down to where you think day 13 will land, or click at that height. Then press *reveal the next value*. Play all ten rounds.
+
+::: {.ink-figure data-figure="smoothing-figure" data-step="0" data-caption="Fig. 1 · forty days of a made-up count, and your guesses for ten of them"}
 :::
 
-You have data ordered in time: daily sales, monthly temperatures, hourly stock prices. The past has a pattern, and you want to extend it one step into the future. That is **forecasting**: using the history of a value to predict where it goes next.
+Each time a value comes in, two simple rules are scored beside you. Their guesses appear as a **+** and an **x** next to the new value:
 
-The trouble is that each observation is part pattern and part accident. Before you can say what tomorrow will be, you have to decide how much of today was real. Three kinds of pattern turn up, and different methods handle different combinations of them.
+- **Same as today.** Tomorrow will be whatever today was.
+- **The average so far.** Add up every day so far and divide by how many there are.
 
-| Pattern | What it looks like | Example |
-|:--------|:------------------|:--------|
-| **Level** | Flat, bouncing around a constant | Daily temperature in a stable climate |
-| **Trend** | Going steadily up or down | Company revenue growing year over year |
-| **Seasonality** | Repeating cycle at fixed intervals | Retail sales spiking every December |
+The column keeps a running total of the misses. A miss is how far a guess was from the value that came in, with the minus sign dropped: guess 50, value 47, miss 3.
 
-## A weighted average of now and before
+Neither rule is silly, and neither is safe. "Same as today" trusts the latest value completely, so one lucky day fools it. "The average so far" gives a day from two weeks ago the same say as yesterday, so it is slow to notice when the count drifts. Over these ten rounds the average missed by 45.5 in total and "same as today" by 55.5. How did you do?
 
-Start with the simplest case, a level and nothing else. Simple exponential smoothing keeps one running estimate of the level, $S_t$, and updates it each time a new observation $x_t$ arrives:
+You probably did something in between without thinking about it: you looked at the latest value, but you did not believe it completely. That is the whole idea of this lesson. **Do not trust the latest value alone, and do not trust the long-run average alone.**
+
+## What if you only moved part of the way?
+
+Here is a rule that sits between the two. Keep one number, your **estimate** of where the series really is. It is also your guess for the next value. When a new value comes in, move your estimate part of the way toward it.
+
+Try it by hand. Your estimate is 50. Today comes in at 60, which is 10 above. Move all the way and you are at 60: that is "same as today". Do not move at all and you are stuck at 50 forever. Move 0.3 of the way instead: 0.3 × 10 = 3, and 50 + 3 = **53**. Tomorrow's guess is 53. When tomorrow's value arrives, do the same again, starting from 53.
+
+That is the only rule: **move part of the way toward each new value.**
+
+::: {.ink-figure data-figure="smoothing-figure" data-step="1" data-caption="Fig. 2 · the same forty days, and the line of guesses you get by moving part of the way"}
+:::
+
+The line is the guess made for each day before that day was seen. The gap between the line and a dot is that day's miss. The small ring at the far right is the guess for day 41, which nobody has seen yet. Press *play it step by step* to watch the estimate walk along: at each dot it moves part of the way toward it, then carries that on as the next guess. The column writes out the arithmetic of each move.
+
+Slide *how far to move* and watch the total miss.
+
+::: {.ask}
+Push the slider all the way to 1. Which rule from Fig. 1 have you built?
+
+- **Same as today.** Yes. Moving all the way means the new estimate *is* the latest value. The total miss is 156.8, the same as the "same as today" row underneath it.
+- **The average so far.** Not at this end. The other end comes closer: with a tiny step, each new value only nudges the estimate, so old values keep a say for a long time, as they do in an average.
+:::
+
+Somewhere in between, the total miss is lower than either rule's. Look for where it is lowest. Your setting is remembered: the code below uses it.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write $x_t$ for the value that came in at step $t$, $S_t$ for your estimate after seeing it, and $\alpha$ (the Greek letter alpha) for how far to move, a number from 0 to 1. Then
+
+$$S_t = S_{t-1} + \alpha \, (x_t - S_{t-1})$$
+
+which is the same as
 
 $$S_t = \alpha \, x_t + (1 - \alpha) \, S_{t-1}$$
 
-The new estimate is a weighted average of what just happened and what you believed before. The forecast for the next period is simply the current estimate, $\hat{x}_{t+1} = S_t$.
-
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $S_t$ | Smoothed value at time $t$ | Your best estimate of the current level |
-| $x_t$ | Actual observation at time $t$ | What really happened |
-| $S_{t-1}$ | Previous smoothed value | What you predicted last time |
-| $\alpha$ | Smoothing parameter (0 to 1) | How much to trust the new data against the old estimate |
-| $\hat{x}_{t+1}$ | Forecast for next period | Your prediction |
-
-::: {.ink-figure data-figure="smoothing-figure" data-step="1" data-caption="Fig. 2 · the smoothed estimate at α = 0.3, and the weight each past observation carries in it"}
+Read the second form as "a mix of the new value and the old estimate". The guess for the next value is the estimate you have now: $\hat{x}_{t+1} = S_t$. The little hat means "a guess for".
 :::
 
-The name comes from what happens when you unroll the formula. $S_{t-1}$ contains $x_{t-1}$, which contains $x_{t-2}$, and so on, so every past observation is still in the estimate, with a weight that shrinks by a factor of $(1 - \alpha)$ for each step back:
+### Now tell a computer
 
-$$S_t = \alpha \, x_t + \alpha(1-\alpha) \, x_{t-1} + \alpha(1-\alpha)^2 \, x_{t-2} + \dots$$
+A computer needs the days as numbers, in order. The cell below fetches the same forty values you saw in Fig. 1, and the setting you chose in Fig. 2.
 
-Recent data matters most and the distant past fades away. At $\alpha = 0.3$ the latest point carries a weight of 0.30, the one before it 0.21, and the last ten together carry 97% of the estimate. The weights decay exponentially, which is the "exponential" in exponential smoothing.
+Press **Run**. The first time takes a few seconds while Python starts.
 
-## Alpha is how fast it reacts
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import series, my_step      # the forty values above, and your slider setting
 
-So $\alpha$ controls how much memory the model has. A high $\alpha$, near 1, mostly trusts the latest observation: the estimate is reactive and follows changes quickly, but it also follows every wiggle. A low $\alpha$, near 0, mostly trusts the history: the estimate is smooth and stable, but slow to react when the level really does move.
+print(len(series), "values. The first five:", series[:5])
+print("You chose to move", my_step, "of the way.")
 
-::: {.ink-figure data-figure="smoothing-figure" data-step="2" data-steps="2:slide alpha and noise|3:add a jump in the level" data-caption="Fig. 3 · smoothed live in your browser, with the one-step-ahead error at every α · made-up data"}
+dots = []
+for i in range(len(series)):          # i counts 0, 1, 2, ... 39
+    dots.append((i + 1, series[i]))   # (day, value): the day goes along the bottom
+
+picture = {"points": dots, "xlim": (0, 42), "ylim": (28, 76), "xlabel": "step", "ylabel": "value"}
+```
 :::
 
-Which end you want depends on how noisy the data is. Push the noise slider up and the observations scatter far from the level that produced them. Trusting any single one of them is a mistake, so the error is lowest at a low $\alpha$: about 0.10 at the noisiest setting. Pull the noise down and each observation is nearly the level itself. Now the old estimate is the thing holding you back, and the best $\alpha$ climbs to about 0.90. [Exam trap: α is responsiveness, not smoothing strength. A larger α smooths *less*. Noisy data → choose a LOW α (trust the previous estimate, smooth more). Calm data → choose a HIGH α (trust the new observation, react faster).]{.side}
+`series` is a **list**: the forty values in order. `series[0]` is the first one, because Python counts from 0, and `series[:5]` is the first five. `len(series)` is how many there are. A `for` loop runs the indented lines once for every number that `range(...)` hands it, and `dots.append(...)` adds one more pair to the end of the list `dots`. The last line names what to draw, and the picture under the cell is drawn from it.
 
-The second button adds a sudden jump in the level. A low $\alpha$ takes many periods to believe it, and a high $\alpha$ is there almost at once; the figure counts the periods until the estimate has climbed to within 2 of the new level. With the jump in the data, the $\alpha$ with the lowest error rises from 0.28 to 0.44 at the same noise. That is the whole trade: react quickly and you chase noise, smooth heavily and you lag behind real change.
+Now the move itself. You worked one by hand: estimate 50, value 60, move 0.3 of the way, new estimate 53.
 
-You do not pick $\alpha$ by eye. You try different values and keep the one that minimises forecast error on held-out data, which is cross-validation (Module 3).
+::: {.ask}
+Before you write the code: how would you check it is right?
 
-## Trend and season
-
-Simple smoothing cannot handle a trend. Its forecast is one number, the current level, so on a rising series it always lags behind, and its forecast for every future period is flat.
-
-::: {.ink-figure data-figure="season-figure" data-step="0" data-caption="Fig. 4 · a rising series with a 12-period cycle: 48 points seen, 12 held out, and the flat forecast of simple smoothing · made-up data"}
+- **Run it on all forty values.** You would get forty numbers and no way to tell whether any of them is correct.
+- **Try the one I did by hand.** Yes. You already know the answer is 53. If the code says anything else, it is wrong, and you know straight away.
 :::
 
-**Double exponential smoothing**, Holt's method, adds a second running estimate, the trend $T_t$: how much the level is changing per period.
+One piece is missing. Replace the blank and press Run.
+
+::: {.py-cell}
+```python
+def move(estimate, value, step):
+    miss = value - estimate           # how far the new value is from where you were
+    return estimate + step * ____     # go that fraction of the way
+
+print(move(50, 60, 0.3))              # by hand this was 53
+```
+::: {.py-solution}
+```python
+def move(estimate, value, step):
+    miss = value - estimate           # how far the new value is from where you were
+    return estimate + step * miss     # go that fraction of the way
+
+print(move(50, 60, 0.3))              # by hand this was 53
+```
+:::
+:::
+
+`def` gives a set of steps a name, so you can use them again; `return` hands the answer back. From now on `move(e, v, s)` means "move from e toward v, a fraction s of the way".
+
+Now run it along the whole series, the way Fig. 2 did. Start the estimate at the first value. Then, for every later value: write down the guess, score the miss, and move.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+estimate = series[0]                  # start at the first value
+guesses = []                          # the guess for each day, made before that day was seen
+total = 0
+frames = []
+
+for i in range(1, len(series)):       # every day after the first
+    value = series[i]
+    guesses.append((i + 1, estimate))           # the guess for today is the estimate so far
+    total = total + abs(value - estimate)       # abs() drops the minus sign: a miss is a miss
+    estimate = move(estimate, value, my_step)   # then move part of the way toward today
+
+    frames.append({"points": dots, "accent": list(guesses),     # list(...) keeps a copy of the line so far
+                   "segments": [((i + 1, guesses[-1][1]), (i + 1, value))],
+                   "xlim": (0, 42), "ylim": (28, 76), "xlabel": "step", "ylabel": "value",
+                   "notes": ["day " + str(i + 1), "total miss " + str(round(total, 1))]})
+
+print("Guess for the next day:", round(estimate, 1))
+print("Total miss:", round(total, 1))
+```
+:::
+
+The picture replays the loop one day at a time: the line of guesses grows, and a thread shows each day's miss. `guesses[-1]` is the last pair in the list, and `[1]` takes its second number, the guess. Compare the total it prints with the total miss in Fig. 2 at your setting. Same days, same rule, same setting: they should agree.
+
+## How far should you move?
+
+So far you picked the setting by sliding. Whether a big step or a small one is better depends on the series.
+
+::: {.ask data-veil="true"}
+A series is very noisy: each value lands far above or below where the series really is. Should you move a long way toward each new value, or a short way?
+
+- **A long way.** Then every wild value drags your estimate with it, and the next guess is wild too. You would be chasing noise.
+- **A short way.** Yes. A wild value then only nudges the estimate, and the wobbles above and below cancel out over time. The price shows up when something real changes. Try the second button below.
+:::
+
+::: {.ink-figure data-figure="smoothing-figure" data-step="2" data-steps="2:calm and noisier|3:a sudden jump" data-caption="Fig. 3 · the same hidden level with more or less noise, and the total miss at every setting · made-up data"}
+:::
+
+The faint stitched line is the level the values were made from, which you never get to see in real data. The small curve in the column is the total miss for every setting from 0.05 to 1. On the calm series it is lowest at 0.3. Press *make it noisier*: same hidden level, bigger wobbles, and the best setting drops to 0.1.
+
+Now press *a sudden jump*. Halfway along, the level rises by 10 and stays there. With a small step the estimate takes a long time to believe it: at 0.2 it needs 15 steps to get within 2 of the new level, and at 0.1 it never does. At 0.5 it is there in 3.
+
+That is the whole trade. **A big step chases noise. A small step is slow to notice a real change.**
+
+### Can the computer choose?
+
+Guessing the setting by eye is fine for one picture. A computer can simply try every setting and keep the one with the smallest total miss. First, the loop you just wrote becomes a function. `values[1:]` means every value except the first.
+
+`if` runs the line under it only when the comparison is true. The blank is what to remember when a setting beats the best one so far.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import noisy                # the noisier series from Fig. 3
+
+def total_miss(values, step):
+    estimate = values[0]
+    total = 0
+    for value in values[1:]:          # every value after the first
+        total = total + abs(value - estimate)
+        estimate = move(estimate, value, step)
+    return total
+
+settings = []
+for k in range(1, 21):
+    settings.append(k / 20)           # 0.05, 0.1, 0.15, ... 1.0
+
+def best_step(values):
+    best = settings[0]                # start by assuming the first setting is best
+    for s in settings:
+        if total_miss(values, s) < total_miss(values, best):
+            best = ____               # a smaller miss: which setting should it remember?
+    return best
+
+calm_best = best_step(series)
+noisy_best = best_step(noisy)
+print("calm series: best step", calm_best, "with total miss", round(total_miss(series, calm_best), 1))
+print("noisier series: best step", noisy_best, "with total miss", round(total_miss(noisy, noisy_best), 1))
+
+calm_curve = []                       # (setting, total miss) for every setting, to draw
+noisy_curve = []
+for s in settings:
+    calm_curve.append((s, total_miss(series, s)))
+    noisy_curve.append((s, total_miss(noisy, s)))
+
+picture = {"lines": [calm_curve, noisy_curve],
+           "stars": [(calm_best, total_miss(series, calm_best)), (noisy_best, total_miss(noisy, noisy_best))],
+           "xlabel": "how far to move", "ylabel": "total miss",
+           "notes": ["lower curve: calm", "upper curve: noisier", "rings: the best setting"]}
+```
+::: {.py-solution}
+```python
+from page import noisy                # the noisier series from Fig. 3
+
+def total_miss(values, step):
+    estimate = values[0]
+    total = 0
+    for value in values[1:]:          # every value after the first
+        total = total + abs(value - estimate)
+        estimate = move(estimate, value, step)
+    return total
+
+settings = []
+for k in range(1, 21):
+    settings.append(k / 20)           # 0.05, 0.1, 0.15, ... 1.0
+
+def best_step(values):
+    best = settings[0]                # start by assuming the first setting is best
+    for s in settings:
+        if total_miss(values, s) < total_miss(values, best):
+            best = s                  # a smaller miss: remember this setting
+    return best
+
+calm_best = best_step(series)
+noisy_best = best_step(noisy)
+print("calm series: best step", calm_best, "with total miss", round(total_miss(series, calm_best), 1))
+print("noisier series: best step", noisy_best, "with total miss", round(total_miss(noisy, noisy_best), 1))
+
+calm_curve = []                       # (setting, total miss) for every setting, to draw
+noisy_curve = []
+for s in settings:
+    calm_curve.append((s, total_miss(series, s)))
+    noisy_curve.append((s, total_miss(noisy, s)))
+
+picture = {"lines": [calm_curve, noisy_curve],
+           "stars": [(calm_best, total_miss(series, calm_best)), (noisy_best, total_miss(noisy, noisy_best))],
+           "xlabel": "how far to move", "ylabel": "total miss",
+           "notes": ["lower curve: calm", "upper curve: noisier", "rings: the best setting"]}
+```
+:::
+:::
+
+It should print 0.3 for the calm series and 0.1 for the noisier one, the same best settings Fig. 3 marked. The last loop works out the total miss at every setting for both series, and the picture draws the two curves from the small chart in Fig. 3 on one sheet, with the best setting of each ringed.
+
+Every miss here was scored on a guess made *before* its value was seen, so this is a fair test of the rule. When you also have to choose other things about a forecaster, keep the last stretch of values back and score on those, as in [Testing on unseen data](cross-validation-from-scratch.html).
+
+## What if the series keeps climbing?
+
+The blend assumes the series wobbles around a level that drifts about. Real series often do more. Some climb steadily, like a company's sales growing year on year. Some repeat a cycle, like a shop that is busy every December. Watch what the blend does with a climb.
+
+### How does it break?
+
+The cell below runs the same blend, moving 0.3 of the way, on a series that rises by about 1.5 every step. It counts how often the guess came in too low.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+from page import rising               # thirty values that climb steadily
+
+estimate = rising[0]
+low = 0
+guesses = []
+for i in range(1, len(rising)):
+    guesses.append((i + 1, estimate))
+    if rising[i] > estimate:          # the value came in above the guess
+        low = low + 1
+    estimate = move(estimate, rising[i], 0.3)
+
+print("Guessed too low", low, "times out of", len(rising) - 1)
+print("Total miss:", round(total_miss(rising, 0.3), 1))
+
+up = []
+for i in range(len(rising)):
+    up.append((i + 1, rising[i]))
+picture = {"points": up, "accent": guesses, "xlabel": "step", "ylabel": "value"}
+```
+:::
+
+Too low 28 times out of 29. The line of guesses runs below the dots the whole way. The blend only ever moves part of the way toward where the series *was*. By the time it gets there, the series has climbed on. Turn the setting all the way up to 1 and you are still one whole step behind, every time.
+
+::: {.ask}
+What would fix it?
+
+- **Move further each time.** It shrinks the gap but never closes it: even moving all the way leaves you one step behind. And on a wobbly series a big step chases the noise.
+- **Keep track of how fast it climbs, and add that on.** Yes. If you know the series climbs about 1.5 a step, guess 1.5 above your estimate instead of right on it.
+:::
+
+### Keep a second running estimate
+
+You do not know the climb in advance, so estimate it the same way you estimate the level: move part of the way toward each new sign of it.
+
+By hand. Your estimate of the level is 40, and your estimate of the climb is 1.5 per step. So the guess for the next value is 40 + 1.5 = 41.5. The value comes in at 43.
+
+- **Move the level** 0.3 of the way from the guess toward the value: 41.5 + 0.3 × 1.5 = 41.95.
+- **Look at how much the level rose:** from 40 to 41.95, which is 1.95.
+- **Move the climb** 0.2 of the way toward that: 1.5 + 0.2 × (1.95 − 1.5) = 1.5 + 0.09 = 1.59.
+
+Next guess: 41.95 + 1.59 = 43.54. Both moves use the same `move` you already wrote. The blank is what to add to the level to make the guess.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import rising
+
+up = []
+for i in range(len(rising)):
+    up.append((i + 1, rising[i]))     # (step, value), to draw
+
+level = rising[0]                     # where the series is
+climb = 0                             # how much it climbs per step: no idea yet
+total = 0
+guesses = []
+frames = []
+
+for i in range(1, len(rising)):
+    value = rising[i]
+    guess = level + ____                            # where it is, plus one step of climb
+    guesses.append((i + 1, guess))
+    total = total + abs(value - guess)
+    new_level = move(guess, value, 0.3)             # the same blend as before
+    climb = move(climb, new_level - level, 0.2)     # blend the climb too
+    level = new_level
+
+    frames.append({"points": up, "accent": list(guesses), "xlim": (0, 31), "ylim": (15, 70),
+                   "xlabel": "step", "ylabel": "value",
+                   "notes": ["step " + str(i + 1), "climb " + str(round(climb, 2)), "total miss " + str(round(total, 1))]})
+
+print("Climb per step, learned:", round(climb, 2))
+print("Total miss with the climb:", round(total, 1), "  without it:", round(total_miss(rising, 0.3), 1))
+```
+::: {.py-solution}
+```python
+from page import rising
+
+up = []
+for i in range(len(rising)):
+    up.append((i + 1, rising[i]))     # (step, value), to draw
+
+level = rising[0]                     # where the series is
+climb = 0                             # how much it climbs per step: no idea yet
+total = 0
+guesses = []
+frames = []
+
+for i in range(1, len(rising)):
+    value = rising[i]
+    guess = level + climb                           # where it is, plus one step of climb
+    guesses.append((i + 1, guess))
+    total = total + abs(value - guess)
+    new_level = move(guess, value, 0.3)             # the same blend as before
+    climb = move(climb, new_level - level, 0.2)     # blend the climb too
+    level = new_level
+
+    frames.append({"points": up, "accent": list(guesses), "xlim": (0, 31), "ylim": (15, 70),
+                   "xlabel": "step", "ylabel": "value",
+                   "notes": ["step " + str(i + 1), "climb " + str(round(climb, 2)), "total miss " + str(round(total, 1))]})
+
+print("Climb per step, learned:", round(climb, 2))
+print("Total miss with the climb:", round(total, 1), "  without it:", round(total_miss(rising, 0.3), 1))
+```
+:::
+:::
+
+Watch the replay. The climb starts at 0, so the first few guesses are low, just as before. Within a few steps the climb has grown to about 1.5 and the guesses sit among the dots instead of under them. The total miss falls from 133.6 to 48.5. To guess further ahead, walk along the climb: two steps ahead is the level plus two climbs.
+
+### What if it repeats every year?
+
+Now a series that climbs *and* repeats. Think of monthly sales that are always high in December and low in February. A climb cannot explain that. You need one more set of running estimates: one **adjustment** for each place in the cycle. With monthly data there are 12, one per month. With daily data that has a weekly pattern there are 7.
+
+Each adjustment says how far that place in the cycle usually sits from the level, as a ratio. An adjustment of 1.2 means "this month usually runs 20% above the level", and 0.8 means 20% below. When a value comes in, divide it by its month's adjustment before you blend it into the level, so a busy December is not mistaken for a jump. When you guess, multiply the month's adjustment back in. And each adjustment is itself moved part of the way toward what its month shows, once a year, when that month comes round.
+
+The figure works through 48 months and holds the last 12 back, so every forecast can be scored on months it never saw. Switch each piece on and off and watch the average miss on the held-out months.
+
+::: {.ink-figure data-figure="season-figure" data-step="0" data-caption="Fig. 4 · a made-up series that climbs and repeats every 12 steps: 48 seen, 12 held out"}
+:::
+
+The plain blend forecasts one flat line, because it has nothing else to go on: an average miss of 11.4. Adding the climb tilts the line, 8.3. Adding the season alone puts the bumps in but leaves them flat, 7.5. With both, the forecast climbs *and* repeats, and the miss falls to 2.9.
+
+Which pieces you need follows from what the series contains:
+
+| Does it climb? | Does it repeat? | Keep track of |
+|:--:|:--:|:--|
+| No | No | the level |
+| Yes | No | the level and the climb |
+| No | Yes | the level and the season |
+| Yes | Yes | all three |
+
+Each piece has its own "how far to move", chosen the same way as before: try settings and keep the ones with the smallest miss on values held back.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With a climb, $T_t$ is the estimate of the climb per step and $\beta$ (beta) is how far it moves:
 
 $$S_t = \alpha \, x_t + (1 - \alpha)(S_{t-1} + T_{t-1})$$
 $$T_t = \beta \, (S_t - S_{t-1}) + (1 - \beta) \, T_{t-1}$$
 
-The trend is smoothed in exactly the same way as the level, with its own parameter $\beta$ (0 to 1) that sets how quickly the trend estimate is updated. The forecast $h$ steps ahead walks along the slope: $\hat{x}_{t+h} = S_t + h \, T_t$.
+The guess $h$ steps ahead walks along the climb: $\hat{x}_{t+h} = S_t + h \, T_t$.
 
-When the data also has a repeating cycle, such as holiday sales or summer peaks, you need a third component. **Triple exponential smoothing**, Holt-Winters, keeps a seasonal factor $C_t$ for each place in the cycle, where $L$ is the length of one full cycle (12 for monthly data, 7 for daily data with a weekly pattern):
+With a season as well, $C_t$ is the adjustment for the place in the cycle at step $t$, $L$ is the length of the cycle (12 for months), and $\gamma$ (gamma) is how far an adjustment moves:
 
 $$S_t = \alpha \, \frac{x_t}{C_{t-L}} + (1 - \alpha)(S_{t-1} + T_{t-1})$$
 $$T_t = \beta \, (S_t - S_{t-1}) + (1 - \beta) \, T_{t-1}$$
 $$C_t = \gamma \, \frac{x_t}{S_t} + (1 - \gamma) \, C_{t-L}$$
 $$\hat{x}_{t+h} = (S_t + h \, T_t) \cdot C_{t+h-L}$$
 
-Seasonality here is multiplicative. The factor $C_t$ says how far this point in the cycle typically sits from the level, as a ratio: 1.2 means 20% above it. The level update divides the season out of the new observation, and the forecast multiplies it back in. The parameter $\gamma$ sets how quickly the seasonal pattern is updated. [All three parameters mean the same thing: α is level responsiveness, β is trend responsiveness, γ is seasonal responsiveness. High is reactive, low is stable.]{.side}
-
-::: {.ink-figure data-figure="season-figure" data-step="2" data-steps="0:simple|1:Holt, level + trend|2:Holt-Winters, + season" data-caption="Fig. 5 · the same series forecast three ways and scored on the 12 held-out points · made-up data"}
+$C_{t-L}$ is the adjustment from the same month one cycle ago. The division takes the season out of the new value; the multiplication in the last line puts it back.
 :::
 
-Step through the three methods and watch the forecast error on the held-out points: 12.3 for the flat forecast, 10.3 once Holt adds the slope, 3.4 when Holt-Winters carries the cycle forward. Which one to use follows from what the data contains, and as with $\alpha$ you choose $\beta$ and $\gamma$ by cross-validation: try different values and keep the ones with the lowest forecast error on held-out data. R's `HoltWinters()` does this automatically.
+## What else do forecasters do?
 
-| Trend? | Seasonality? | Method | Parameters |
-|:------:|:------------:|:-------|:-----------|
-| No | No | Simple exponential smoothing | $\alpha$ |
-| No | Yes | Seasonal exponential smoothing | |
-| Yes | No | Holt (double) | $\alpha$, $\beta$ |
-| Yes | Yes | Holt-Winters (triple) | $\alpha$, $\beta$, $\gamma$ |
+Two more ideas, in words only.
 
-## ARIMA
+**Build the next value out of the last few values and the last few misses.** Instead of one running estimate, say "tomorrow is a bit of today, plus a bit of yesterday, plus a correction for how wrong I was today". This family needs a series that wobbles around a steady level with wobbles of a steady size. If the series climbs, you first work with the *change* from one step to the next instead of the value: 20, 22, 25, 26 becomes +2, +3, +1, which no longer climbs. Doing that twice handles a climb that itself speeds up; that is rarely needed. These forecasters can describe more patterns than the blend, but they need more data, about 40 values or more, and can be thrown by odd values. The blend you built turns out to be one member of this family. A fair rule: for a short, noisy series, use the blend; for a long, steady one, try this family; when in doubt, try both and keep whichever misses less on values held back.
 
-Exponential smoothing is intuitive but limited in the patterns it can express. **ARIMA** is more flexible. It combines three ideas into one framework, and its three numbers say how much of each to use.
+**Predict how jumpy the series is about to be, not the value.** In a stock market some weeks are calm and some are wild, and wild days come in clusters. You may not be able to say whether tomorrow goes up or down, but you can say "after a big surprise, expect bigger wobbles for a while". These forecasters predict the size of the next wobble from the size of the last miss and the last prediction of jumpiness. They are used for risk: how wide the range of likely values should be.
 
-| Letter | Name | What it does |
-|:------:|:-----|:-------------|
-| **p** | AutoRegressive order | Use the last $p$ values to predict the next |
-| **d** | Differencing order | How many times to difference the data to remove trend |
-| **q** | Moving Average order | Use the last $q$ forecast errors to correct predictions |
+If the question is not "what comes next?" but "has something changed?", that is the previous lesson, [Spotting a change](cusum-from-scratch.html).
 
-The autoregressive part says tomorrow's value depends on today's, and maybe yesterday's:
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+The value built from the last $p$ values, with $\phi$ (phi) for how much each one counts and $\epsilon_t$ (epsilon) for the miss at step $t$:
 
 $$x_t = c + \phi_1 x_{t-1} + \phi_2 x_{t-2} + \dots + \phi_p x_{t-p} + \epsilon_t$$
 
-It looks like regression, but instead of predicting from other variables you predict from the series' own past values. [Exam trap: ARIMA and exponential smoothing are time series forecasting models. That is its own category. They are not "response prediction" models like regression, even though the AR equation looks like one.]{.side}
-
-ARIMA needs **stationary** data: no trend, constant variance. If the data has a trend, **differencing** removes it by modelling the change from one period to the next instead of the value:
+The change from one step to the next:
 
 $$x_t' = x_t - x_{t-1}$$
 
-With $d = 0$ the data is already stationary. With $d = 1$ you difference once, which removes a linear trend. With $d = 2$ you difference twice, which removes a quadratic trend and is rarely needed.
+The value built from the last $q$ misses, with $\theta$ (theta) for how much each one counts:
 
-The moving-average part says tomorrow's value depends on today's forecast error:
+$$x_t = c + \epsilon_t + \theta_1 \epsilon_{t-1} + \dots + \theta_q \epsilon_{t-q}$$
 
-$$x_t = c + \epsilon_t + \theta_1 \epsilon_{t-1} + \theta_2 \epsilon_{t-2} + \dots + \theta_q \epsilon_{t-q}$$
+Together these are written ARIMA($p$, $d$, $q$), where $d$ is how many times you take the change. The blend you built is ARIMA(0, 1, 1).
 
-This corrects systematic patterns in the errors. If you keep over-predicting, the MA term adjusts. Put together, ARIMA(1,1,1) means: difference once, then model with one AR term and one MA term. And simple exponential smoothing turns out to be a special case, ARIMA(0,1,1).
-
-| | Exponential Smoothing | ARIMA |
-|:--|:---------------------|:------|
-| **Simplicity** | Simpler, fewer parameters | More complex, flexible |
-| **Data needed** | Works with shorter series | Needs ~40+ observations |
-| **Noisy/volatile data** | More robust | Can struggle with outliers |
-| **Complex patterns** | Limited to level/trend/season | Can model many patterns |
-| **Interpretability** | Parameters have clear meaning | p, d, q less intuitive |
-| **Special case** | Simple ES | = ARIMA(0,1,1) |
-
-As a rule of thumb, short, noisy, volatile data calls for exponential smoothing, and long, stable data with many observations calls for ARIMA. When in doubt, try both and pick the one with the lower cross-validated error.
-
-## How much will it vary?
-
-Everything above forecasts the **value**: what will the temperature be tomorrow? GARCH answers a different question: how volatile will it be? Think of stock markets. Some weeks are calm and some are wild. The price itself may be unpredictable, but the amount of volatility has patterns, because calm periods and turbulent periods come in clusters.
+The jumpiness forecast, with $\sigma_t^2$ (sigma squared) for the predicted size of the wobble:
 
 $$\sigma_t^2 = \omega + \alpha_1 \epsilon_{t-1}^2 + \beta_1 \sigma_{t-1}^2$$
 
-| Symbol | What it is | Plain English |
-|:------:|:-----------|:-------------|
-| $\sigma_t^2$ | Predicted variance at time $t$ | How much volatility we expect |
-| $\omega$ | Baseline variance | The minimum level of volatility |
-| $\epsilon_{t-1}^2$ | Previous squared error | How big yesterday's surprise was |
-| $\alpha_1$ | Shock sensitivity | How much a single surprise increases future volatility |
-| $\beta_1$ | Persistence | How long volatility stays elevated after a shock |
-| $\sigma_{t-1}^2$ | Previous variance | Yesterday's volatility forecast |
+$\omega$ (omega) is a floor, the calmest it ever gets. $\alpha_1$ says how much one big surprise raises the next prediction. $\beta_1$ says how long a jumpy spell lasts.
+:::
 
-The $\alpha_1$ term captures shocks: a big surprise today means more volatility tomorrow. The $\beta_1$ term captures persistence: volatility tends to stay high once it is high. [Exam trap: GARCH estimates the variance, not the value. If the question says volatility, risk, or how much values will fluctuate, the answer is GARCH. If it says forecast the value, it is exponential smoothing or ARIMA.]{.side}
+## What you just built
 
-A common practice check asks whether you know the difference, so read the question for what is being forecast.
+Everything you did has a name:
 
-| Question asks about... | Use |
-|:-----------------------|:----|
-| "Forecast the **value**" | Exponential smoothing or ARIMA |
-| "Forecast **volatility/risk/variance**" | GARCH |
-| "Predict how much values will **fluctuate**" | GARCH |
-| "Build **confidence intervals** that change over time" | GARCH |
-| "**Portfolio risk**" or "**Value at Risk**" | GARCH |
+| What you did | What it is called |
+|:--|:--|
+| Guessing the next value of a series from its past | Forecasting a time series |
+| "Same as today" and "the average so far" | The naive forecast and the mean forecast |
+| Moving part of the way toward each new value | Simple exponential smoothing |
+| How far to move | The smoothing constant, α (alpha) |
+| Your running estimate | The level, $S_t$ |
+| The miss on a guess made before its value was seen | The one-step-ahead forecast error |
+| Big step chases noise, small step lags | Responsiveness against stability |
+| Keeping track of the climb | Trend; Holt's method, or double exponential smoothing, with β |
+| One adjustment per place in the cycle | Seasonality; Holt-Winters, or triple exponential smoothing, with γ |
+| Adjustments as ratios (1.2 = 20% above) | Multiplicative seasonality |
+| Last few values and last few misses | ARIMA: autoregressive (AR), moving average (MA) |
+| Working with the change from step to step | Differencing |
+| A series with a steady level and steady wobbles | A stationary series |
+| Predicting how jumpy it will be | Volatility forecasting; GARCH |
 
-That gives the whole decision in one table.
+Why "exponential"? Unroll the rule. Your estimate holds 0.3 of today's value. It holds 0.7 of yesterday's estimate, which held 0.3 of yesterday's value, so yesterday counts 0.3 × 0.7 = 0.21. The day before counts 0.21 × 0.7 = 0.147, and so on, each weight 0.7 times the last. Every past value still counts a little, and the weights shrink by the same factor each step back. That shrinking is called exponential decay. At 0.3, the last ten values carry 97% of the estimate.
 
-| What are you forecasting? | What the data has | Method |
-|:--------------------------|:------------------|:-------|
-| The value itself | Level only | Simple ES |
-| The value itself | Level + trend | Double ES (Holt) |
-| The value itself | Level + trend + season | Triple ES (Holt-Winters) |
-| The value itself | Complex pattern, lots of data | ARIMA |
-| The volatility or variance | | GARCH |
-| Whether something has changed | | CUSUM (Module 6) |
+You did not need the names to do it. A library does the same arithmetic. R's `HoltWinters()` keeps a level, a climb and a season, and picks all three "how far to move" settings for you by trying values and keeping the ones with the smallest error. In Python, the `statsmodels` package has the same forecasters, and ARIMA. You could now read what they do and recognise every part.
 
-## Run it yourself {.reference}
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
@@ -502,63 +806,4 @@ plot(1:n4, sqrt(vol), type = "l", col = "coral", lwd = 1.5,
 par(mfrow = c(1, 1))
 ```
 
-## On one page {.reference}
-
-```
-TIME SERIES FORECASTING RECIPE
-================================
-
-EXPONENTIAL SMOOTHING
----------------------
-Simple:   Sₜ = α·xₜ + (1-α)·Sₜ₋₁                    [level only]
-Holt:     + Tₜ = β·(Sₜ - Sₜ₋₁) + (1-β)·Tₜ₋₁         [+ trend]
-H-W:      + Cₜ = γ·(xₜ/Sₜ) + (1-γ)·Cₜ₋ₗ              [+ seasonality]
-
-Parameters:
-  α → level responsiveness    (high = reactive, low = smooth)
-  β → trend responsiveness
-  γ → seasonal responsiveness
-  All chosen via cross-validation
-
-"Exponential" = past data gets exponentially decaying weights
-
-ARIMA(p, d, q)
---------------
-p = autoregressive terms  (predict from past values)
-d = differencing           (remove trend)
-q = moving average terms   (correct from past errors)
-
-ARIMA(0,1,1) = simple exponential smoothing
-Use when: stable data, 40+ observations, complex patterns
-
-GARCH(p, q)
------------
-σₜ² = ω + α·εₜ₋₁² + β·σₜ₋₁²
-
-Forecasts VARIANCE, not value.
-Use when: "volatility", "risk", "how much will values vary"
-
-PRACTICAL DECISION:
-  "Forecast the value" → ES or ARIMA
-  "Forecast the variance/volatility" → GARCH
-  "Detect a change" → CUSUM
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. What does $\alpha$ control in exponential smoothing? What happens when
-   you increase it?
-2. Why is it called "exponential" smoothing?
-3. When do you need Holt's method instead of simple ES?
-4. What does the "d" in ARIMA stand for, and why is it needed?
-5. What is the key difference between ARIMA and exponential smoothing?
-   When would you prefer each?
-6. GARCH forecasts _______, not _______. (Fill in the blanks.)
-7. A manager asks you to "predict next quarter's sales." Which method?
-   Now they ask "predict how volatile next quarter's sales will be."
-   Which method?
-8. What is ARIMA(0,1,1) equivalent to?
-9. Data has 20 observations, lots of noise, and a seasonal pattern.
-   Exponential smoothing or ARIMA? Why?
+:::

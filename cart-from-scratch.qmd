@@ -1,119 +1,501 @@
 ---
-title: "How does a decision tree decide where to cut?"
-subtitle: "One yes-or-no question at a time, a tree carves the data into rectangles that anyone can read, and it will keep carving until it has memorised the noise unless you stop it."
+title: "How do you sort things with yes-or-no questions?"
+subtitle: "You will cut the data by hand first, then teach a computer to find the best cuts. All you need is counting."
 engine: knitr
 ---
 
-::: {.ink-figure data-figure="cart-figure" data-step="0" data-caption="Fig. 1 · the best single straight line still gets 20 of these 70 points wrong · made-up data"}
+Here are 40 people who borrowed money. Each one is placed by two numbers: their income across (in thousands a year) and how much they already owed up (also in thousands). A circle, o, is someone who paid the loan back. A cross, +, is someone who missed payments.
+
+A lender wants a rule for the next person who walks in, and wants a rule that anyone can read out loud. You are going to build one from questions like "is their income below 56?", asking about one number at a time.
+
+## Where would you cut?
+
+You may draw one straight up-and-down line through the picture. Everyone to the left of it goes in one pile, everyone to the right in another. Then each pile gets a single answer: o or +.
+
+::: {.ask data-veil="true"}
+What makes a cut a good one?
+
+- **It splits the borrowers into two equal halves.** Two equal halves can still be two equal muddles. A pile of 10 o and 10 + has no good answer.
+- **Each pile is mostly one kind.** Yes. A pile that is nearly all o can answer "o" and be right nearly every time.
+- **It goes through the middle of the picture.** The middle of the page knows nothing about who paid back. The cut should follow the borrowers, not the paper.
 :::
 
-The models you have met so far are powerful but hard to explain. A support vector machine says "the hyperplane with maximum margin decided". K-nearest neighbours says "the five nearest neighbours voted", and nobody can say which neighbours. A regression hands over a weighted sum of twelve coefficients. Sometimes the person asking is a loan officer, a doctor, or a manager who wants to know why the model said no, and none of those answers will do.
+::: {.ink-figure data-figure="tree-lab" data-step="0" data-caption="Fig. 1 · 40 made-up borrowers, and one cut on income that you drag"}
+:::
 
-CART, short for classification and regression trees, answers with if-then rules that a non-technical reader can follow from top to bottom:
+Drag the cut. Each pile goes with its bigger kind: if a pile has more + than o, it says +, and is hatched. The points that disagree with their pile's answer are ringed. Those are the ones it would call wrong.
+
+Where the cut starts, at income 80, the right pile has 8 o and 2 +. It says o, so 2 are called wrong. The left pile has 12 o and 18 +. It says +, so 12 are called wrong. 2 + 12 = **14** wrong out of 40.
+
+Move the cut and try to get that total down. The best you can do with one cut on income is 10.
+
+That cut is a question: **is income below this number?** "Yes" sends you to one pile, "no" to the other, and the pile gives the answer.
+
+## How do you score a cut?
+
+Counting the ones called wrong is a fine score, and it is the one you just used. In each pile, the smaller kind is the number called wrong. Add the two piles.
+
+It has one blind spot. Try this one in your head.
+
+::: {.ask}
+A pile has 20 o and 10 +. It says o, so 10 are called wrong. Cut A splits it into a left pile of 10 o and 0 +, and a right pile of 10 o and 10 +. That is 0 + 10, still 10 called wrong. Is cut A any use?
+
+- **No. The count did not change.** That is what the count says. But look at the left pile: it is all one kind, finished, and the right pile is a fresh start. The next cut, inside the right pile only, can now fix things.
+- **Yes. Ten borrowers are now in a pile that is all one kind.** Right. The count of wrong ones did not move, but the piles got purer, and purer piles make the next cut easier.
+:::
+
+So computers use a slightly finer score, one that goes down whenever the piles get purer, even when each pile's answer stays the same. For a pile with *a* of one kind and *b* of the other, it is
+
+**2 × a × b ÷ (a + b)**
+
+and a cut scores the two piles' numbers added. Lower is better. A pile that is all one kind scores 0, because *a* or *b* is 0.
+
+Work one by hand. The right pile above had 8 o and 2 +: 2 × 8 × 2 = 32, and 32 ÷ 10 = **3.2**. The left pile had 12 o and 18 +: 2 × 12 × 18 = 432, and 432 ÷ 30 = 14.4. The cut at 80 scores 3.2 + 14.4 = 17.6.
+
+Now cut A. Before it, 2 × 20 × 10 ÷ 30 = 13.3. After it, the pure pile scores 0, and the other 2 × 10 × 10 ÷ 20 = 10. The finer score fell from 13.3 to 10, while the count of wrong ones sat at 10.
+
+Where does the sum come from? Pick two borrowers from a pile at random (the same one may come up twice). 2 × (share of o) × (share of +) is how often the two are different kinds. Multiply by the size of the pile so that big piles count for more, and that is the score.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+Write $p$ for the share of o in a pile and $q = 1 - p$ for the share of +. How mixed the pile is, the chance that two borrowers picked at random are different kinds, is
+
+$$G = 1 - p^2 - q^2 = 2pq$$
+
+For a pile of $n$ borrowers with $a$ of one kind and $b$ of the other, $p = a/n$ and $q = b/n$, so
+
+$$n \times G = n \times 2 \frac{a}{n} \frac{b}{n} = \frac{2ab}{a + b}$$
+
+which is the score above. With more than two kinds, $G = 1 - \sum_k p_k^2$: read the big Σ as "add these up", one share for each kind. Libraries usually divide the total for a cut by the number of borrowers, giving a weighted average of $G$. Dividing every cut's score by the same number never changes which cut is best.
+:::
+
+### Now tell a computer
+
+A computer cannot look at the picture. It gets each borrower as three numbers, such as `(44, 26, 1)`: income 44, debt 26, and their kind, 0 for o and 1 for +. The cell below fetches the same 40 borrowers, and the cut you left in Fig. 1.
+
+Press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import rows, my_cut          # the 40 borrowers above, and the cut you chose
+
+print(len(rows), "borrowers. The first one is", rows[0])
+print("Your cut: income below", my_cut)
+
+spots = []                             # where to draw each borrower
+kinds = []                             # and which mark: 0 is o, 1 is +
+for r in rows:
+    spots.append((r[0], r[1]))         # r[0] is the income, r[1] the debt
+    kinds.append(r[2])                 # r[2] is the kind
+
+def sheet():
+    # a fresh picture of the borrowers, ready to draw on
+    return {"points": spots, "labels": kinds, "xlim": (10, 110), "ylim": (0, 65),
+            "xlabel": "income", "ylabel": "debt"}
+
+picture = sheet()
+picture["vlines"] = [my_cut]           # your cut, as an up-and-down line
+```
+:::
+
+A few Python words. `rows` is a list, written with square brackets, and `rows[0]` is its first item. `for r in rows:` runs the indented lines once for each borrower, calling the current one `r`. `def` gives a set of steps a name, and `return` hands back the answer. A dict, written with curly brackets, is a small table of named things: `picture["vlines"] = ...` fills in the one called `vlines`. The picture under the cell is drawn from it.
+
+Now count the piles. `count` goes through a pile once and adds one to the right counter for each borrower. `m` says which measurement to cut on: 0 for income, 1 for debt. One piece is missing.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def count(pile, m, cut):
+    left = [0, 0]                      # [how many o, how many +] left of the cut
+    right = [0, 0]                     # the same for the right
+    for r in pile:
+        if r[m] < cut:                 # is this borrower's number below the cut?
+            left[r[2]] += 1            # r[2] is 0 or 1: add one to that counter
+        else:
+            right[____] += 1
+    return left, right
+
+left, right = count(rows, 0, my_cut)
+wrong = min(left) + min(right)         # in each pile the smaller kind is called wrong
+print("left:", left, " right:", right, " called wrong:", wrong)
+
+picture["notes"] = ["income < " + str(my_cut), "left  " + str(left),
+                    "right " + str(right), "called wrong " + str(wrong)]
+```
+::: {.py-solution}
+```python
+def count(pile, m, cut):
+    left = [0, 0]                      # [how many o, how many +] left of the cut
+    right = [0, 0]                     # the same for the right
+    for r in pile:
+        if r[m] < cut:                 # is this borrower's number below the cut?
+            left[r[2]] += 1            # r[2] is 0 or 1: add one to that counter
+        else:
+            right[r[2]] += 1           # the same, on the other side
+    return left, right
+
+left, right = count(rows, 0, my_cut)
+wrong = min(left) + min(right)         # in each pile the smaller kind is called wrong
+print("left:", left, " right:", right, " called wrong:", wrong)
+
+picture["notes"] = ["income < " + str(my_cut), "left  " + str(left),
+                    "right " + str(right), "called wrong " + str(wrong)]
+```
+:::
+:::
+
+`if` runs its lines only when the test is true, and `else` runs the others. `+= 1` means "add one to it". `min` picks the smaller of the two counts. Compare what it prints with the side column of Fig. 1: same cut, same borrowers, so the numbers should agree. Drag the cut somewhere else and run it again.
+
+::: {.ask}
+Next comes the finer score in code. How would you know the code is right?
+
+- **Run it on your cut and see if the number looks sensible.** Any number between 0 and 20 would look sensible. You would have no way to tell 15.0 from 15.9.
+- **Try a pile I worked out by hand.** Yes. A pile of 8 o and 2 + scored 3.2. If the code says anything else, it is wrong, and you know at once.
+:::
+
+::: {.py-cell}
+```python
+def mixed(pile_count):
+    a = pile_count[0]                  # how many o
+    b = pile_count[1]                  # how many +
+    if a + b == 0:
+        return 0                       # an empty pile is not mixed at all
+    return 2 * a * b / ____
+
+def score(pile, m, cut):
+    left, right = count(pile, m, cut)
+    return mixed(left) + mixed(right)  # the two piles, added
+
+print(round(mixed([8, 2]), 2))         # by hand this was 3.2
+print("your cut scores", round(score(rows, 0, my_cut), 2))
+```
+::: {.py-solution}
+```python
+def mixed(pile_count):
+    a = pile_count[0]                  # how many o
+    b = pile_count[1]                  # how many +
+    if a + b == 0:
+        return 0                       # an empty pile is not mixed at all
+    return 2 * a * b / (a + b)
+
+def score(pile, m, cut):
+    left, right = count(pile, m, cut)
+    return mixed(left) + mixed(right)  # the two piles, added
+
+print(round(mixed([8, 2]), 2))         # by hand this was 3.2
+print("your cut scores", round(score(rows, 0, my_cut), 2))
+```
+:::
+:::
+
+The line `if a + b == 0` is there because a cut can leave a pile with nobody in it, and Python will not divide by zero. An empty pile is not mixed, so it scores 0.
+
+## Which cut is best?
+
+By hand you dragged the cut and watched the total. A computer can be more patient: it tries every cut there is and keeps the best.
+
+Every cut? Between two neighbouring incomes, say 51 and 55, every cut does the same thing, because nobody's income is in between. So it only has to try one cut in each gap, and halfway, 53, is as good as any. `cuts` makes that list. `.sort()` puts a list in order, smallest first, and `range(n)` counts 0, 1, 2 and so on up to just below `n`.
+
+The loop then tries each cut in turn. `best_cut` is the cut it is remembering, like a finger kept on the best line so far.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def cuts(pile, m):
+    values = []
+    for r in pile:
+        if r[m] not in values:
+            values.append(r[m])        # every different value, once
+    values.sort()                      # smallest first
+    middles = []
+    for i in range(len(values) - 1):
+        middles.append((values[i] + values[i + 1]) / 2)   # halfway between neighbours
+    return middles
+
+best_cut = None                        # None means "nothing yet"
+best_score = 1000                      # bigger than any real score, so the first cut beats it
+frames = []
+for cut in cuts(rows, 0):              # 0: cuts on income
+    s = score(rows, 0, cut)
+    if s < best_score:                 # better than anything so far: remember it
+        best_score = s
+        best_cut = ____
+    pic = sheet()
+    pic["vlines"] = [cut]                                  # the cut being tried
+    pic["accent"] = [(best_cut, 0), (best_cut, 65)]        # the best one so far
+    pic["notes"] = ["trying income < " + str(cut), "score " + str(round(s, 2)),
+                    "best so far " + str(best_cut)]
+    frames.append(pic)
+
+print("best cut: income below", best_cut, "  score", round(best_score, 2))
+print("your cut: income below", my_cut, "  score", round(score(rows, 0, my_cut), 2))
+```
+::: {.py-solution}
+```python
+def cuts(pile, m):
+    values = []
+    for r in pile:
+        if r[m] not in values:
+            values.append(r[m])        # every different value, once
+    values.sort()                      # smallest first
+    middles = []
+    for i in range(len(values) - 1):
+        middles.append((values[i] + values[i + 1]) / 2)   # halfway between neighbours
+    return middles
+
+best_cut = None                        # None means "nothing yet"
+best_score = 1000                      # bigger than any real score, so the first cut beats it
+frames = []
+for cut in cuts(rows, 0):              # 0: cuts on income
+    s = score(rows, 0, cut)
+    if s < best_score:                 # better than anything so far: remember it
+        best_score = s
+        best_cut = cut
+    pic = sheet()
+    pic["vlines"] = [cut]                                  # the cut being tried
+    pic["accent"] = [(best_cut, 0), (best_cut, 65)]        # the best one so far
+    pic["notes"] = ["trying income < " + str(cut), "score " + str(round(s, 2)),
+                    "best so far " + str(best_cut)]
+    frames.append(pic)
+
+print("best cut: income below", best_cut, "  score", round(best_score, 2))
+print("your cut: income below", my_cut, "  score", round(score(rows, 0, my_cut), 2))
+```
+:::
+:::
+
+The picture plays back every try: the thin line sweeps across while the coloured one stays on the best so far. Compare the best cut with the one you found by hand in Fig. 1. It should be 53, scoring 7.5 + 7.5 = 15: each pile has 5 of one kind and 15 of the other. If your cut was anywhere between 52 and 55, you found it too.
+
+### Up and down, or across?
+
+Nothing says the question has to be about income. A level line across the picture asks "is debt below this number?" The computer tries those as well and keeps whichever single question scores lowest. `(s, m, cut)` is a tuple, a few values travelling together, and `s, m, cut = best_split(rows)` unpacks it into three names.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def best_split(pile):
+    best = None                                 # (score, measurement, cut): nothing yet
+    for m in [0, 1]:                            # 0 is income, 1 is debt
+        for cut in cuts(pile, m):
+            s = score(pile, m, cut)
+            if best is None or s < best[0]:     # the first one tried, or better than the best
+                best = (s, m, cut)
+    return best
+
+names = ["income", "debt"]
+frames = []
+for m in [0, 1]:                                # the same tries again, keeping a picture of each
+    for cut in cuts(rows, m):
+        pic = sheet()
+        if m == 0:
+            pic["vlines"] = [cut]               # an up-and-down line: a cut on income
+        else:
+            pic["hlines"] = [cut]               # a level line: a cut on debt
+        pic["notes"] = ["trying " + names[m] + " < " + str(cut),
+                        "score " + str(round(score(rows, m, cut), 2))]
+        frames.append(pic)
+
+s, m, cut = best_split(rows)
+print("best question: is", names[m], "below", cut, "?   score", round(s, 2))
+
+last = sheet()
+if m == 0:
+    last["accent"] = [(cut, 0), (cut, 65)]
+else:
+    last["accent"] = [(10, cut), (110, cut)]
+last["notes"] = ["best: " + names[m] + " < " + str(cut), "score " + str(round(s, 2))]
+frames.append(last)
+```
+:::
+
+The income cut wins. The best question about debt alone, debt below 41, scores 15.68, a little worse than 15. So the first question of the tree is **is income below 53?**
+
+## What happens inside each pile?
+
+One question left you with two piles, each still a little mixed. Now do the same thing again, inside each pile on its own: find the best question for the left pile using only the left pile's borrowers, and the best for the right pile using only the right's. A pile that is all one kind is finished and is left alone.
+
+::: {.ink-figure data-figure="tree-lab" data-step="1" data-caption="Fig. 2 · each pile cut again, one level at a time, and the questions written out"}
+:::
+
+Press *cut each pile again* once. The left pile is split by a question about debt, and so is the right pile, but at a different number. You have four rectangles, and beside them four answers:
 
 ```
-IF income > $50K AND credit_score > 700
-  → APPROVE
-ELSE IF income > $50K AND credit_score ≤ 700
-  → REVIEW
-ELSE
-  → DENY
+is income below 53?
+  yes: is debt below 23.5?   yes: o    no: +
+  no:  is debt below 45?     yes: o    no: +
 ```
 
-That is a decision tree. It also copes with patterns like the one above, where one class sits in a band inside the other and no single straight line separates them. The rest of this page is about how the tree finds its rules, and why it has to be held back.
+Read it from the top. Someone with income 40 and debt 30: income is below 53, so take "yes"; debt is not below 23.5, so take "no"; the answer is +. That is the whole rule, and you can say it out loud. Six of the 40 are called wrong now, down from 10.
 
-## The first cut
+Every cut is either up-and-down or across, so the piles are always rectangles. Press again: some rectangles split, and the pure ones stay as they are.
 
-A tree is built from one move, repeated. Pick one feature and one value, and cut the data in two: everything below the value goes left, everything else goes right. In theory you could branch on combinations of features, but in practice it is done one feature at a time. So the question at every step is which feature, and where.
+### Now tell a computer
 
-For classification, CART scores a group of points by its **Gini impurity**:
+The code keeps a list of piles. Each pile is a dict holding its borrowers and the rectangle it covers. `cut_again` goes through the piles once: a pure pile is kept as it is (`continue` skips straight to the next pile), and any other pile is cut in two by its own best question. Nothing here is new: it is `best_split` from above, used on one pile at a time.
 
-$$\text{Gini} = 1 - \sum_{k=1}^{K} p_k^2$$
+::: {.py-cell data-draw="py-plot"}
+```python
+def tally(pile):
+    t = [0, 0]                                  # [how many o, how many +]
+    for r in pile:
+        t[r[2]] += 1
+    return t
 
-where $p_k$ is the proportion of class $k$ in the node. For two classes this simplifies to $2p(1-p)$.
+def cut_again(piles):
+    new = []
+    for pile in piles:
+        if min(tally(pile["rows"])) == 0:       # all one kind: nothing to sort
+            new.append(pile)
+            continue
+        s, m, cut = best_split(pile["rows"])    # the best question for this pile alone
+        left, right = [], []
+        for r in pile["rows"]:
+            if r[m] < cut:
+                left.append(r)
+            else:
+                right.append(r)
+        x0, x1, y0, y1 = pile["box"]            # the rectangle this pile covers
+        if m == 0:                              # an income cut: a left and a right rectangle
+            new.append({"rows": left, "box": (x0, cut, y0, y1)})
+            new.append({"rows": right, "box": (cut, x1, y0, y1)})
+        else:                                   # a debt cut: a lower and an upper rectangle
+            new.append({"rows": left, "box": (x0, x1, y0, cut)})
+            new.append({"rows": right, "box": (x0, x1, cut, y1)})
+    return new
 
-| Gini value | Meaning |
-|:----------:|:--------|
-| 0 | **Pure**: every point belongs to one class |
-| 0.5 | **Maximum impurity**: a 50/50 mix (for two classes) |
+def draw(piles, title):
+    pic = sheet()
+    pic["lines"] = []
+    wrong = 0
+    for pile in piles:
+        x0, x1, y0, y1 = pile["box"]
+        pic["lines"].append([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])   # its rectangle
+        wrong += min(tally(pile["rows"]))       # the smaller kind in each pile is called wrong
+    pic["notes"] = [title, str(len(piles)) + " piles", "called wrong " + str(wrong)]
+    return pic
 
-A cut makes two child nodes, each with its own Gini. CART tries every possible cut on every feature and keeps the one with the **lowest weighted average Gini** across the two children, where each child is weighted by how many points it holds.
-
-::: {.ink-figure data-figure="cart-figure" data-step="1" data-caption="Fig. 2 · drag the cut; the curve is the weighted Gini of every place it could go · made-up data"}
+piles = [{"rows": rows, "box": (10, 110, 0, 65)}]   # to begin with, one pile: everyone
+frames = [draw(piles, "no cuts yet")]
+for level in range(1, 4):
+    piles = cut_again(piles)
+    frames.append(draw(piles, "level " + str(level)))
+    print("level", level, ":", len(piles), "piles")
+```
 :::
 
-Drag the cut in Fig. 2 and watch the counts on each side. Uncut, the 70 points have a Gini of 0.45. The best vertical cut, near $x_1 = 3.6$, brings the weighted figure down to 0.38 because the left side becomes almost pure. Notice that the count of wrong points does not move at that cut: both sides still vote for the same class. Impurity registers progress that a count of mistakes misses, and the next cut cashes it in.
+The picture plays the levels back: one rectangle, then two, then four, then seven. Compare the number called wrong at each level with Fig. 2. They are the same tree, grown by the same rule.
 
-## Growing the tree
+## When should it stop cutting?
 
-CART does not stop at one split. It takes each child node and asks the same question again, then again of the grandchildren, and so on, recursively. Every cut is parallel to an axis, so the tree divides the plane into rectangles. That is the difference from an SVM, which draws a single line or curve, and from KNN, whose boundaries are irregular. CART always makes **axis-aligned rectangular splits**, and each rectangle is one leaf of the tree and one if-then rule.
+Each level calls fewer borrowers wrong. Keep going and every pile ends up all one kind: nobody is called wrong at all.
 
-::: {.ink-figure data-figure="cart-figure" data-step="2" data-caption="Fig. 3 · the same tree drawn twice: as rectangles on the plane, and as nodes and thread · ringed points are the ones it still gets wrong · made-up data"}
+::: {.ask data-veil="true"}
+Cut until every pile is pure. On its own 40 borrowers it now gets every one right. How will it do on 40 new borrowers it has never seen?
+
+- **Nearly perfect too.** That is what you would hope. Slide the levels in the figure and watch the line for fresh borrowers.
+- **Worse than a smaller tree.** Yes. Slide the levels in the figure to see how much worse.
 :::
 
-Slide the depth in Fig. 3. Each level adds cuts, each cut adds a rectangle, and the training error falls. To label a new point you start at the root, answer each question, and take the majority class of the leaf you land in. By convention the tree is drawn upside down, root at the top and leaves at the bottom.
-
-Growth has to end somewhere, and the stopping rules matter. A branch is accepted only if it improves the split criterion by more than some threshold and both sides keep enough data points. The course rule of thumb is that each leaf should hold at least 5% of the data. You can also cap the depth outright. All of these are ways of stopping early.
-
-## Cutting it back
-
-A tree with enough depth can classify every training point correctly. Branch until every leaf holds a single point and the training error is zero, but the tree has only memorised its data, and it will predict poorly on anything new. The signs of an overfit tree are high training accuracy with low test accuracy, many levels and many leaves, leaves that hold very few points, and complicated rules that make no intuitive sense.
-
-::: {.ink-figure data-figure="cart-figure" data-step="3" data-steps="2:grow the tree|3:score points it never saw" data-caption="Fig. 4 · the same trees scored on 70 held-out points; training error keeps falling, held-out error turns back up · made-up data"}
+::: {.ink-figure data-figure="tree-lab" data-step="2" data-caption="Fig. 3 · every level of the tree, scored on its own 40 borrowers and on 40 fresh ones from the same made-up pattern"}
 :::
 
-Fig. 4 scores the same trees on points they were not grown on. At depth 5 the tree makes no mistakes on its own 70 points and 13 on the fresh 70. The held-out error is lowest at depth 3 and rises after it, while the training error keeps falling all the way down. The thin slivers at the deeper levels are rectangles built around single noisy points. [Exam trap: a deeper tree is a more complex model, and complex means overfitting risk, never the reverse. Perfect training accuracy is a warning. Prune using data the tree was not grown on.]{.side}
+Press *show the fresh ones* to swap in 40 new borrowers, made up by the same rule as the first 40. The rectangles stay where the first 40 put them.
 
-**Pruning** is the fix, and there are two strategies.
+With two levels, the tree calls 6 of its own borrowers wrong and only 4 of the fresh ones. With every pile pure, it calls none of its own wrong, and 10 of the fresh ones.
 
-| Strategy | How it works |
-|:---------|:-------------|
-| **Pre-pruning** | Stop growing early (limit depth, minimum samples per leaf) |
-| **Post-pruning** | Grow the full tree, then cut back branches that don't help on validation data |
+Look at what the deep cuts are doing. Below debt 11 on the right there is a long thin strip that says +. It is there for one borrower, income 77 and debt 8, who missed payments where nearly everyone else paid. The tree drew a whole rectangle around one odd case. Four fresh borrowers land in that strip. All four paid back, and all four are called +. The tree has **memorised oddities** in the borrowers it saw, instead of learning the pattern.
 
-The course teaches the second as a two-phase process. Grow the tree on one half of the data, then use the held-out half to check whether each branch really reduces the error, and remove the branches that do not. The figure prunes by whole levels to keep the picture simple; real pruning removes individual branches. R's `rpart` does the same job with a complexity parameter, `cp`, chosen by cross-validation. Either way the simpler tree often performs as well as the full one on new data, or better.
+Here is the same thing in code. `while True` means "keep going", and `break` is the way out: it stops once a round of cutting changes nothing. A fresh borrower is answered by finding the rectangle they land in and taking that pile's answer. `x0 <= r[0] < x1` reads "r[0] is at least x0 and below x1", which is how the code asks whether a borrower is inside a rectangle.
 
-## Numbers at the leaves
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import fresh                          # 40 borrowers the tree has never seen
 
-CART is not only for classification. A **regression tree** predicts a number, and it chooses its cuts by the sum of squared errors, the same objective as linear regression but applied locally inside each rectangle:
+def wrong_on(piles, some):
+    wrong = 0
+    for r in some:
+        for pile in piles:
+            x0, x1, y0, y1 = pile["box"]
+            if x0 <= r[0] < x1 and y0 <= r[1] < y1:    # the rectangle this borrower lands in
+                t = tally(pile["rows"])
+                if t[1] > t[0]:
+                    says = 1                    # more + than o: the pile says +
+                else:
+                    says = 0
+                if says != r[2]:
+                    wrong += 1
+    return wrong
 
-$$\text{SSE} = \sum_{i \in \text{left}} (y_i - \bar{y}_{\text{left}})^2 + \sum_{i \in \text{right}} (y_i - \bar{y}_{\text{right}})^2$$
+piles = [{"rows": rows, "box": (10, 110, 0, 65)}]
+own, new = [], []
+frames = []
+level = 0
+while True:
+    grown = cut_again(piles)
+    if len(grown) == len(piles):                # nothing was cut: every pile is pure
+        break
+    piles = grown
+    level += 1
+    a = wrong_on(piles, rows)
+    b = wrong_on(piles, fresh)
+    print("level", level, "  wrong on its own 40:", a, "  on 40 fresh:", b)
+    own.append((level, a))
+    new.append((level, b))
+    frames.append({"lines": [list(own)], "accent": list(new),
+                   "points": own + new, "labels": [0] * len(own) + [1] * len(new),
+                   "xlim": (0, 7), "ylim": (0, 20), "xlabel": "levels", "ylabel": "called wrong",
+                   "notes": ["o  its own 40", "+  40 fresh", "level " + str(level)]})
+```
+:::
 
-This is the course's "pick the split that minimises the total variance of the two branches" in different words.
+The plain line is the borrowers it grew on, falling all the way to 0. The coloured line is the fresh ones: lowest at two levels, then back up. `[0] * 3` makes the list `[0, 0, 0]`; it is only there to give each point on the picture its mark.
 
-As the course presents it, a regression tree splits the data into leaves and fits a separate regression model in each one, so the coefficients can differ between subgroups. In practice each leaf rarely has enough points to support a full model, so the usual simplification is a constant: the leaf predicts the **mean** of its training points. The other tree types follow the same pattern. A classification tree predicts the most common class in the leaf, and a logistic regression tree reports the fraction of positive responses.
+::: {.ask}
+The full tree is perfect on what it saw and worse on what it did not. What would you do?
 
-Predicting a mean per leaf gives a **staircase**. The prediction is piecewise constant, flat inside each rectangle, and the tree approximates a curve by breaking it into enough small steps. A deep regression tree overfits in the same way a deep classification tree does: the steps start following individual noisy points.
+- **Stop early.** That works. Stop at a fixed number of levels, or refuse a cut that leaves a pile with only a handful of borrowers, or refuse one that improves the score by too little.
+- **Grow it fully, then cut back.** That works too. Keep some borrowers aside that the tree never grows on. Then, branch by branch, take away cuts that do not lower the number those borrowers get wrong.
+- **Get more borrowers.** Always welcome, but a tree that keeps cutting will still find oddities to memorise in a bigger crowd. You still need one of the other two.
+:::
 
-## One tree or many
+Both fixes need you to judge the tree on borrowers it did not grow on, as Fig. 3 did. The figure cuts back by whole levels to keep the picture simple. Real cutting back removes single branches, so one side of the tree can stay deeper than the other.
 
-Set beside the other classifiers, a single tree looks like this.
+## Can a tree do more than sort?
 
-| | CART | SVM | KNN | Logistic Reg |
-|:--|:-----|:----|:----|:-------------|
-| **Interpretable?** | Yes — if-then rules | Moderate | No | Moderate (coefficients) |
-| **Handles non-linear?** | Yes (inherently) | Yes (kernels) | Yes (inherently) | Only with transforms |
-| **Handles mixed types?** | Yes (numeric + categorical) | Numeric only | Numeric only | Numeric only |
-| **Needs scaling?** | **No** | Yes | Yes | Recommended |
-| **Overfitting risk** | High (deep trees) | Moderate | High (small k) | Low |
-| **Feature selection?** | Built in (top splits = most important) | No | No | Via p-values |
+**It can predict a number.** Suppose you wanted how many days late a payment would be, not just whether it was late. Cut exactly as before, but let each pile answer with the average of its borrowers' numbers. To score a cut, measure how far each number in a pile is from that pile's average, square it, and add them all up, the same "squared miss" you used when fitting a line. The answers jump from one flat level to the next, like a staircase, and a deep tree overfits in the same way: its steps start to follow single odd points.
 
-The table holds CART's particular advantages. A tree needs no scaling, because its splits compare a feature to a threshold and never measure a distance. It takes categorical and numeric features side by side. It reports feature importance for free, since the features used in the top splits matter most. And it is the one model here a non-technical stakeholder can read. Its weaknesses are the overfitting you have just seen, boundaries that can only be rectangles, and instability: a small change in the data can produce a very different tree.
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+With $\bar{y}_{\text{left}}$ for the average of the numbers in the left pile, and $\bar{y}_{\text{right}}$ for the right, a cut scores
 
-| Scenario | Use CART? | Why |
-|:---------|:---------|:----|
-| "Need interpretable rules for a loan officer" | **Yes** | CART = human-readable if-then rules |
-| "Explain to management why the model rejected an applicant" | **Yes** | Trace the tree path |
-| "Classify with maximum accuracy on large dataset" | Maybe not | SVM often more accurate |
-| "Features are a mix of numbers and categories" | **Yes** | CART handles both natively |
-| "Predict a probability" | Logistic regression | CART outputs class, not calibrated probability |
-| "Non-linear relationships, need simple explanation" | **Yes** | Splits naturally capture non-linearity |
+$$\text{total} = \sum_{i \in \text{left}} (y_i - \bar{y}_{\text{left}})^2 + \sum_{i \in \text{right}} (y_i - \bar{y}_{\text{right}})^2$$
 
-The instability is also an opportunity. A **random forest** grows many trees, typically 500 to 1,000 or more, and makes each one different on purpose in two ways. Every tree gets a bootstrap sample: $n$ points drawn with replacement, so some are repeated and others left out. And at each branch only a random subset of the features is considered. The forest then averages the trees' predictions for regression and takes the most common prediction for classification. No pruning is needed, because the trees overfit in different ways and the averaging smooths those differences out. [The trade: a forest usually predicts better than one tree, but 500 trees are a black box. You can report which variables matter overall, not the rule behind any one prediction.]{.side}
+Read the big Σ as "add these up" over the borrowers in that pile. The best cut is the one with the smallest total. Some trees go further and fit a small straight line inside each pile instead of an average; that needs many points per pile, so the average is the usual choice.
+:::
 
-**Gradient boosting** builds its trees in sequence instead, each one correcting the errors of those before it. Both are among the most powerful models in practice, and both are built from CART.
+**Many trees are steadier than one.** Move a few borrowers and a tree can change a lot, because a different first question changes every question under it. So grow many trees, each on a different random sample: draw 40 borrowers from the 40 at random, putting each one back after it is drawn, so some come up twice and some not at all. At each cut, let a tree look at only some of the measurements, chosen at random. Then ask all the trees and let them vote (for a number, take the average). Their oddities are different, and in the vote they mostly cancel out, so nobody needs to cut them back.
 
-## Run it yourself {.reference}
+The cost is the thing you started with. Five hundred trees voting is not a rule anyone can read out loud. You can still say which measurements the trees lean on most, but not the reason behind any one answer.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| A yes-or-no question about one measurement | A split |
+| The piles; the piles at the very end | Nodes; leaves |
+| The questions, read from the top | A decision tree (a classification tree) |
+| The finer score, 2 × a × b ÷ (a + b) | Gini impurity, times the size of the pile |
+| Trying every cut on every measurement and keeping the best | Greedy, axis-aligned splitting |
+| How many levels of questions | Depth |
+| Memorising oddities | Overfitting |
+| Stopping early | Pre-pruning |
+| Growing fully, then cutting back with borrowers it never grew on | Post-pruning, with a validation set |
+| The 40 fresh borrowers | A test set |
+| Each pile answering with its average | A regression tree |
+| Many trees on random samples, voting | A random forest |
+
+The method is often called CART, short for classification and regression trees. A library such as scikit-learn (`DecisionTreeClassifier`) or R's `rpart` runs the same steps: every cut on every measurement, the Gini score, one pile at a time. `rpart` cuts back with a setting called `cp`, chosen by holding out borrowers again and again.
+
+A tree has some useful habits. It never measures a distance, only asks "is this number below that one?", so income in thousands and debt in thousands do not need to be put on the same scale. A question can also be about a category ("is the loan for a car?"). The measurements used near the top are the ones the tree relies on most. Its weak points are the ones you met: it overfits if you let it, its boundaries are always rectangles, and a small change in the data can grow a quite different tree. Gradient boosting is another way to combine many trees: it grows them one after another, each one aimed at the mistakes of those before it.
+
+::: {.callout-note collapse="true" title="Reference: the same ideas in R"}
 
 Every plot below is produced by the R on this page. Open "The R" under any of them to see the code.
 
@@ -404,62 +786,4 @@ barplot(sort(importance, decreasing = TRUE),
   main = "Variable Importance (from CART)",
   ylab = "Importance Score")
 ```
-
-## On one page {.reference}
-
-```
-CART (Decision Tree) RECIPE
-=============================
-
-1. ALGORITHM:
-   - Pick the feature + split point with lowest Gini impurity (classification)
-     or lowest SSE (regression)
-   - Split the data into two groups
-   - Repeat recursively on each group
-   - Stop when a stopping criterion is met (depth, min samples, etc.)
-
-2. SPLITTING CRITERIA:
-   Classification: Gini = 1 - Σpₖ²    (0 = pure, 0.5 = max impurity)
-   Regression:     SSE = Σ(yᵢ - ȳ)²   (minimize within each split)
-
-3. OVERFITTING:
-   Deep trees memorize → prune!
-   Pre-pruning: limit depth, min samples per leaf
-   Post-pruning: grow full tree, cut back branches (use cp / cross-validation)
-
-4. UNIQUE ADVANTAGES:
-   - Human-readable (if-then rules)
-   - No scaling required
-   - Handles mixed data (numeric + categorical)
-   - Built-in feature importance
-   - Non-linear without transforms
-
-5. WEAKNESSES:
-   - High overfitting risk without pruning
-   - Axis-aligned splits only (rectangular boundaries)
-   - Unstable: small data changes → very different tree
-
-6. PRACTICE TIPS:
-   "Interpretable model" → CART
-   "Explain the decision" → CART
-   "Perfect training accuracy" → overfit, prune it
-   Building block for Random Forest and Boosting
-```
-
-## Check yourself {.reference}
-
-Before moving on, try to answer these without scrolling up:
-
-1. Why is CART called the most "interpretable" model?
-2. What is Gini impurity? What value means a pure node? A maximally mixed node?
-3. How does CART decide where to split?
-4. A decision tree gets 100% accuracy on training data. Is this good?
-   What should you do?
-5. What is pruning? Why is it necessary?
-6. Name two advantages CART has over SVM.
-7. Name two advantages SVM has over CART.
-8. A manager says "I need to explain to the board why we denied this loan."
-   Which model would you recommend? Why?
-9. How does a regression tree differ from a classification tree?
-10. What are Random Forests and Gradient Boosting, and how do they relate
-    to CART?
+:::

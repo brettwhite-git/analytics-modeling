@@ -1,0 +1,472 @@
+---
+title: "How do you measure how alike two things are?"
+subtitle: "You will do every step by hand first, then teach it to a computer. All you need is arithmetic."
+engine: knitr
+---
+
+A café keeps two numbers about each of its regular customers: how many times they visit in a month, and how much they spend on a visit. Customer no. 1 visits 2.3 times a month and spends $7.68 each time. That is the whole description: two numbers.
+
+Two numbers are all you need to put something on a page: one tells you how far across, the other how far up. So every customer is a dot. A table of customers, one row each, is a list of dots. Nobody has told you yet that "alike" is something you can measure. It is, and the rest of this guide leans on it.
+
+## Which customers are alike?
+
+Here are twenty made-up customers of the café. Each dot is one customer: across is visits per month, up is spend per visit in dollars. Click any customer.
+
+::: {.ink-figure data-figure="points-lab" data-step="0" data-caption="Fig. 1 · twenty made-up customers, and the three nearest to the one you chose"}
+:::
+
+Threads grow from the customer you chose to the three dots closest to it. Look at who they reach: customers who visit about as often and spend about as much. Click the lone dot near the bottom and the threads have to reach much further.
+
+That is the idea of the whole lesson: **things that are alike sit close together.** "Close" is a number, written in the column beside the plot. The next section is how to work it out.
+
+### Now tell a computer
+
+A computer cannot look at a picture. It needs the dots as numbers. In Python, a customer is a pair of numbers in round brackets, such as `(2.3, 7.68)`: 2.3 across, 7.68 up. The whole table is a list of pairs in square brackets, `[(2.2, 8.51), (2.3, 7.68), ...]`.
+
+The cell below fetches the same twenty customers you just saw, and the one you clicked. Press **Run**. The first time takes a few seconds while Python starts.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+from page import points, chosen       # the customers in Fig. 1, and the one you clicked
+
+print("There are", len(points), "customers.")
+print("The first one is", points[0])
+print("You chose no.", chosen, "which is", points[chosen])
+
+picture = {"points": points, "stars": [points[chosen]],
+           "xlim": (0, 10), "ylim": (0, 10),
+           "xlabel": "visits per month", "ylabel": "spend per visit ($)"}
+```
+:::
+
+`print` writes its words and numbers out under the cell. `len(points)` is how many things the list holds. `points[0]` is the first customer in it: Python counts from 0, not 1, which is why the figure numbers customers from 0 too. The last lines make a `picture`, a list of what to draw, and the drawing under the cell is made from it. The circled dot is the one you chose.
+
+## How far apart are two customers?
+
+Start with an easy one. One dot sits at (0, 0) and another at (3, 4). To get from the first to the second you go 3 across and 4 up.
+
+Multiply each by itself and add: 3 × 3 = 9, and 4 × 4 = 16, and 9 + 16 = **25**. That is the squared distance. Its square root, the number that multiplied by itself gives 25, is **5**: the length of a straight thread between the two dots. You can check with a ruler: across 3, up 4, the slanted side is 5.
+
+Now two real customers. No. 1 is at (2.3, 7.68) and no. 2 at (1.6, 7.79). Across: 2.3 − 1.6 = 0.7. Up: 7.79 − 7.68 = 0.11. Each times itself: 0.49 and 0.0121, which add to about 0.50. Its square root is 0.71. That is the number Fig. 1 showed for no. 2, and the sum in its column.
+
+Why multiply each by itself? Because across can come out negative (1.6 − 2.3 = −0.7) and a distance cannot. A number times itself is never negative: −0.7 × −0.7 = 0.49.
+
+::: {.ask}
+No. 2 is 0.50 away from no. 1, squared. No. 13 is 4.00 away, squared. To know which is nearer, do you need the square roots?
+
+- **Yes, squared numbers are not real distances.** True, they are not lengths. But you only want to know which is nearer. The square roots are 0.71 and 2.00, the same order. A bigger number always has a bigger square root.
+- **No, the order stays the same.** Right. A bigger number always has a bigger square root, so 0.50 against 4.00 picks the same customer as 0.71 against 2.00. Take the square root when you want the true length, and skip it when you only want the nearest.
+:::
+
+::: {.ask}
+Before you write code for this: how would you check the code is right?
+
+- **Run it on all twenty customers.** You would get a pile of numbers, and no way of telling whether any of them is correct.
+- **Try the one I just did by hand.** Yes. You already know (0, 0) to (3, 4) is 25. If the code says anything else, it is wrong, and you know straight away.
+:::
+
+The code below does the same sum. One piece is missing. Replace the blank with what it should add, and press Run.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+import math                       # a toolbox of maths, including square roots
+
+def dist2(p, q):
+    across = p[0] - q[0]          # p[0] is the first number of the pair
+    up = p[1] - q[1]              # p[1] is the second
+    return across * across + ____
+
+print(dist2((0, 0), (3, 4)))                # by hand this was 25
+print(math.sqrt(dist2((0, 0), (3, 4))))     # its square root, the true length: 5
+
+picture = {"points": [(0, 0), (3, 4)], "segments": [((0, 0), (3, 4))],
+           "lines": [[(0, 0), (3, 0), (3, 4)]],
+           "xlim": (-1, 5), "ylim": (-1, 5),
+           "notes": ["squared: " + str(dist2((0, 0), (3, 4))),
+                     "length: " + str(math.sqrt(dist2((0, 0), (3, 4))))]}
+```
+::: {.py-solution}
+```python
+import math                       # a toolbox of maths, including square roots
+
+def dist2(p, q):
+    across = p[0] - q[0]          # p[0] is the first number of the pair
+    up = p[1] - q[1]              # p[1] is the second
+    return across * across + up * up
+
+print(dist2((0, 0), (3, 4)))                # by hand this was 25
+print(math.sqrt(dist2((0, 0), (3, 4))))     # its square root, the true length: 5
+
+picture = {"points": [(0, 0), (3, 4)], "segments": [((0, 0), (3, 4))],
+           "lines": [[(0, 0), (3, 0), (3, 4)]],
+           "xlim": (-1, 5), "ylim": (-1, 5),
+           "notes": ["squared: " + str(dist2((0, 0), (3, 4))),
+                     "length: " + str(math.sqrt(dist2((0, 0), (3, 4))))]}
+```
+:::
+:::
+
+`def` gives a set of steps a name, so you can use them again. From now on, `dist2(a, b)` means "do that sum for a and b", and `return` hands the answer back. `import math` fetches Python's maths toolbox, and `math.sqrt` is its square root. The drawing shows the three sides: across, up, and the slanted thread whose length you just worked out.
+
+## Who is the nearest?
+
+By hand, you would measure from your customer to the first other customer, then the second, then the third, and keep in mind the closest one so far. The code does exactly that. `best` is the customer it is keeping in mind, and `best_d` is how far away that one is.
+
+Three new words. `for j in range(len(points))` repeats the indented lines once for every customer, with `j` counting 0, 1, 2, and so on. `if` runs its lines only when the test after it is true. `!=` means "is not", so `j != me` skips the customer you started from, who is always 0 away from themselves.
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def nearest(points, me):
+    best = -1                     # nobody found yet
+    best_d = 1000000000           # a huge number: the first customer checked beats it
+    for j in range(len(points)):  # once for each customer: j is 0, 1, 2, ...
+        d = dist2(points[j], points[me])
+        if j != me and d < best_d:
+            best = ____           # closer than anyone so far: remember who
+            best_d = d            # and how close
+    return best
+
+winner = nearest(points, chosen)
+print("The nearest to no.", chosen, "is no.", winner)
+
+me = points[chosen]
+frames = []                       # one picture for each check, played in order
+for j in range(len(points)):
+    if j != chosen:
+        frames.append({"points": points, "stars": [me], "segments": [(me, points[j])],
+                       "notes": ["checking no. " + str(j),
+                                 "squared: " + str(round(dist2(points[j], me), 2))]})
+frames.append({"points": points, "stars": [me], "segments": [(me, points[winner])],
+               "notes": ["nearest: no. " + str(winner)]})
+```
+::: {.py-solution}
+```python
+def nearest(points, me):
+    best = -1                     # nobody found yet
+    best_d = 1000000000           # a huge number: the first customer checked beats it
+    for j in range(len(points)):  # once for each customer: j is 0, 1, 2, ...
+        d = dist2(points[j], points[me])
+        if j != me and d < best_d:
+            best = j              # closer than anyone so far: remember who
+            best_d = d            # and how close
+    return best
+
+winner = nearest(points, chosen)
+print("The nearest to no.", chosen, "is no.", winner)
+
+me = points[chosen]
+frames = []                       # one picture for each check, played in order
+for j in range(len(points)):
+    if j != chosen:
+        frames.append({"points": points, "stars": [me], "segments": [(me, points[j])],
+                       "notes": ["checking no. " + str(j),
+                                 "squared: " + str(round(dist2(points[j], me), 2))]})
+frames.append({"points": points, "stars": [me], "segments": [(me, points[winner])],
+               "notes": ["nearest: no. " + str(winner)]})
+```
+:::
+:::
+
+The drawing plays back every check, one thread at a time, and ends on the winner. Compare the number it prints with the top of the "nearest three" list in Fig. 1. They should match: the computer did what you did.
+
+The lines after the function only make the drawing. `frames.append(...)` adds one more picture to the end of the list `frames`, and `str` turns a number into words so it can be joined to other words.
+
+### What about three measurements, or thirty?
+
+Suppose the café also knows how many minutes each customer stays. Now a customer is three numbers, such as (1, 2, 3), and you cannot draw that on a flat page. You can still measure.
+
+The sum just gets one more piece. From (1, 2, 3) to (4, 6, 3): the gaps are 3, 4 and 0. Each times itself: 9 + 16 + 0 = **25**. With thirty measurements the sum has thirty pieces, one for each. Nothing else changes.
+
+So here is `dist2` again, for any number of measurements. It walks along the two lists side by side, one measurement at a time, and keeps a running total. It replaces the first version, and everything you wrote above keeps working.
+
+::: {.py-cell}
+```python
+def dist2(p, q):
+    total = 0
+    for i in range(len(p)):       # once for each measurement
+        gap = p[i] - q[i]
+        total = total + gap * gap # each gap times itself, added on
+    return total
+
+print(dist2((0, 0), (3, 4)))              # two measurements: still 25
+print(dist2((1, 2, 3), (4, 6, 3)))        # three measurements: 9 + 16 + 0 = 25
+print(nearest(points, chosen))            # the same nearest as before
+```
+:::
+
+## What if you change the units?
+
+The café's owner keeps spend in dollars. Her accountant keeps it in cents. Same customers, same visits, same money. Only the numbers written down are different: $7.68 becomes 768.
+
+::: {.ask data-veil="true"}
+Count spend in cents instead of dollars. Is no. 2 still the nearest to no. 1?
+
+- **Yes. They are the same customers.** That is what you would hope. Slide the coins in the figure and watch the "nearest three" list.
+- **No, it can change.** Slide the coins in the figure and watch why.
+:::
+
+::: {.ink-figure data-figure="points-lab" data-step="1" data-caption="Fig. 2 · the same customers, with spend counted in smaller and smaller coins"}
+:::
+
+Slide *spend in* from dollars to cents. The chart keeps the same length for one unit across and one unit up, so it shows true distances. As the spend numbers grow a hundredfold, the visits shrink to a thin strip against the left edge. Across hardly counts any more. The nearest customer is now whoever spends the closest amount, however often they come.
+
+Work it by hand for no. 1. In dollars, to no. 2: 0.49 + 0.0121 ≈ **0.50**. To no. 13, at (4.3, 7.69): across is 2.0, so 4, and up is 0.01, so 0.0001. Total **4.00**. No. 2 is nearer.
+
+In cents, spend is 768 against 779 for no. 2, and 768 against 769 for no. 13. To no. 2: 0.49 + 11 × 11 = 0.49 + 121 = **121.49**. To no. 13: 4 + 1 × 1 = **5**. Now no. 13 is nearer, although it visits almost twice as often. The visits gap of 0.49 is still in there. It is just drowned by a 121.
+
+### How does it break?
+
+Here is the same thing in code. The cell writes the spend of every customer in cents and asks `nearest` again. Run it.
+
+::: {.py-cell data-draw="py-plot" data-aside="true"}
+```python
+in_cents = []                                  # an empty list, filled below
+for p in points:                               # p is each customer in turn
+    in_cents.append((p[0], round(p[1] * 100))) # same customer, spend in cents
+
+a = nearest(points, chosen)
+b = nearest(in_cents, chosen)
+print("In dollars, the nearest to no.", chosen, "is no.", a)
+print("In cents,   the nearest to no.", chosen, "is no.", b)
+
+me = in_cents[chosen]
+picture = {"points": in_cents, "stars": [me], "segments": [(me, in_cents[b])],
+           "xlabel": "visits per month", "ylabel": "spend per visit (cents)",
+           "notes": ["dollars: no. " + str(a), "cents: no. " + str(b)]}
+```
+:::
+
+For no. 1 the answer changes, and for most other customers too. Nothing is wrong with the code. It did the sum it was given. The sum adds a visits gap and a spend gap as if one visit were worth one cent, and nobody decided that. Whichever measurement happens to have the bigger numbers wins.
+
+::: {.ask}
+What should you do about it?
+
+- **Leave spend out.** Then spend counts for nothing, which is the same mistake the other way round. Spend tells you something about a customer.
+- **Always use dollars.** That fixes this pair. But visits and dollars are not the same kind of thing either: who says one visit is worth one dollar? With thirty measurements in thirty different units, there is no "right" unit to pick.
+- **Put every measurement on the same scale first.** Yes. Make each one run over the same range, so no measurement wins just because of its units.
+:::
+
+## How do you put them on one scale?
+
+One simple way: for each measurement, take the smallest value and the largest. Subtract the smallest from every value, then divide by the range, the largest minus the smallest. The smallest customer becomes 0, the largest becomes 1, and everyone else lands in between.
+
+By hand, with three customers who spend $2, $4 and $10. The smallest is 2 and the range is 10 − 2 = 8.
+
+- $2: (2 − 2) ÷ 8 = **0**
+- $4: (4 − 2) ÷ 8 = 2 ÷ 8 = **0.25**
+- $10: (10 − 2) ÷ 8 = 8 ÷ 8 = **1**
+
+Now the same three in cents: 200, 400 and 1000. The smallest is 200 and the range is 800. (400 − 200) ÷ 800 = **0.25**, and so on: exactly the same three answers. Dollars or cents, the scaled numbers are the same. Units no longer matter.
+
+Go back to Fig. 2 and press *put both on one scale*. Every customer glides to its new place, with both measurements running from 0 to 1. Then slide the coins again. Nothing moves.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+For two customers $p$ and $q$, each described by $n$ numbers $p_1, \dots, p_n$, the squared distance is
+
+$$d^2(p, q) = \sum_{i=1}^{n} (p_i - q_i)^2$$
+
+and the distance itself is $d(p, q) = \sqrt{d^2(p, q)}$. Read the big Σ as "add these up, for $i$ from 1 to $n$".
+
+Putting one measurement $x$ on the 0 to 1 scale:
+
+$$x_{\text{scaled}} = \frac{x - \min(x)}{\max(x) - \min(x)}$$
+:::
+
+In code, `scale` does that sum for one list of values. `min` and `max` give the smallest and largest. One blank: what do you divide by?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def scale(values):
+    lo = min(values)                   # the smallest
+    hi = max(values)                   # the largest
+    out = []
+    for v in values:
+        out.append((v - lo) / ____)    # how far above the smallest, as a share of the range
+    return out
+
+print(scale([2, 4, 10]))               # by hand: 0, 0.25, 1
+print(scale([200, 400, 1000]))         # the same in cents: the same answer
+
+visits = []
+spend = []
+for p in points:
+    visits.append(p[0])                # one list of visits
+    spend.append(p[1])                 # and one list of spend
+sv = scale(visits)
+ss = scale(spend)
+
+scaled = []
+for i in range(len(points)):
+    scaled.append((sv[i], ss[i]))      # each customer again, now on the 0 to 1 scale
+
+c = nearest(scaled, chosen)
+print("On one scale, the nearest to no.", chosen, "is no.", c)
+
+me = scaled[chosen]
+picture = {"points": scaled, "stars": [me], "segments": [(me, scaled[c])],
+           "xlim": (0, 1), "ylim": (0, 1),
+           "xlabel": "visits, 0 to 1", "ylabel": "spend, 0 to 1"}
+```
+::: {.py-solution}
+```python
+def scale(values):
+    lo = min(values)                   # the smallest
+    hi = max(values)                   # the largest
+    out = []
+    for v in values:
+        out.append((v - lo) / (hi - lo))   # how far above the smallest, as a share of the range
+    return out
+
+print(scale([2, 4, 10]))               # by hand: 0, 0.25, 1
+print(scale([200, 400, 1000]))         # the same in cents: the same answer
+
+visits = []
+spend = []
+for p in points:
+    visits.append(p[0])                # one list of visits
+    spend.append(p[1])                 # and one list of spend
+sv = scale(visits)
+ss = scale(spend)
+
+scaled = []
+for i in range(len(points)):
+    scaled.append((sv[i], ss[i]))      # each customer again, now on the 0 to 1 scale
+
+c = nearest(scaled, chosen)
+print("On one scale, the nearest to no.", chosen, "is no.", c)
+
+me = scaled[chosen]
+picture = {"points": scaled, "stars": [me], "segments": [(me, scaled[c])],
+           "xlim": (0, 1), "ylim": (0, 1),
+           "xlabel": "visits, 0 to 1", "ylabel": "spend, 0 to 1"}
+```
+:::
+:::
+
+Compare the nearest it prints with the top of the list in Fig. 2 once you have pressed *put both on one scale*. Same customers, same sum, same answer. For no. 1 it is no. 2 again, as it was in dollars, because here visits and dollars happened to run over similar ranges. Scaling makes sure of that instead of leaving it to luck.
+
+The scale has a weak spot worth knowing. If every customer had the same value, the largest minus the smallest would be 0, and the code would try to divide by zero. A measurement that never changes tells you nothing about who is alike, so in practice you leave it out.
+
+## Where is the middle, and how spread out are they?
+
+Two more numbers describe any list of values, and the lessons ahead use them all the time: where its middle is, and how spread out it is around that middle.
+
+Here are eight customers' visits last month: 2, 4, 4, 4, 5, 5, 7, 9. Drag the middle to where you think it should be.
+
+::: {.ink-figure data-figure="points-lab" data-step="2" data-caption="Fig. 3 · eight numbers on a line, and a middle you can drag"}
+:::
+
+Every number pulls on the middle by its gap: how far it is from it. With the middle at 3, the numbers below pull 1 in all, and the numbers above pull 17. Move it right until the two pulls match. They match at **5**.
+
+That spot is the average. By hand: add them up, 2 + 4 + 4 + 4 + 5 + 5 + 7 + 9 = 40, and divide by how many there are, 40 ÷ 8 = **5**.
+
+Now the spread. Take each gap from the middle, multiply it by itself (the squares in the figure), and average those:
+
+- gaps: −3, −1, −1, −1, 0, 0, 2, 4
+- each times itself: 9, 1, 1, 1, 0, 0, 4, 16
+- added: 32. Divided by 8: **4**.
+
+That is the average square. Its square root, **2**, is the spread: a typical distance from the middle, in visits. Most of the numbers sit within 2 of 5, between 3 and 7. Watch the average square in the column as you drag: it is smallest when the middle is at the average.
+
+::: {.callout-note collapse="true" title="The same thing in symbols"}
+For $n$ numbers $x_1, \dots, x_n$, the average is
+
+$$\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i$$
+
+and the spread is
+
+$$s = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (x_i - \bar{x})^2}$$
+
+Read $\bar{x}$ as "x bar", the average. Many programs divide by $n - 1$ instead of $n$ inside the square root, which makes the spread a little larger. With many numbers the difference is small.
+:::
+
+In code, both are a loop that keeps a running total, like `dist2`. One blank: what do you divide the total by?
+
+::: {.py-cell data-draw="py-plot"}
+```python
+def average(values):
+    total = 0
+    for v in values:
+        total = total + v              # add them all up
+    return total / ____                # divide by how many there are
+
+def spread(values):
+    mid = average(values)
+    total = 0
+    for v in values:
+        gap = v - mid                  # how far from the middle
+        total = total + gap * gap      # times itself, added on
+    return math.sqrt(total / len(values))
+
+eight = [2, 4, 4, 4, 5, 5, 7, 9]
+print("middle", average(eight), "spread", spread(eight))          # by hand: 5 and 2
+print("all", len(visits), "customers' visits: middle", round(average(visits), 2),
+      "spread", round(spread(visits), 2))
+
+mid = average(eight)
+dots = []
+gaps = []
+for i in range(len(eight)):
+    dots.append((i + 1, eight[i]))                   # customer 1, 2, 3, ... and their visits
+    gaps.append(((i + 1, eight[i]), (i + 1, mid)))   # a thread from each to the middle
+picture = {"points": dots, "segments": gaps, "hlines": [mid],
+           "xlim": (0, 9), "ylim": (0, 10),
+           "xlabel": "customer", "ylabel": "visits last month",
+           "notes": ["middle " + str(mid), "spread " + str(spread(eight))]}
+```
+::: {.py-solution}
+```python
+def average(values):
+    total = 0
+    for v in values:
+        total = total + v              # add them all up
+    return total / len(values)         # divide by how many there are
+
+def spread(values):
+    mid = average(values)
+    total = 0
+    for v in values:
+        gap = v - mid                  # how far from the middle
+        total = total + gap * gap      # times itself, added on
+    return math.sqrt(total / len(values))
+
+eight = [2, 4, 4, 4, 5, 5, 7, 9]
+print("middle", average(eight), "spread", spread(eight))          # by hand: 5 and 2
+print("all", len(visits), "customers' visits: middle", round(average(visits), 2),
+      "spread", round(spread(visits), 2))
+
+mid = average(eight)
+dots = []
+gaps = []
+for i in range(len(eight)):
+    dots.append((i + 1, eight[i]))                   # customer 1, 2, 3, ... and their visits
+    gaps.append(((i + 1, eight[i]), (i + 1, mid)))   # a thread from each to the middle
+picture = {"points": dots, "segments": gaps, "hlines": [mid],
+           "xlim": (0, 9), "ylim": (0, 10),
+           "xlabel": "customer", "ylabel": "visits last month",
+           "notes": ["middle " + str(mid), "spread " + str(spread(eight))]}
+```
+:::
+:::
+
+The first line it prints should say 5 and 2, as you worked out by hand and as Fig. 3 showed when balanced. In the drawing, the level line is the middle and each thread is one gap.
+
+## What you just built
+
+Everything you did has a name:
+
+| What you did | What it is called |
+|:--|:--|
+| A customer described by a few numbers | A data point, or observation |
+| Each kind of number (visits, spend) | A variable, or feature |
+| The list of customers | A data set |
+| Each gap times itself, added up | The squared Euclidean distance |
+| Its square root, the length of the thread | The Euclidean distance |
+| How many numbers describe each customer | The number of dimensions |
+| The few closest customers | The nearest neighbours |
+| Subtract the smallest, divide by the range | Min-max scaling, or normalisation |
+| The middle | The mean |
+| The average square | The variance |
+| The spread, its square root | The standard deviation |
+
+You did not need the names to do it. They are for talking to other people, and for looking things up. Another common way to put measurements on one scale uses the last two rows: subtract the mean and divide by the standard deviation, so every measurement ends up with a middle of 0 and a spread of 1. That is called standardising. A library such as scikit-learn has a `MinMaxScaler` and a `StandardScaler` that do these sums on a whole table at once, and a `NearestNeighbors` that finds the closest few the way your loop did.
