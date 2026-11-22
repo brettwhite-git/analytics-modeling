@@ -4,7 +4,7 @@
    straight line of step 0 is ordinary least squares on the same 0/1 outcomes, and the four counts and the
    total cost are counted from the points that are drawn.
    Steps: 0 a straight line runs above 1 and below 0 · 1 the S-shaped curve stays between them ·
-          2 the reader slides the cut-off: four counts and the total cost, worked out live ·
+          2 the reader drags the cut-off along the curve (or slides it): four counts and the total cost, worked out live ·
           3 change what a miss costs and see which cut-off is cheapest (second slider).
    The parts, their fitted chances (to 3 decimals, the same numbers the counts here use) and the reader's
    cut-off are offered to the page's Python through window.InkPage. Needs InkKit (ink/ink-kit.js). */
@@ -195,6 +195,7 @@
           if (!best || ct.cost < best.cost || (ct.cost === best.cost && Math.abs(t - 50) < Math.abs(best.t - 50))) best = { t: t, cost: ct.cost };
         }
         bestAt.set((best.t / 100).toFixed(2)); bestCost.set(String(best.cost));
+        placeGrab();
       }
 
       /* ---- the outcomes: a plus for broke (drawn at 1), a circle for fine (drawn at 0) ---- */
@@ -207,6 +208,31 @@
         format: function (v) { return v.toFixed(2); },
         onChange: function (v) { cutoff = v; remember(v); redraw(); }
       });
+
+      /* ---- the cut-off on the plot: a ring where it meets the curve, dragged left and right along it.
+              It sets the slider, so the two always agree (and snap to the same 0.05 steps). ---- */
+      function monthAt(t) { return (Math.log(t / (1 - t)) - m.a0) / m.a1; }
+      var grabX0 = sx(Math.max(0, monthAt(0.05))), grabX1 = sx(Math.min(DOM, monthAt(0.95)));
+      var grab = k.root.group({ steps: [2, 3], d: 400 });
+      var grabHit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      grabHit.setAttribute('x', -11); grabHit.setAttribute('width', 22);
+      grabHit.setAttribute('y', sy(1.19)); grabHit.setAttribute('height', sy(P_LO) - sy(1.19));
+      grabHit.setAttribute('class', 'ik-hit');
+      grab.node.appendChild(grabHit);
+      var ringG = grab.group({ d: 400 });
+      ringG.circle(0, 0, 6.5, { w: 1.4, op: 0.95 });
+      ringG.dot(0, 0, 2, {});
+      var grabDrag = k.draggable(grab.node, {
+        label: 'The cut-off, where it meets the curve. Left and right arrow keys move it.',
+        bounds: { x0: grabX0, y0: PLOT.y, x1: grabX1, y1: PLOT.y + PLOT.h },
+        onMove: function (x) { cut.set(prob((x - PLOT.x) / PLOT.w * DOM)); }
+      });
+      function placeGrab() {
+        var x = sx(Math.max(0, Math.min(DOM, monthAt(cutoff))));
+        grab.node.setAttribute('transform', 'translate(' + x.toFixed(1) + ' 0)');
+        ringG.node.setAttribute('transform', 'translate(0 ' + sy(cutoff).toFixed(1) + ')');
+        grabDrag.set(x, sy(cutoff));
+      }
       k.slider({
         x: SIDE, y: 210, w: 158, min: 1, max: 10, step: 1, value: costFN, label: 'miss costs', steps: [3],
         onChange: function (v) { costFN = v; redraw(); }

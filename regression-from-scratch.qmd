@@ -412,7 +412,7 @@ Lower the cut-off to 0.35. Now there are 5 false alarms and 2 misses: 7 mistakes
 ::: {.ink-figure data-figure="logistic-figure" data-step="2" data-steps="2:slide the cut-off|3:reprice a miss" data-caption="Fig. 5 · a cut-off, the four counts, and their cost, worked out live · made-up costs"}
 :::
 
-Slide the cut-off and watch the four counts and the cost. The ringed points are the mistakes. Then press *reprice a miss* and change what a miss costs: the cheapest cut-off moves. There is no cut-off that is right for every job. The only way to choose is to count and multiply.
+Drag the ring where the cut-off meets the curve, or use the slider, and watch the four counts and the cost. The ringed points are the mistakes. Then press *reprice a miss* and change what a miss costs: the cheapest cut-off moves. There is no cut-off that is right for every job. The only way to choose is to count and multiply.
 
 Your code can do the counting. It fetches the 34 parts, the chance the curve gives each one, and the cut-off you left Fig. 5 on. `and` needs both sides to be true. One blank: what does each miss cost?
 

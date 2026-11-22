@@ -7,7 +7,8 @@
      + season            one adjustment per place in the cycle (a ratio: 1.2 = 20% above the level)
      + climb and season  both
    The average held-out miss, the climb per step and the twelve adjustments shown are the numbers that are drawn.
-   One step. Made-up data. Needs InkKit (ink/ink-kit.js). */
+   The pieces are switched by the two buttons, or by clicking a row of "tried so far" (the small triangle marks
+   the one shown). One step. Made-up data. Needs InkKit (ink/ink-kit.js). */
 (function () {
   'use strict';
   if (!window.InkKit) return;
@@ -107,6 +108,20 @@
         k.root.text(SIDE, 210 + i * 18, r[0], { kind: 'axis' });
         return k.root.text(SIDE + SW, 210 + i * 18, '–', { kind: 'val', anchor: 'end' });
       });
+      // each row is also a way in: click one to switch on just those pieces
+      var rowMark = k.root.layer();
+      ROWS.forEach(function (r, i) {
+        var hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hit.setAttribute('x', SIDE - 14); hit.setAttribute('y', 210 + i * 18 - 13);
+        hit.setAttribute('width', SW + 20); hit.setAttribute('height', 18);
+        hit.setAttribute('class', 'ik-hit'); hit.setAttribute('tabindex', 0); hit.setAttribute('role', 'button');
+        hit.setAttribute('aria-label', 'Show the forecast with ' + (r[1] && r[2] ? 'the climb and the season' : r[1] ? 'the climb' : r[2] ? 'the season' : 'neither piece'));
+        hit.style.cursor = 'pointer';
+        function pick() { if (!busy && (climbOn !== r[1] || seasonOn !== r[2])) { climbOn = r[1]; seasonOn = r[2]; redraw(true); } }
+        hit.addEventListener('click', pick);
+        hit.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+        k.root.node.appendChild(hit);
+      });
 
       var live = k.root.layer();
       var bars = k.root.layer();
@@ -156,6 +171,8 @@
         var m = model(x, climbOn, seasonOn), f = forecastOf(m), key = (climbOn ? 1 : 0) + (seasonOn ? 2 : 0);
         tried[key] = f.miss;
         ROWS.forEach(function (r, i) { var kk = (r[1] ? 1 : 0) + (r[2] ? 2 : 0); rowVals[i].set(tried[kk] == null ? '–' : tried[kk].toFixed(1)); });
+        rowMark.clear();
+        ROWS.forEach(function (r, i) { if (r[1] === climbOn && r[2] === seasonOn) rowMark.mark(SIDE - 7, 206 + i * 18, 'tri', { r: 2.6 }); });
         errVal.set(f.miss.toFixed(1));
         climbVal.set(m.climb == null ? 'none' : (m.climb >= 0 ? '+' : '−') + Math.abs(m.climb).toFixed(2));
         bClimb.set(climbOn ? 'take the climb off' : 'add the climb');

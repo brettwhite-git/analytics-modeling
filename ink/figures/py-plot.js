@@ -15,6 +15,8 @@
          "xlabel": "time", "ylabel": "value",
      }
 
+   Point at anything it drew and the nearest value is read out beside it.
+
    Everything is optional. Needs InkKit (ink/ink-kit.js). */
 (function () {
   'use strict';
@@ -79,6 +81,7 @@
         pic = pic || {};
         var lim = limits(pic);
         var sx = k.scale(lim.x[0], lim.x[1], PLOT.x, PLOT.x + PLOT.w), sy = k.scale(lim.y[0], lim.y[1], PLOT.y + PLOT.h, PLOT.y);
+        last = { pic: pic, sx: sx, sy: sy }; clearHover();
         function clampY(v) { return Math.max(PLOT.y, Math.min(PLOT.y + PLOT.h, sy(v))); }
         function clampX(v) { return Math.max(PLOT.x, Math.min(PLOT.x + PLOT.w, sx(v))); }
         function far(v) { return Math.max(-4000, Math.min(4000, v)); }      // keep wild values drawable; the clip does the cutting
@@ -155,6 +158,41 @@
         var notes = (pic.notes || []).slice(0, 5);
         noteNodes.forEach(function (node, i) { node.set(notes[i] != null ? String(notes[i]).slice(0, 26) : ''); });
       }
+
+      /* hover: the nearest thing your code drew, read out as numbers */
+      var hover = k.root.layer(), last = null, hoverKey = '';
+      function showHover(evt) {
+        if (!last) return;
+        var ctm = k.svg.getScreenCTM();
+        if (!ctm) return;
+        var pt = k.svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
+        var at = pt.matrixTransform(ctm.inverse()), best = null, bestD = 16 * 16;
+        function offer(p, what) {
+          if (!pair(p)) return;
+          var x = last.sx(+p[0]), y = last.sy(+p[1]), d = (x - at.x) * (x - at.x) + (y - at.y) * (y - at.y);
+          if (x < PLOT.x - 1 || x > PLOT.x + PLOT.w + 1 || y < PLOT.y - 1 || y > PLOT.y + PLOT.h + 1) return;
+          if (d < bestD) { bestD = d; best = { x: x, y: y, p: p, what: what }; }
+        }
+        var pic = last.pic;
+        (pic.lines || []).forEach(function (l) { (l || []).forEach(function (p) { offer(p, ''); }); });
+        (pic.accent || []).forEach(function (p) { offer(p, ''); });
+        (pic.bars || []).forEach(function (p) { offer(p, ''); });
+        (pic.points || []).forEach(function (p) { offer(p, ''); });
+        (pic.stars || []).forEach(function (p) { offer(p, ''); });
+        var key = best ? best.x.toFixed(1) + ',' + best.y.toFixed(1) : '';
+        if (key === hoverKey) return;
+        hoverKey = key;
+        hover.clear();
+        if (!best) return;
+        var r = 6.5, text = (best.what ? best.what + '  ' : '') + '(' + fmt(+best.p[0]) + ', ' + fmt(+best.p[1]) + ')';
+        hover.path('M' + (best.x - r).toFixed(1) + ' ' + best.y.toFixed(1) + ' a' + r + ' ' + r + ' 0 1 0 ' + (2 * r) + ' 0 a' + r + ' ' + r + ' 0 1 0 ' + (-2 * r) + ' 0', { accent: true, w: 1.1, op: 0.9 });
+        var right = best.x > PLOT.x + PLOT.w - 120, low = best.y < PLOT.y + 22;
+        hover.text(best.x + (right ? -10 : 10), best.y + (low ? 18 : -10), text, { kind: 'axis', anchor: right ? 'end' : 'start' });
+      }
+      function clearHover() { hoverKey = ''; hover.clear(); }
+      k.svg.addEventListener('pointermove', showHover);
+      k.svg.addEventListener('pointerdown', showHover);
+      k.svg.addEventListener('pointerleave', clearHover);
 
       var playing = 0;
       /* called by ink/py.js after a cell runs */

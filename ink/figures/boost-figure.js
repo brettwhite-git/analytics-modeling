@@ -3,6 +3,7 @@
    them (one cut on x; each side predicts the average miss on its side; the cut that leaves the least squared
    miss), and adds a fraction of it to the guess. The reader adds one correction at a time (or ten), slides
    the fraction, and watches the miss on the points used and on fresh points from the same made-up curve.
+   The small "miss by round" chart can be dragged along (or clicked) to go to any round, back or forward.
    "Miss" is the average distance between a point and the line. Every number is computed from what is drawn.
    One step. Offers `train`, `fresh`, `rate` to the page's Python. Made-up data. Needs InkKit (ink/ink-kit.js). */
 (function () {
@@ -108,6 +109,17 @@
       rows.axes({ x: CHART.x, y: CHART.y, w: CHART.w, h: CHART.h, xticks: [0, 20, 40].map(function (v) { return [cx(v), String(v)]; }) });
       var chart = k.root.layer();
 
+      /* the round you are on, as a handle over the small chart: drag it (or click the chart) to go to any round */
+      var roundG = k.root.group({ d: 500 });
+      roundG.line(cx(0), CHART.y, cx(0), CHART.y + CHART.h, { w: 0.6, op: 0.45, rough: 0.2 });
+      roundG.circle(cx(0), CHART.y - 9, 4.5, { w: 1.4, op: 0.95 });
+      var scrub = k.root.group({ d: 0 });
+      var scrubHit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      scrubHit.setAttribute('x', CHART.x - 6); scrubHit.setAttribute('y', CHART.y - 18);
+      scrubHit.setAttribute('width', CHART.w + 12); scrubHit.setAttribute('height', CHART.h + 26);
+      scrubHit.setAttribute('class', 'ik-hit');
+      scrub.node.appendChild(scrubHit);
+
       /* the guess as a stepped line: flat between cuts, a riser at each one */
       function stepped(fn, cuts) {
         var xs = [0].concat(cuts, [10]).sort(function (a, b) { return a - b; }), d = '', first = true;
@@ -168,6 +180,7 @@
           chart.text(SIDE, 432, 'since then, it rises.', { kind: 'hand' });
         }
         bOne.node.style.display = bTen.node.style.display = n >= ROUNDS ? 'none' : '';
+        roundG.node.setAttribute('transform', 'translate(' + (cx(n) - cx(0)).toFixed(1) + ' 0)');
       }
 
       /* add `times` corrections; one at a time is slow and shows the whole correction it takes a fraction of */
@@ -191,6 +204,25 @@
       var bTen = k.button(SIDE + COL, 350, 'add 10', function () { if (!busy) add(10, false); }, { d: 650, anchor: 'end' });
       k.button(SIDE, 378, 'start over', function () { if (busy) return; n = 0; side(); paint(1, false); }, { d: 700 });
       k.root.group({ d: 800 }).callout('a', 'each fits what is left', SIDE, 266);
+      // arrow keys go one round at a time (the kit's own key step is wider than a round), so take them first
+      scrub.node.addEventListener('keydown', function (e) {
+        var dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!dir) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (busy || n + dir < 0 || n + dir > ROUNDS) return;
+        n += dir; side(); paint(1, false); scrubDrag.set(cx(n), CHART.y);
+      });
+      var scrubDrag = k.draggable(scrub.node, {
+        x: cx(0), y: CHART.y, label: 'The round you are on. Left and right arrow keys go back or forward.',
+        bounds: { x0: cx(0), y0: CHART.y, x1: cx(ROUNDS), y1: CHART.y },
+        onMove: function (x) {
+          if (busy) return;
+          var m = Math.round((x - cx(0)) / (cx(ROUNDS) - cx(0)) * ROUNDS);
+          if (m === n) return;
+          n = m; side(); paint(1, false);
+        },
+        onEnd: function () { scrubDrag.set(cx(n), CHART.y); }
+      });
 
       k.onStep(function () { busy = false; side(); paint(1, false); });
     }

@@ -116,8 +116,8 @@
 
       /* ---- the two curves and the ten days: the same in both steps ---- */
       var curves = k.root.group({ d: 200 });
-      inkPath(curves, curveD(gentle), { w: 1.1, op: 0.75, d: 500, dur: 900 });
-      inkPath(curves, curveD(wiggly), { w: 1.6, op: 0.95, d: 900, dur: 1400 });
+      var curveNodes = [inkPath(curves, curveD(gentle), { w: 1.1, op: 0.75, d: 500, dur: 900 }),
+        inkPath(curves, curveD(wiggly), { w: 1.6, op: 0.95, d: 900, dur: 1400 })];
       var threads = k.root.layer();
       var marks = k.root.group({ d: 100, stagger: 30 });
       pts.forEach(function (p) { marks.mark(sx(p.x), sy(p.y), 'o', { r: 3.8 }); });
@@ -214,6 +214,29 @@
         note1.set(shown ? 'threads: the ' + (which ? 'wiggly' : 'gentle') + ' one' : 'new days, same stand');
         callB.node.style.display = shown >= 10 ? '' : 'none';
       }
+
+      /* the curves themselves answer a click: step 0 measures that curve, step 1 shows its misses on the new days.
+         A wide clear stroke along each curve is the target; the curve thickens under the pointer. */
+      var curveHits = k.root.group({ d: 0 });
+      [gentle, wiggly].forEach(function (c, j) {
+        var hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        hit.setAttribute('d', curveD(c));
+        hit.setAttribute('fill', 'none'); hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', 18);
+        hit.setAttribute('stroke-linecap', 'round');
+        hit.style.pointerEvents = 'stroke'; hit.style.cursor = 'pointer';
+        hit.setAttribute('role', 'button'); hit.setAttribute('tabindex', -1);
+        hit.setAttribute('aria-label', 'the ' + (j ? 'wiggly' : 'gentle') + ' curve');
+        var w0 = curveNodes[j].getAttribute('stroke-width');
+        hit.addEventListener('pointerenter', function () { curveNodes[j].setAttribute('stroke-width', +w0 + 0.8); });
+        hit.addEventListener('pointerleave', function () { curveNodes[j].setAttribute('stroke-width', w0); });
+        hit.addEventListener('click', function () {
+          if (k.step() === 0) { measure(j); return; }
+          if (busy || which === j) return;
+          which = j;
+          drawThreads(fresh.slice(0, shown), which ? wiggly : gentle, shown); label1();
+        });
+        curveHits.node.appendChild(hit);
+      });
 
       k.onStep(function (step) {
         busy = false;

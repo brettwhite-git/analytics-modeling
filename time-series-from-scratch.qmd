@@ -378,7 +378,7 @@ Now a series that climbs *and* repeats. Think of monthly sales that are always h
 
 Each adjustment says how far that place in the cycle usually sits from the level, as a ratio. An adjustment of 1.2 means "this month usually runs 20% above the level", and 0.8 means 20% below. When a value comes in, divide it by its month's adjustment before you blend it into the level, so a busy December is not mistaken for a jump. When you guess, multiply the month's adjustment back in. And each adjustment is itself moved part of the way toward what its month shows, once a year, when that month comes round.
 
-The figure works through 48 months and holds the last 12 back, so every forecast can be scored on months it never saw. Switch each piece on and off and watch the average miss on the held-out months.
+The figure works through 48 months and holds the last 12 back, so every forecast can be scored on months it never saw. Switch each piece on and off with the buttons, or click a row under *tried so far*, and watch the average miss on the held-out months.
 
 ::: {.ink-figure data-figure="season-figure" data-step="0" data-caption="Fig. 4 · a made-up series that climbs and repeats every 12 steps: 48 seen, 12 held out"}
 :::

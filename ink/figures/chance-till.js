@@ -118,7 +118,7 @@
       c0.text(CH.x, CH.y0 + 34, '0', { kind: 'axis', anchor: 'middle' });
       c0.text(CH.x + CH.w, CH.y0 + 34, '60 min', { kind: 'axis', anchor: 'end' });
       c0.text(CH.x + CH.w / 2, CH.y0 + 34, '· one dot per person who came in ·', { kind: 'axis', anchor: 'middle' });
-      var chartLine = k.root.layer({ steps: [0] }), chartDots = k.root.layer({ steps: [0] });
+      var chartLine = k.root.layer({ steps: [0] }), chartDots = k.root.layer({ steps: [0] }), probe = k.root.layer({ steps: [0] });
 
       // the column
       var s0 = k.root.group({ steps: [0], d: 250 });
@@ -131,10 +131,11 @@
       var vAvg = s0.text(SIDE + COL, 162, '–', { kind: 'val', anchor: 'end' });
 
       var t = 0, res = play(HOUR), queue = [], busy = false, cancel = null, finish = null, running = false;
+      var reading = null;                              // a played minute the reader clicked on the chart, to read back
 
       function readout() {
-        var last = t ? res[t - 1] : null;
-        rows[0].set(t + ' of ' + MIN);
+        var at = reading != null ? reading + 1 : t, last = at ? res[at - 1] : null;
+        rows[0].set(at + ' of ' + MIN);
         rows[1].set(last ? String(last.roll) : '–');
         rows[2].set(last ? String(last.a) : '–');
         rows[3].set(last ? String(last.served) : '–');
@@ -145,6 +146,8 @@
         overflow.set(queue.length > VISIBLE ? '+' + (queue.length - VISIBLE) : '');
         bNext.set(t >= MIN ? 'the hour is over' : 'next minute');
         bRun.node.style.display = t >= MIN ? 'none' : '';
+        probe.clear();
+        if (reading != null) probe.path('M' + cx(reading + 0.5).toFixed(1) + ' ' + (CH.y0 + 4) + ' L' + cx(reading + 0.5).toFixed(1) + ' ' + (CH.y0 - CH.h), { w: 0.8, op: 0.6 });
       }
       function drawChart() {
         chartLine.clear();
@@ -168,7 +171,7 @@
       }
       function reset() {
         if (cancel) cancel();
-        busy = false; running = false; finish = null;
+        busy = false; running = false; finish = null; reading = null;
         pool.forEach(free); queue = []; t = 0; res = play(HOUR);
         chartLine.clear(); chartDots.clear(); face(0); placeDie(0);
         readout();
@@ -188,7 +191,7 @@
           busy = false; finish = null; cancel = null;
           if (served) free(served);
           face(r.roll); placeDie(0); layoutQueue();
-          t++; addDots(t - 1); drawChart(); readout();
+          t++; reading = null; addDots(t - 1); drawChart(); readout();
           if (done) done();
         };
         cancel = k.animate(ms, function (u) {
@@ -208,19 +211,56 @@
       }
       function snap() { if (busy && finish) { if (cancel) cancel(); finish(); } }
 
-      var bNext = k.button(SIDE, 200, 'next minute', function () {
+      function nextMinute() {
         if (running) return;
         snap(); minute(820);
-      }, { steps: [0] });
-      var bRun = k.button(SIDE, 234, 'run the hour', function () {
+      }
+      /* play quickly on until `end` minutes have been played (the whole hour, or a minute clicked on the chart) */
+      function runTo(end) {
         if (running) return;
         snap(); running = true;
         (function loop() {
           if (!running || k.step() !== 0) { running = false; return; }
-          if (t >= MIN) { running = false; readout(); return; }
+          if (t >= end) { running = false; readout(); return; }
           minute(150, function () { setTimeout(loop, 25); });
         })();
-      }, { steps: [0] });
+      }
+      var bNext = k.button(SIDE, 200, 'next minute', nextMinute, { steps: [0] });
+      var bRun = k.button(SIDE, 234, 'run the hour', function () { runTo(MIN); }, { steps: [0] });
+
+      // on the chart itself: the die rolls the next minute; a minute on the chart is read back, or played up to
+      var NS = 'http://www.w3.org/2000/svg';
+      var hits = k.root.group({ steps: [0] });
+      function hitRect(x, y, w, h, label, cursor) {
+        var r = document.createElementNS(NS, 'rect');
+        r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', w); r.setAttribute('height', h);
+        r.setAttribute('class', 'ik-hit'); r.setAttribute('tabindex', 0); r.setAttribute('role', 'button');
+        r.setAttribute('aria-label', label); r.style.cursor = cursor;
+        hits.node.appendChild(r);
+        return r;
+      }
+      var dieHit = hitRect(DIE.x - 34, DIE.y - 34, 68, 68, 'Roll the die for the next minute', 'pointer');
+      dieHit.addEventListener('click', nextMinute);
+      dieHit.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nextMinute(); } });
+      var chartHit = hitRect(CH.x, CH.y0 - CH.h - 4, CH.w, CH.h + 26, 'Read a minute of the hour. Arrow keys move along it.', 'crosshair');
+      function pickMinute(m) {
+        if (running) return;
+        snap();
+        m = Math.max(0, Math.min(MIN - 1, m));
+        if (m < t) { reading = m; readout(); }
+        else runTo(m + 1);
+      }
+      chartHit.addEventListener('click', function (e) {
+        var p = k.toFigure(e);
+        pickMinute(Math.floor((p.x - CH.x) / CH.w * MIN));
+      });
+      chartHit.addEventListener('keydown', function (e) {
+        var dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!dir || !t) return;
+        e.preventDefault();
+        var m = (reading != null ? reading : t - 1) + dir;
+        if (m >= 0 && m < t) { reading = m; readout(); }
+      });
       k.button(SIDE, 268, 'another hour', function () {
         hourSeed += 7919; HOUR = hourFrom(hourSeed); reset();
       }, { steps: [0] });

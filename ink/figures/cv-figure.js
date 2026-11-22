@@ -191,16 +191,38 @@
       });
       function showMark(i, which) { markSets[i].forEach(function (n, j) { n.style.display = j === which ? '' : 'none'; }); }
 
-      /* click targets: one per cell, one per dot (step 0 only) */
+      /* click targets: one per cell, one per dot. Step 0: hide that day. Step 1: hide the dot's part.
+         Step 2: a locked cell opens the final part. */
       var hits = k.root.group({ d: 0 });
       var hitNodes = [];
-      function toggle(i) {
-        if (k.step() !== 0 || busy) return;
+      function toggle(i, isDot) {
+        if (busy) return;
+        var st = k.step();
+        if (st === 1) {
+          if (isDot) { var j = Math.floor(i / partSize()); if (j !== part) { part = j; redraw1(true); } }
+          return;
+        }
+        if (st === 2) {
+          if (!isDot && i >= N_FIT && !opened) { opened = true; redraw2(); }
+          return;
+        }
         var count = Object.keys(hidden).length;
         if (hidden[i]) delete hidden[i];
         else if (count < N - 2) hidden[i] = true;     // keep at least two days to draw a line through
         remember(hiddenList());
         redraw0(true);
+      }
+      /* which targets answer in this step (cells at even places, dots at odd) */
+      function armHits() {
+        var st = k.step();
+        hitNodes.forEach(function (n, at) {
+          var i = at >> 1, isDot = at & 1;
+          var on = st === 0 || (st === 1 && isDot) || (st === 2 && !isDot && i >= N_FIT && !opened);
+          n.style.pointerEvents = on ? 'auto' : 'none';
+          n.setAttribute('tabindex', on && !isDot ? 0 : -1);
+          n.setAttribute('aria-label', (isDot ? 'dot ' : 'day ') + (i + 1)
+            + (st === 1 && isDot ? ': hide its part' : st === 2 && !isDot && i >= N_FIT ? ': open the final part' : ''));
+        });
       }
       pts.forEach(function (p, i) {
         var NS = 'http://www.w3.org/2000/svg';
@@ -212,8 +234,8 @@
           n.setAttribute('class', 'ik-hit'); n.style.cursor = 'pointer';
           n.setAttribute('tabindex', j ? -1 : 0); n.setAttribute('role', 'button');
           n.setAttribute('aria-label', (j ? 'dot ' : 'day ') + (i + 1));
-          n.addEventListener('click', function () { toggle(i); });
-          n.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(i); } });
+          n.addEventListener('click', function () { toggle(i, j === 1); });
+          n.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(i, j === 1); } });
           hits.node.appendChild(n);
           hitNodes.push(n);
         });
@@ -319,6 +341,7 @@
         partLabel.mark(cx - tw / 2 + 4, 26.5, 'x', { r: 3.2 });
         partLabel.text(cx - tw / 2 + 13, 30, name, { kind: 'label' });
         placeLine(fitLine(s.rest), s.held, glide);
+        placeGrip((cellX(s.a) + cellX(s.b)) / 2);
         // the column: this part, and the parts visited so far
         var top = Math.max(1, Math.ceil(Math.max.apply(null, partErrs) * 2) / 2), ex = k.scale(0, top, SIDE, SIDE + SIDE_W);
         chart.clear();
@@ -356,6 +379,38 @@
         format: function (v) { return PART_CHOICES[v] === N ? N + ' (one each)' : String(PART_CHOICES[v]); },
         onChange: function (v) { if (busy) return; nParts = PART_CHOICES[v]; part = 0; scoreParts(); redraw1(true); }
       });
+      /* the hidden part can be dragged along the strip: a ring under it is the handle, the whole strip is the grip */
+      var GRIP_Y = STRIP.y + STRIP.h + 9;
+      var drag1 = k.root.group({ steps: [1], d: 400 });
+      var grip = drag1.group();
+      grip.circle(0, 0, 5.5, { w: 1.4, op: 0.95 });
+      grip.dot(0, 0, 1.8, {});
+      var grab1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      grab1.setAttribute('x', STRIP.x - 4); grab1.setAttribute('y', STRIP.y - 8);
+      grab1.setAttribute('width', STRIP.w + 8); grab1.setAttribute('height', GRIP_Y + 8 - (STRIP.y - 8));
+      grab1.setAttribute('class', 'ik-hit');
+      drag1.node.appendChild(grab1);
+      function toPart(j) {
+        j = k.clamp(j, 0, nParts - 1);
+        if (j === part || busy) return;
+        part = j; redraw1(true);
+      }
+      var drag1H = k.draggable(drag1.node, {
+        label: 'The hidden part. Drag it along the strip, or use the arrow keys, to hide another part.',
+        bounds: { x0: STRIP.x, y0: GRIP_Y, x1: STRIP.x + STRIP.w - 0.5, y1: GRIP_Y },
+        onMove: function (x) { toPart(Math.floor((x - STRIP.x) / (CELL * partSize()))); }
+      });
+      // arrow keys move one whole part, not a few pixels (heard before the kit's own key handler)
+      drag1.node.addEventListener('keydown', function (e) {
+        var dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!dir) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        toPart(part + dir);
+      }, true);
+      function placeGrip(cx) {
+        grip.node.setAttribute('transform', 'translate(' + cx.toFixed(1) + ' ' + GRIP_Y + ')');
+        drag1H.set(cx, GRIP_Y);
+      }
       var ends1 = k.root.group({ steps: [1], d: 500 });
       ends1.text(SIDE, 288, '2', { kind: 'axis' });
       ends1.text(SIDE + SIDE_W, 288, 'one day each', { kind: 'axis', anchor: 'end' });
@@ -422,12 +477,15 @@
         lFinal.set(opened ? 'final check' : '');
         vFinal.set(opened ? f2(finalScore) : '');
         nFinal.set(opened ? win.name + ', once, at the end' : win.name + ' wins, refit on 15');
+        armHits();
       }
 
       k.onStep(function (step) {
         busy = false;
         if (cancelGlide) { cancelGlide(); cancelGlide = null; }
-        hitNodes.forEach(function (n) { n.style.pointerEvents = step === 0 ? 'auto' : 'none'; });
+        armHits();
+        // the kit's '.ik-drag .ik-hit' rule outranks '.is-off .ik-hit', so the strip grip is switched off here
+        grab1.style.pointerEvents = step === 1 ? '' : 'none';
         partLabel.clear(); chart.clear();
         if (step === 0) {
           hidden = {}; (remembered() || []).forEach(function (i) { hidden[i] = true; });

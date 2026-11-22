@@ -3,7 +3,8 @@
    Each real flip adds to the counts, and the belief is all the heads over all the flips. The curve is
    how strongly each heads-rate is believed: a beta curve with (imagined + real heads, imagined + real tails),
    whose middle is exactly that count. Every curve, count and readout comes from the same numbers.
-   The reader flips one at a time or five at a time, and slides how sure they were to begin with.
+   The reader flips one at a time or five at a time, and sets how sure they were to begin with: by dragging
+   the top of the starting curve up (taller and narrower: surer) or down, or with the slider, kept in step.
    The 40 flips are seeded made-up flips of a coin that lands heads 7 times in 10 in the long run.
    One step. Offers `flips`, `start_heads`, `start_tails` to the page's Python. Needs InkKit (ink/ink-kit.js). */
 (function () {
@@ -107,11 +108,11 @@
         live.mark(sx(m), base, 'tri', { r: 4.4 });
         if (n > 0) { var c = counts(n); live.mark(sx(c.h / n), base, 'x', { r: 3.8 }); }
         // name the curves where there is clear paper
-        var nx = sx(now.mode), ny = sy(now.peak) - 10;
+        var nx = sx(now.mode), ny = sy(now.peak) - (n > 0 ? 10 : 18);   // clear of the handle when it sits on this curve
         live.text(k.clamp(nx, PLOT.x + 30, PLOT.x + PLOT.w - 30), ny, n > 0 ? 'now' : 'to begin with', { kind: 'label', anchor: 'middle' });
         if (n > 0) {
           // the starting curve's name: above its peak, or out on a flank, wherever the new curve leaves paper
-          var spots = [[sx(start.mode), sy(start.peak) - 10, 'middle']];
+          var spots = [[sx(start.mode), sy(start.peak) - 18, 'middle']];
           [0.62, 0.38].forEach(function (f) {
             var lo = start.pts.filter(function (p) { return p[0] < start.mode && p[1] >= start.peak * f; })[0];
             var hi = start.pts.filter(function (p) { return p[0] > start.mode && p[1] >= start.peak * f; }).pop();
@@ -150,10 +151,10 @@
 
       function show() {
         var t = target();
-        shown = t; drawSide(); drawCurves(t.a, t.b);
+        shown = t; drawSide(); drawCurves(t.a, t.b); placeGrip();
       }
       function flip(times, done) {
-        if (times <= 0 || n >= N_MAX) { busy = false; label(); if (done) done(); return; }
+        if (times <= 0 || n >= N_MAX) { busy = false; label(); show(); if (done) done(); return; }   // show: catch up on a sureness set mid-flip
         busy = true;
         var from = shown || target();
         n++;
@@ -166,12 +167,38 @@
         });
       }
 
+      /* ---- the grip: the top of the starting curve, dragged up for surer, down for less sure ---- */
+      function gripY(sure) { return sy(peakOf(sure / 2, sure / 2)); }
+      var gripG = k.root.group({ d: 400 });
+      gripG.circle(0, 0, 6.5, { w: 1.4, op: 0.95 });
+      gripG.dot(0, 0, 2, {});
+      var grab = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      grab.setAttribute('r', 16); grab.setAttribute('class', 'ik-hit');
+      gripG.node.appendChild(grab);
+      function placeGrip() { gripG.node.setAttribute('transform', 'translate(' + sx(0.5).toFixed(1) + ' ' + gripY(state.sure).toFixed(1) + ')'); }
+      function setSure(v, fromSlider) {
+        if (v === state.sure) return;
+        state.sure = v;
+        if (!fromSlider) slider.set(v, true);
+        if (!busy) show(); else placeGrip();
+      }
+      var grip = k.draggable(gripG.node, {
+        x: sx(0.5), y: gripY(SURE_START), label: 'The top of the starting curve. Up and down arrow keys set how sure you were to begin with.',
+        bounds: { x0: sx(0.5), y0: gripY(SURE_MAX), x1: sx(0.5), y1: gripY(SURE_MIN) },
+        onMove: function (x, y) {
+          // the even number of imagined flips whose starting curve peaks nearest the pointer
+          var best = SURE_MIN;
+          for (var v = SURE_MIN; v <= SURE_MAX; v += 2) if (Math.abs(gripY(v) - y) < Math.abs(gripY(best) - y)) best = v;
+          setSure(best, false);
+        }
+      });
+
       /* ---- the controls ---- */
-      k.slider({
+      var slider = k.slider({
         x: SIDE, y: 310, w: COL, min: SURE_MIN, max: SURE_MAX, step: 2, value: SURE_START,
         label: 'imagined flips',
         format: function (v) { return String(v); },
-        onChange: function (v) { state.sure = v; if (!busy) show(); }
+        onChange: function (v) { setSure(v, true); grip.set(sx(0.5), gripY(v)); }
       });
       var ends = k.root.group({ d: 500 });
       ends.text(SIDE, 329, 'not sure', { kind: 'axis' });
@@ -184,7 +211,7 @@
       }
       k.root.group({ d: 800 }).callout('a', 'it moves, and narrows', SIDE, 430);
 
-      k.onStep(function () { busy = false; label(); show(); });
+      k.onStep(function () { busy = false; label(); show(); grip.set(sx(0.5), gripY(state.sure)); });
     }
   });
 })();
