@@ -272,11 +272,11 @@ You make the allowance bigger. Does the alarm come sooner or later?
 
 With an allowance of 0.25 and the line at 2.5, the alarm rings on day 42, the twelfth day of the new level, with no false alarms. Slide the allowance down to 0 and it rings on day 36, much sooner, but only after a false alarm on day 9. Push it up to 0.5 and it waits until day 50.
 
-The alarm line works the same way. Lower it and the alarm comes sooner, with more false alarms. Raise it and you wait longer, with fewer. Both knobs trade the same two things, and you cannot have the fastest alarm and the fewest false ones at once.
+The alarm line works the same way: drag it up or down, or use its slider. Lower it and the alarm comes sooner, with more false alarms. Raise it and you wait longer, with fewer. Both knobs trade the same two things, and you cannot have the fastest alarm and the fewest false ones at once.
 
 So there is no best setting. It depends on what each mistake costs. Watching a nuclear reactor, a late alarm is the expensive mistake: use a small allowance and a low line, and put up with checking for nothing now and then. Watching a marketing campaign, every false alarm wastes money and people's time: use a bigger allowance and a higher line, and accept hearing later. In between, as in most factories, you look for a balance.
 
-The second button under Fig. 4 changes the size of the rise itself. A small rise that lasts is exactly what this score is for, but the smaller it is, the longer the evidence takes to pile up.
+The second button under Fig. 4 changes the size of the rise itself: drag the new level in the top chart, or use its slider. A small rise that lasts is exactly what this score is for, but the smaller it is, the longer the evidence takes to pile up.
 
 ### Now tell a computer
 

@@ -2,7 +2,8 @@
    The same two versions as before (hidden click chances: A 20%, B 30%) and 500 visitors, in batches.
    Every version has one seeded stream of outcomes, and every plan reads from the same streams (a version's
    n-th visitor answers the same way whichever plan sent them), so the plans are compared on equal luck.
-   Steps: 0 you decide, batch by batch, how many of the next 50 go to B (slider, then "send the batch"),
+   Steps: 0 you decide, batch by batch, how many of the next 50 go to B (slider, then "send the batch";
+            or click a column to send the whole batch to that version),
           and your running total is set against half each and against the leader rule
           1 the leader rule with its two dials: how much to keep spreading ("explore share") and how big a
             batch is, rerun over 200 other seeded days.
@@ -152,19 +153,42 @@
         send.set(b < BUDGET / BATCH ? 'send the batch' : 'start over');
         callA.node.style.display = b ? '' : 'none';
       }
-      k.slider({
+      var toBSlider = k.slider({
         x: SIDE, y: 176, w: 158, min: 0, max: BATCH, step: 5, value: toB, label: 'of next 50, to B', steps: [0],
         format: function (v) { return String(v); },
         onChange: function (v) { toB = v; }
       });
-      var send = k.button(SIDE, 216, 'send the batch', function () {
-        if (mine.length >= BUDGET / BATCH) { mine = []; draw0(); return; }
+      function sendBatch() {
         var last = mine.length ? mine[mine.length - 1] : { n: [0, 0], w: [0, 0] };
         var alloc = [BATCH - toB, toB], n = last.n.slice(), w = last.w.slice();
         for (var a = 0; a < 2; a++) { w[a] += wins(st[a], n[a], n[a] + alloc[a]); n[a] += alloc[a]; }
         mine.push({ alloc: alloc, n: n, w: w });
         draw0();
+      }
+      var send = k.button(SIDE, 216, 'send the batch', function () {
+        if (mine.length >= BUDGET / BATCH) { mine = []; draw0(); return; }
+        sendBatch();
       }, { steps: [0], d: 500 });
+
+      // click a version's column to send the whole next batch to it; the slider moves to match
+      var colHits = k.root.group({ steps: [0] });
+      CX.forEach(function (cx, a) {
+        var hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hit.setAttribute('x', cx + TB.dx - 6); hit.setAttribute('y', Y1 - 6);
+        hit.setAttribute('width', WB.dx + WB.w - TB.dx + 12); hit.setAttribute('height', 392 - Y1);
+        hit.setAttribute('class', 'ik-hit');
+        hit.setAttribute('tabindex', 0); hit.setAttribute('role', 'button');
+        hit.setAttribute('aria-label', 'Send all of the next ' + BATCH + ' visitors to ' + NAMES[a]);
+        hit.style.cursor = 'pointer';
+        function pull() {
+          if (mine.length >= BUDGET / BATCH) return;               // all ten sent: "start over" is the way back
+          toBSlider.set(a ? BATCH : 0);
+          sendBatch();
+        }
+        hit.addEventListener('click', pull);
+        hit.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pull(); } });
+        colHits.node.appendChild(hit);
+      });
 
       /* ---- step 1: how much to keep spreading, and how often to look ---- */
       var live1 = k.root.layer({ steps: [1] });

@@ -6,7 +6,8 @@
       data-steps  optional buttons, "2:slide λ|3:move a point" (step:label), lettered (c), (d) by step
       The figure script is loaded on demand from ink/figures/<data-figure>.js.
    2. Sews a seam above every section, one stitch at a time, when it scrolls into view.
-   3. Draws the ruler that shows how far down the sheet you are.
+   3. Draws the ruler that shows how far down the sheet you are, and beside it the page's sections
+      with what is inside the one you are reading.
    Figures follow the contract in ink/AUTHORING.md: window.ShowcaseFigures[key].mount(el, opts). */
 (function () {
   'use strict';
@@ -239,9 +240,113 @@
       queued = true;
       requestAnimationFrame(update);
     }
+    var explore = addExplorer();
     window.addEventListener('scroll', queue, { passive: true });
     window.addEventListener('resize', queue);
+    var plainUpdate = update;
+    update = function () { plainUpdate(); if (explore) explore(); };
     update();
+  }
+
+  /* ---------- the explorer: this page's sections beside the ruler, and what is inside the one you are reading ---------- */
+  function addExplorer() {
+    var sections = Array.prototype.slice.call(document.querySelectorAll('.sheet section.level2'));
+    sections = sections.filter(function (s) { return s.querySelector(':scope > h2'); });
+    if (sections.length < 2) return null;
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var nav = document.createElement('nav');
+    nav.className = 'ink-explore';
+    nav.setAttribute('aria-label', 'On this page');
+    var title = document.createElement('p');
+    title.className = 'ink-explore__title';
+    title.textContent = 'On this page';
+    nav.appendChild(title);
+    var list = document.createElement('ol');
+    list.className = 'ink-explore__list';
+    nav.appendChild(list);
+
+    function jump(target, middle) {
+      return function (event) {
+        event.preventDefault();
+        target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: middle ? 'center' : 'start' });
+        if (target.id && history.replaceState) history.replaceState(null, '', '#' + target.id);
+      };
+    }
+    function link(target, text, kind, middle) {
+      var a = document.createElement('a');
+      a.href = target.id ? '#' + target.id : '#';
+      if (kind) {
+        var tag = document.createElement('span');
+        tag.className = 'ink-explore__kind';
+        tag.textContent = kind;
+        a.appendChild(tag);
+      }
+      var label = document.createElement('span');
+      label.className = 'ink-explore__text';
+      label.textContent = text;
+      a.appendChild(label);
+      a.title = text;
+      a.addEventListener('click', jump(target, middle));
+      return a;
+    }
+
+    var py = 0;
+    var rows = sections.map(function (section) {
+      var h2 = section.querySelector(':scope > h2');
+      var li = document.createElement('li');
+      li.className = 'ink-explore__section';
+      li.appendChild(link(section, h2.textContent.trim()));
+      var sub = document.createElement('ol');
+      sub.className = 'ink-explore__sub';
+      var items = [];
+      Array.prototype.forEach.call(section.querySelectorAll('h3, .ink-figure, .py-cell, .ask'), function (node) {
+        var a;
+        if (node.matches('h3')) a = link(node.closest('section') || node, node.textContent.trim(), '');
+        else if (node.matches('.ink-figure')) {
+          var cap = (node.getAttribute('data-caption') || 'Figure').split(' · ');
+          a = link(node, cap[1] || cap[0], /^Fig/.test(cap[0]) ? cap[0] : 'Fig.', true);
+        }
+        else if (node.matches('.py-cell')) {
+          py++;
+          var ta = node.querySelector('textarea'), code = (ta && ta.value) || node.textContent || '';
+          var fn = /def\s+(\w+)\s*\(/.exec(code);
+          a = link(node, fn ? 'write ' + fn[1] + '()' : 'run the code', 'Py ' + py, false);
+        }
+        else {
+          var q = node.querySelector('p');
+          a = link(node, q ? q.textContent.trim() : 'A question', 'Ask', true);
+        }
+        var item = document.createElement('li');
+        item.appendChild(a);
+        sub.appendChild(item);
+        items.push({ node: node, li: item });
+      });
+      if (items.length) li.appendChild(sub);
+      list.appendChild(li);
+      return { section: section, li: li, items: items };
+    });
+    document.body.appendChild(nav);
+    document.documentElement.classList.add('has-explore');
+
+    var current = -1, currentItem = null;
+    return function () {
+      var line = window.innerHeight * 0.38, at = 0, i;
+      for (i = 0; i < rows.length; i++) if (rows[i].section.getBoundingClientRect().top <= line) at = i;
+      if (at !== current) {
+        if (current >= 0) rows[current].li.classList.remove('is-here');
+        rows[at].li.classList.add('is-here');
+        current = at;
+        var top = rows[at].li.offsetTop - nav.clientHeight * 0.3;        // keep the open section in view inside the rail
+        nav.scrollTop = Math.max(0, top);
+      }
+      var item = null;
+      rows[at].items.forEach(function (it) { if (it.node.getBoundingClientRect().top <= window.innerHeight * 0.6) item = it; });
+      if (item !== currentItem) {
+        if (currentItem) currentItem.li.classList.remove('is-here');
+        if (item) item.li.classList.add('is-here');
+        currentItem = item;
+      }
+    };
   }
 
   /* ---------- the shell: contents, bar, theme ---------- */

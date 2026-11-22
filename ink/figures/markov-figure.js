@@ -60,9 +60,10 @@
           chain.line(x, y, x - 7.5 * Math.cos(ang + da), y - 7.5 * Math.sin(ang + da), { w: 1, rough: 0.3, op: 0.65 });
         });
       }
-      NODE.forEach(function (n, i) {
-        chain.circle(n.x, n.y, R, { w: 1.4, op: 0.9 });
+      var stateRings = NODE.map(function (n, i) {
+        var ringNode = chain.circle(n.x, n.y, R, { w: 1.4, op: 0.9 });
         chain.text(n.x, n.y + 3.5, NAMES[i], { kind: 'label', anchor: 'middle' });
+        return ringNode;
       });
       NODE.forEach(function (a, i) {
         NODE.forEach(function (b, j) {
@@ -161,17 +162,43 @@
       }
       function halt() { if (stop) { stop(); stop = null; } }
 
+      function runFrom(s) {
+        halt();
+        start = s; days = 0; tried[s] = 0; redraw();
+        stop = k.animate(2400, function (t) {
+          var d = Math.round(t * DAYS);
+          if (d !== days) { days = d; tried[s] = d; redraw(); }
+        });
+      }
       k.button(SIDE, 214, 'next day', function () { halt(); days++; redraw(); }, { steps: [0] });
       k.button(SIDE, 246, 'back to day 0', function () { halt(); days = 0; redraw(); }, { steps: [0] });
       [0, 1, 2].forEach(function (s, i) {
-        k.button(SIDE, 214 + i * 30, 'start ' + NAMES[s], function () {
-          halt();
-          start = s; days = 0; tried[s] = 0; redraw();
-          stop = k.animate(2400, function (t) {
-            var d = Math.round(t * DAYS);
-            if (d !== days) { days = d; tried[s] = d; redraw(); }
-          });
-        }, { steps: [1] });
+        k.button(SIDE, 214 + i * 30, 'start ' + NAMES[s], function () { runFrom(s); }, { steps: [1] });
+      });
+
+      /* the states themselves: click one to start there (step 0: day 0 from it; step 1: run its twenty days) */
+      var NS = 'http://www.w3.org/2000/svg', hits = k.root.group();
+      NODE.forEach(function (n, s) {
+        var c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', R + 2);
+        c.setAttribute('class', 'ik-hit'); c.setAttribute('tabindex', 0); c.setAttribute('role', 'button');
+        c.setAttribute('aria-label', 'Start ' + NAMES[s]);
+        c.style.cursor = 'pointer';
+        hits.node.appendChild(c);
+        function pick() {
+          if (k.step() === 1) { runFrom(s); return; }
+          halt(); start = s; days = 0; redraw();
+        }
+        function lift(on) {
+          var ps = stateRings[s].querySelectorAll('path');
+          for (var q = 0; q < ps.length; q++) ps[q].setAttribute('stroke-width', on ? 1.9 : 1.4);
+        }
+        c.addEventListener('pointerenter', function () { lift(true); });
+        c.addEventListener('pointerleave', function () { lift(false); });
+        c.addEventListener('focus', function () { lift(true); });
+        c.addEventListener('blur', function () { lift(false); });
+        c.addEventListener('click', pick);
+        c.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
       });
 
       k.onStep(function (step) {

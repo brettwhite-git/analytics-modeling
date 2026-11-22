@@ -1,7 +1,7 @@
 /* Factorial figure — three things to test, two choices each, drawn as a cube whose 8 corners are the 8 ads.
-   Steps: 0 every combination (every corner is one ad) · 1 you choose: a budget of four runs, click corners
+   Steps: 0 every combination (every corner is one ad; click one to spell it out) · 1 you choose: a budget of four runs, click corners
           in or out · 2 a balanced half (4 corners, chosen so every choice appears twice and every pair of
-          choices once), and the other half.
+          choices once), and the other half (the button, or click a pale corner).
    The run count and the balance readouts are counted from whichever corners are selected, in every step.
    Offers the corners you chose to the page's Python: `from page import my_runs` gives one
    (font, background, headline) triple per chosen corner; before you choose any, the balanced half.
@@ -62,7 +62,7 @@
     draw: function (k) {
       var all = [1, 1, 1, 1, 1, 1, 1, 1];
       var half = all.map(function (_, c) { return parity(c) === 0 ? 1 : 0; });
-      var mine = MINE, focused = -1;
+      var mine = MINE, focused = -1, shownC = SHOWN;
 
       /* ---- the cube: nine edges you can see, three you cannot ---- */
       var cube = k.root.group({ d: 100, stagger: 70 });
@@ -102,22 +102,34 @@
           var p = at(c);
           live.paper(p[0] - 4, p[1] - 4, 8, 8);
           live.mark(p[0], p[1], 'o', { r: 5.5, w: c === focused ? 2 : 1.2, op: sel[c] ? 0.95 : 0.3 });
-          if (step === 0 ? c === SHOWN : sel[c]) live.circle(p[0], p[1], 11.5, { accent: true, w: 1.5, op: 0.95 });
+          if (step === 0 ? c === shownC : sel[c]) live.circle(p[0], p[1], 11.5, { accent: true, w: 1.5, op: 0.95 });
         }
         runsVal.set(bal.runs + (step === 1 ? ' of ' + BUDGET : ' of 8'));
         full.set(step === 1 && bal.runs >= BUDGET ? 'budget used up' : '');
         choiceVal.set(bal.runs ? times(bal.choice) : '0 times');
         pairVal.set(bal.runs ? times(bal.pair) : '0 times');
         okVal.set(bal.ok ? 'yes' : 'no');
+        syncs.forEach(function (fn) { fn(); });
       }
 
       /* ---- step 0: one corner spelled out ---- */
       var g0 = k.root.group({ steps: [0], d: 500 });
       var shown = at(SHOWN);
-      g0.callout('a', 'one corner, one ad', SIDE, 170, { to: [shown[0] + 15, shown[1] + 6], d: 900 });
-      FACTORS.forEach(function (fac, i) {
-        g0.text(SIDE, 194 + i * 16, fac.levels[bit(SHOWN, i)] + ' ' + (i === 0 ? 'font' : fac.name), { kind: 'label', d: 1300 + i * 120 });
+      var call0 = g0.callout('a', 'one corner, one ad', SIDE, 170, { to: [shown[0] + 15, shown[1] + 6], d: 900 });
+      var moved0 = k.root.layer({ steps: [0] });             // the callout again, once another corner is picked
+      function spell(c, i) { return FACTORS[i].levels[bit(c, i)] + ' ' + (i === 0 ? 'font' : FACTORS[i].name); }
+      var spelt = FACTORS.map(function (fac, i) {
+        return g0.text(SIDE, 194 + i * 16, spell(SHOWN, i), { kind: 'label', d: 1300 + i * 120 });
       });
+      function pick(c) {
+        if (c === shownC) return;
+        shownC = c;
+        call0.style.display = c === SHOWN ? '' : 'none';
+        moved0.clear();
+        if (c !== SHOWN) { var p = at(c); moved0.callout('a', 'one corner, one ad', SIDE, 170, { to: [p[0] + 15, p[1] + 6], d: 0 }); }
+        spelt.forEach(function (t, i) { t.set(spell(c, i)); });
+        redraw();
+      }
 
       /* ---- step 2: the balanced half ---- */
       var g2b = k.root.group({ steps: [2], d: 300 });
@@ -135,11 +147,14 @@
       g2.text(SIDE, 358, 'everything fairly?', { kind: 'hand', d: 1100 });
       k.button(SIDE, 236, 'clear', function () { for (var c = 0; c < 8; c++) mine[c] = 0; redraw(); }, { steps: [1], d: 500 });
 
-      // the kit has sliders, drags and written buttons but no clickable mark, so each corner gets its own target
-      var hits = document.createElementNS(NS, 'g');
-      g2.node.appendChild(hits);
+      // the kit has sliders, drags and written buttons but no clickable mark, so each corner gets its own target.
+      // Step 0: click a corner to spell it out. Step 1: click it in or out. Step 2: click a pale one to swap halves.
+      var hits = k.root.group().node, syncs = [];
       function describe(c) {
-        return FACTORS.map(function (fac, i) { return fac.levels[bit(c, i)]; }).join(', ') + (mine[c] ? ': in the design' : ': left out');
+        var name = FACTORS.map(function (fac, i) { return fac.levels[bit(c, i)]; }).join(', '), step = k.step();
+        if (step === 0) return name + ': spell it out';
+        if (step === 2) return name + (half[c] ? ': in this half' : ': in the other half, click to swap');
+        return name + (mine[c] ? ': in the design' : ': left out');
       }
       for (var c = 0; c < 8; c++) (function (c) {
         var p = at(c), hit = document.createElementNS(NS, 'circle');
@@ -147,9 +162,14 @@
         hit.setAttribute('class', 'ik-hit');
         hit.setAttribute('tabindex', 0); hit.setAttribute('role', 'button');
         hit.style.cursor = 'pointer';
-        function sync() { hit.setAttribute('aria-pressed', mine[c] ? 'true' : 'false'); hit.setAttribute('aria-label', describe(c)); }
+        function sync() {
+          if (k.step() === 1) hit.setAttribute('aria-pressed', mine[c] ? 'true' : 'false');
+          else hit.removeAttribute('aria-pressed');
+          hit.setAttribute('aria-label', describe(c));
+        }
         function toggle() {
-          if (k.step() !== 1) return;
+          if (k.step() === 0) { pick(c); return; }
+          if (k.step() === 2) { if (!half[c]) { half = half.map(function (v) { return 1 - v; }); redraw(); } return; }
           if (!mine[c] && balance(mine).runs >= BUDGET) return;      // the budget is spent: take one out first
           mine[c] = mine[c] ? 0 : 1; redraw();
         }
@@ -158,9 +178,7 @@
         hit.addEventListener('focus', function () { focused = c; redraw(); });
         hit.addEventListener('blur', function () { if (focused === c) { focused = -1; redraw(); } });
         hits.appendChild(hit);
-        k.onStep(sync);
-        hit.addEventListener('click', sync);
-        hit.addEventListener('keydown', sync);
+        syncs.push(sync);
       })(c);
 
       k.onStep(redraw);

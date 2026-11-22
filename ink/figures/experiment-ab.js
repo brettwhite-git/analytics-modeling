@@ -1,5 +1,6 @@
 /* Experiment A/B — two versions of a sign-up button, each with a hidden chance of being clicked.
-   Steps: 0 show each version to visitors yourself, one at a time or ten at a time, and watch the tallies
+   Steps: 0 show each version to visitors yourself (click its sheet, or the buttons), one at a time or
+          ten at a time, and watch the tallies
           and who is ahead (a small chart of the lead, as you go)
           1 run the whole test again and again at one size, and see where each test's lead lands
    Every visitor's answer is fixed in advance by a seeded stream per version (the n-th visitor shown A always
@@ -140,6 +141,21 @@
         crowd[0].clear(); crowd[1].clear(); ring.style.display = 'none';
         readout0(); drawChart(); prompts();
       }, { steps: [0], d: 550 });
+      // click a version's sheet to show it to one more visitor: the same as its button
+      var sheetHits = k.root.group({ steps: [0] });
+      [0, 1].forEach(function (a) {
+        var hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hit.setAttribute('x', GX[a] - 4); hit.setAttribute('y', GY - 12);
+        hit.setAttribute('width', COLS * GAP + 8); hit.setAttribute('height', 20 * GAP + 6);
+        hit.setAttribute('class', 'ik-hit');
+        hit.setAttribute('tabindex', 0); hit.setAttribute('role', 'button');
+        hit.setAttribute('aria-label', 'Show version ' + NAMES[a] + ' to one more visitor');
+        hit.style.cursor = 'pointer';
+        function one() { if (!busy && addVisitor(a)) note(); }
+        hit.addEventListener('click', one);
+        hit.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); one(); } });
+        sheetHits.node.appendChild(hit);
+      });
       function prompts() {
         bA.node.style.display = shown[0] < MAX ? '' : 'none';
         bB.node.style.display = shown[1] < MAX ? '' : 'none';

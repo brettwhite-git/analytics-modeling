@@ -2,10 +2,13 @@
    Steps: 0 the five weights of the plant model as bars. Slide the price; switch between paying by the sizes of the
           weights and paying by their squares. By sizes, the four chance measurements drop to exactly zero one by
           one; by squares, every bar shrinks and none reaches zero.
-          1 every column on the same ruler (divided by its spread). Slide the price, or try every price, and keep
-          the one with the lowest miss on the fresh plants: a small chart of fresh miss against price.
+          1 every column on the same ruler (divided by its spread). Slide the price (or drag its handle along the
+          small chart), or try every price, and keep the one with the lowest miss on the fresh plants: a small
+          chart of fresh miss against price.
           2 the same idea as a picture, for two weights only: error rings around the unpriced fit, and the budget
-          region (a diamond for sizes, a circle for squares). Slide the budget T. Its own made-up data.
+          region (a diamond for sizes, a circle for squares). Drag the region's top corner, or slide the budget T.
+          Its own made-up data.
+   Whatever moves while dragging is redrawn clean (no rough strokes), so it never re-wobbles.
    Steps 0-1 run the lesson's own loop (variable-selection-from-scratch.qmd, cells 3 and 5) on the plants of
    keep-noise.js, so the bars match the page's Python. Step 2 solves the two-weight problem exactly.
    Needs InkKit (ink/ink-kit.js). */
@@ -16,6 +19,17 @@
   var PLOT = { x: 44, y: 34, w: 392, h: 372 };       // the plot area, in figure pixels
   var SIDE = 462;                                    // left edge of the column beside the plot
   var NAMES = ['sun', 'name', 'day', 'pot', 'coin'];
+  var NS = 'http://www.w3.org/2000/svg', MOUNTS = 0;
+  function grabber(g) {
+    // a handle: a pen ring with a dot, drawn once at the origin and moved by a transform, with a wide hit area
+    g.circle(0, 0, 6.5, { w: 1.4, op: 0.95 });
+    g.dot(0, 0, 2, {});
+    var hit = document.createElementNS(NS, 'circle');
+    hit.setAttribute('r', 14); hit.setAttribute('class', 'ik-hit');
+    g.node.appendChild(hit);
+    return g.node;
+  }
+  function moveTo(node, x, y) { node.setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')'); }
 
   /* ======================= steps 0-1: the plants and the lesson's loop ======================= */
   // the same sixteen made-up plants as keep-noise.js: sun, name, day, pot, coin, height
@@ -285,8 +299,7 @@
       function cy(v) { return C.y1 - (C.y1 - C.y0) * Math.min(v, C.top) / C.top; }
       function drawChart() {
         chart.clear();
-        chart.line(C.x0, C.y1, C.x1, C.y1, { w: 0.8, rough: 0.3 });
-        chart.line(C.x0, C.y1, C.x0, C.y0, { w: 0.8, rough: 0.3 });
+        chart.path('M' + C.x0 + ' ' + C.y0 + ' V' + C.y1 + ' H' + C.x1, { w: 0.8 });
         chart.text(C.x0 - 8, C.y0 - 10, 'fresh miss, by price', { kind: 'label' });
         chart.text(C.x0, C.y1 + 14, '0', { kind: 'axis', anchor: 'middle' });
         chart.text(C.x1, C.y1 + 14, '40', { kind: 'axis', anchor: 'middle' });
@@ -303,8 +316,18 @@
           chart.path('M' + (bxp - 6) + ' ' + byp.toFixed(1) + ' a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0', { w: 1.6, accent: true, op: 0.95 });
           vBest.set(String(PRICES1[best]));
         } else vBest.set('–');
-        chart.line(cx(PRICES1[bars.i1]), C.y0, cx(PRICES1[bars.i1]), C.y1, { w: 0.6, op: 0.5, rough: 0.2 });
+        var nowX = cx(PRICES1[bars.i1]);
+        chart.path('M' + nowX.toFixed(1) + ' ' + C.y0 + ' V' + C.y1, { w: 0.6, op: 0.5 });
+        moveTo(priceHandle, nowX, C.y1);
+        drag1.set(nowX, C.y1);
       }
+      // the price itself, as a handle on the small chart's price axis: dragging it moves the slider too
+      var priceHandle = grabber(k.root.group({ steps: [1], d: 400 }));
+      var drag1 = k.draggable(priceHandle, {
+        x: cx(0), y: C.y1, label: 'The price, on the small chart. Left and right arrow keys move it.',
+        bounds: { x0: C.x0, y0: C.y1, x1: C.x1, y1: C.y1 },
+        onMove: function (x) { slider1.set(Math.round((x - C.x0) / (C.x1 - C.x0) * 20) * 2); }
+      });
       var g1 = k.root.group({ steps: [1], d: 400 });
       g1.text(SIDE, 268, 'best price so far', { kind: 'label' });
       var vBest = g1.text(SIDE + 158, 268, '–', { kind: 'val', anchor: 'end' });
@@ -341,16 +364,26 @@
         }
         return pts;
       }
-      function drawContour(g, level, o) {
+      function drawContour(g, level, o, clean) {
         if (level < 1e-5) return;
-        runsInside(contour(level, 40), box).forEach(function (run) {
-          if (run.length === 41) run = run.slice(0, 40).concat([run[0], run[1]]);
+        var n = clean ? 120 : 40;
+        runsInside(contour(level, n), box).forEach(function (run) {
+          if (clean) { g.polyline(run, o); return; }
+          if (run.length === n + 1) run = run.slice(0, n).concat([run[0], run[1]]);
           if (run.length > 2) g.curve(run, o); else g.line(run[0][0], run[0][1], run[1][0], run[1][1], o);
         });
       }
       var geo = k.root.group({ steps: [2], d: 0 });
       var rings = geo.group({ d: 500, stagger: 140 });
       LEVELS.forEach(function (lv) { drawContour(rings, lv, { w: 0.6, op: 0.5, rough: 0.4 }); });
+      // the region's hatch: clean hairlines over the whole plot, drawn once, clipped to the diamond or circle
+      var uid = ++MOUNTS, clipId = 'lasso-figure-' + uid + '-region';
+      var clip = document.createElementNS(NS, 'clipPath'), clipShape = document.createElementNS(NS, 'path');
+      clip.setAttribute('id', clipId); clip.appendChild(clipShape);
+      k.svg.querySelector('defs').appendChild(clip);
+      var hatchHold = geo.group({ d: 0 });
+      hatchHold.node.setAttribute('clip-path', 'url(#' + clipId + ')');
+      hatchHold.path(hatchD(box.x0, box.y0, box.x1, box.y1, 5), { w: 0.6, op: 0.32 });
       var region = geo.layer();
       var ax = geo.group({ d: 0 });
       ax.line(box.x0, OY, box.x1, OY, { w: 0.9, op: 0.7, rough: 0.4 });
@@ -389,6 +422,14 @@
       head.line(SIDE, 118, C2, 118, { w: 0.6, op: 0.45, rough: 0.3 });
       var rule = head.text(SIDE, 142, '', { kind: 'math' });
       var point = geo.layer();
+      // the budget itself, as a handle on the region's top corner: dragging it up or down moves the slider too
+      var tHandle = grabber(geo.group({ d: 500 }));
+      var drag2b = { x0: OX, x1: OX, y0: OY - T_MAX * UNIT, y1: OY - T_MIN * UNIT };
+      var drag2 = k.draggable(tHandle, {
+        x: OX, y: OY - T_START * UNIT, bounds: drag2b,
+        label: 'The top corner of the budget region. Up and down arrow keys move it.',
+        onMove: function (x, y) { var u = (OY - y) / UNIT; slider2.set(mode === 'lasso' ? u : u * u); }
+      });
 
       var PP = { x: SIDE + 20, y: 246, w: 122, h: 80 };
       var px = k.scale(0, T_MAX, PP.x, PP.x + PP.w), py = k.scale(0, 1.7, PP.y + PP.h, PP.y);
@@ -411,17 +452,23 @@
       function redraw2() {
         var s = solve(mode, T), X = sx(s.a1), Y = sy(s.a2), lv = extra(f, s.a1, s.a2);
         region.clear(); point.clear(); paths.clear();
+        var reach = (mode === 'lasso' ? T : Math.sqrt(T)) * UNIT, shapeD;
         if (mode === 'lasso') {
-          var dia = [[sx(T), OY], [OX, sy(T)], [sx(-T), OY], [OX, sy(-T)]];
-          region.hatch(dia, { op: 0.32 });
-          region.poly(dia, { w: 1.6, op: 0.9, rough: 0.5 });
+          shapeD = 'M' + (OX + reach).toFixed(1) + ' ' + OY + ' L' + OX + ' ' + (OY - reach).toFixed(1) +
+            ' L' + (OX - reach).toFixed(1) + ' ' + OY + ' L' + OX + ' ' + (OY + reach).toFixed(1) + ' Z';
         } else {
-          var r = Math.sqrt(T) * UNIT, ring = [];
-          for (var j = 0; j < 48; j++) ring.push([OX + r * Math.cos(j / 48 * 2 * Math.PI), OY + r * Math.sin(j / 48 * 2 * Math.PI)]);
-          region.hatch(ring, { op: 0.32 });
-          region.circle(OX, OY, r, { w: 1.6, op: 0.9 });
+          var r = reach.toFixed(1);
+          shapeD = 'M' + (OX - reach).toFixed(1) + ' ' + OY + ' a' + r + ' ' + r + ' 0 1 0 ' + (2 * reach).toFixed(1) + ' 0' +
+            ' a' + r + ' ' + r + ' 0 1 0 ' + (-2 * reach).toFixed(1) + ' 0 Z';
         }
-        drawContour(region, lv, { w: 1.1, op: 0.85, rough: 0.3 });
+        clipShape.setAttribute('d', shapeD);
+        region.path(shapeD, { w: 1.6, op: 0.9 });
+        drawContour(region, lv, { w: 1.1, op: 0.85 }, true);
+        // the handle sits on the region's top corner; its track is the budget's range in this mode
+        var lo = (mode === 'lasso' ? T_MIN : Math.sqrt(T_MIN)) * UNIT, hi = (mode === 'lasso' ? T_MAX : Math.sqrt(T_MAX)) * UNIT;
+        drag2b.y0 = OY - hi; drag2b.y1 = OY - lo;
+        moveTo(tHandle, OX, OY - reach);
+        drag2.set(OX, OY - reach);
         point.paper(X - 6, Y - 6, 12, 12).setAttribute('rx', 6);
         point.dot(X, Y, 4.2, { accent: true });
         rowName.set(mode === 'lasso' ? 'sizes' : 'squares');

@@ -329,7 +329,7 @@ The score does not change. Each day's miss is the gap between the dot and the li
 ::: {.ink-figure data-figure="guess-line" data-step="0" data-caption="Fig. 5 · a line with a height and a tilt, scored the same way · made-up data"}
 :::
 
-It starts flat, at height 13 with tilt 0: the best one-number guess, with a total of 68. Slide the tilt up and the squares at both ends shrink. You will find the height has to come down as the tilt goes up. Try to beat 30.
+It starts flat, at height 13 with tilt 0: the best one-number guess, with a total of 68. Drag the ring at the right end of the line up, or slide the tilt, and the squares at both ends shrink. You will find the height has to come down as the tilt goes up: drag the ring at day 0, or use the height slider. Try to beat 30.
 
 Then press *let the nudges do it*. Each round nudges the height by the average miss, then the tilt by whether the misses on later days are bigger than on earlier ones, each times a step size. The total falls to about 26.71, far below the 68 that a single number could reach.
 

@@ -3,8 +3,8 @@
    Steps: 0 click the day you think it changed, then see the true day and how far off you were
           1 keep a running score one day at a time: today's score = yesterday's + (output - 10)
           2 the plain score sinks on quiet days; switch on "never below zero" and "an allowance" and watch it change
-          3 an alarm line: slide the allowance and the threshold, read how late the alarm is and how many false ones
-          4 the same, with the size of the rise on a slider
+          3 an alarm line: drag it up or down (or slide it), slide the allowance, read how late the alarm is and how many false ones
+          4 the same, with the size of the rise: drag the new level in the top chart, or use its slider
    Every number is computed here from the same seeded series, which is offered to the page's Python through
    window.InkPage (output, normal, my_allowance, my_threshold). After any alarm the score starts again at zero.
    Made-up data. Needs InkKit (ink/ink-kit.js). */
@@ -133,7 +133,7 @@
         dotsLayer.clear();
         dotsLayer.polyline(series.map(function (v, i) { return [tx(i + 1), yv(v, box)]; }), { w: 0.6, op: 0.25 });
         series.forEach(function (v, i) { dotsLayer.dot(tx(i + 1), yv(v, box), box === TALL ? 2.1 : 1.8, { op: 0.85 }); });
-        if (k.step() === 4) dotsLayer.line(cx, yv(MU + shift, TOP), X0 + PW, yv(MU + shift, TOP), { w: 1.1, op: 0.7, rough: 0.3 });
+        if (k.step() === 4) placeRise();
       }
 
       /* ================= step 0: where did it change? ================= */
@@ -324,6 +324,59 @@
       });
       g3.line(SIDE, 152, SIDE + 158, 152, { w: 0.6, op: 0.45, rough: 0.3 });
       var l3 = k.root.layer({ steps: [3, 4] });
+
+      /* the alarm line itself: drawn once, moved with a transform, and grabbed to set the threshold */
+      var alarmG = k.root.group({ steps: [3, 4], d: 0 });
+      alarmG.line(X0, 0, X0 + PW, 0, { w: 1.1, op: 0.75, rough: 0.3 });
+      var alarmLabel = alarmG.group({ d: 0 });
+      alarmLabel.paper(X0 + 6, -16, 70, 13);
+      alarmLabel.text(X0 + 8, -6, 'alarm line', { kind: 'axis' });
+      alarmG.circle(X0 + PW, 0, 6, { w: 1.4, op: 0.95 });
+      alarmG.dot(X0 + PW, 0, 2, {});
+      raw('rect', { x: X0, y: -10, width: PW + 16, height: 20, 'class': 'ik-hit' }, alarmG.node);
+      function tAt(y) { return Math.round((SC3.lo + (BOT.y + BOT.h - y) / BOT.h * (SC3.hi - SC3.lo)) * 10) / 10; }
+      var alarmDrag = k.draggable(alarmG.node, {
+        x: X0 + PW, y: ys(T, SC3), label: 'The alarm line. Up and down arrow keys move it.',
+        bounds: { x0: X0 + PW, y0: ys(5, SC3), x1: X0 + PW, y1: ys(0.5, SC3) },
+        onMove: function (x, y) {
+          var v = Math.max(0.5, Math.min(5, tAt(y)));
+          if (v === T) return;
+          T = v; tSlider.set(v, true); keep(); redraw3();
+        }
+      });
+      function placeAlarm() {
+        var y = ys(T, SC3);
+        alarmG.node.setAttribute('transform', 'translate(0 ' + y.toFixed(1) + ')');
+        alarmLabel.node.setAttribute('transform', y - 6 < BOT.y + 10 ? 'translate(0 20)' : '');
+        alarmDrag.set(X0 + PW, y);
+      }
+
+      /* step 4: the new level after day 30, grabbed to set the size of the rise */
+      var riseG = k.root.group({ steps: [4], d: 0 });
+      riseG.line(cx, 0, X0 + PW, 0, { w: 1.1, op: 0.7, rough: 0.3 });
+      riseG.paper(X0 + PW - 70, -17, 66, 13);
+      riseG.text(X0 + PW - 4, -7, 'new level', { kind: 'axis', anchor: 'end' });
+      riseG.circle(X0 + PW, 0, 6, { w: 1.4, op: 0.95 });
+      riseG.dot(X0 + PW, 0, 2, {});
+      raw('rect', { x: cx, y: -10, width: X0 + PW + 16 - cx, height: 20, 'class': 'ik-hit' }, riseG.node);
+      function riseAt(y) { return Math.round((VLO + (TOP.y + TOP.h - y) / TOP.h * (VHI - VLO) - MU) * 20) / 20; }
+      var riseDrag = k.draggable(riseG.node, {
+        x: X0 + PW, y: yv(MU + SHIFT, TOP), label: 'The new level after day 30. Up and down arrow keys move it.',
+        bounds: { x0: X0 + PW, y0: yv(MU + 1, TOP), x1: X0 + PW, y1: yv(MU, TOP) },
+        onMove: function (x, y) {
+          if (k.step() !== 4) return;
+          var v = Math.max(0, Math.min(1, riseAt(y)));
+          if (v === shift) return;
+          shiftSlider.set(v, true); setShift(v);
+        }
+      });
+      function placeRise() {
+        var y = yv(MU + shift, TOP);
+        riseG.node.setAttribute('transform', 'translate(0 ' + y.toFixed(1) + ')');
+        riseDrag.set(X0 + PW, y);
+      }
+      function setShift(v) { shift = v; series = makeSeries(v); drawDots(); redraw3(); }
+
       function redraw3() {
         var m = watch(series, C, T), i;
         l3.clear();
@@ -338,10 +391,7 @@
           if (m.alarms.indexOf(i + 1) >= 0 && i < N - 1) pts.push([tx(i + 1), ys(0, SC3)]);
         }
         l3.polyline(pts, { w: 1.5, op: 0.9 });
-        l3.line(X0, ys(T, SC3), X0 + PW, ys(T, SC3), { w: 1.1, op: 0.75, rough: 0.3 });
-        var ty = ys(T, SC3) - 6 < BOT.y + 10 ? ys(T, SC3) + 14 : ys(T, SC3) - 6;
-        l3.paper(X0 + 6, ty - 10, 70, 13);
-        l3.text(X0 + 8, ty, 'alarm line', { kind: 'axis' });
+        placeAlarm();
         m.alarms.forEach(function (d) {
           var y = ys(m.S[d - 1], SC3);
           if (d <= LAST_NORMAL) l3.mark(tx(d), y, 'x', { r: 4.5, w: 1.3 });
@@ -362,10 +412,10 @@
       function keep() { save(STORE_KNOBS, { C: C, T: T }, 'ink:change-knobs'); }
       k.slider({ x: SIDE, y: 196, w: 158, min: 0, max: 0.6, step: 0.05, value: C, label: 'allowance', steps: [3, 4],
         format: function (v) { return v.toFixed(2); }, onChange: function (v) { C = v; keep(); redraw3(); } });
-      k.slider({ x: SIDE, y: 246, w: 158, min: 0.5, max: 5, step: 0.1, value: T, label: 'alarm line', steps: [3, 4],
+      var tSlider = k.slider({ x: SIDE, y: 246, w: 158, min: 0.5, max: 5, step: 0.1, value: T, label: 'alarm line', steps: [3, 4],
         format: function (v) { return v.toFixed(1); }, onChange: function (v) { T = v; keep(); redraw3(); } });
       var shiftSlider = k.slider({ x: SIDE, y: 296, w: 158, min: 0, max: 1, step: 0.05, value: SHIFT, label: 'size of the rise', steps: [4],
-        format: function (v) { return v.toFixed(2); }, onChange: function (v) { shift = v; series = makeSeries(v); drawDots(); redraw3(); } });
+        format: function (v) { return v.toFixed(2); }, onChange: function (v) { setShift(v); } });
       k.root.group({ steps: [3], d: 600 }).callout('d', 'faster, or fewer alarms?', SIDE, 296);
       var g4 = k.root.group({ steps: [4], d: 500 });
       g4.callout('e', 'a smaller rise', SIDE, 336);

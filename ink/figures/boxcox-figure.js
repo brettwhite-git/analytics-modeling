@@ -1,7 +1,8 @@
 /* Stretch figure — pulling in a long tail, done by hand before it is named.
    Sixty made-up waiting times (minutes) are piled into a histogram. The reader slides the strength of a
    stretch from none, through the square root, to the logarithm and past it, or presses a button that eases
-   the stretch to the log. Every frame re-bins the stretched values and redraws the pile with clean strokes
+   the stretch to the log, or grabs the average line and drags it toward the middle of the pile: the figure
+   picks the stretch (on the slider's own steps) that puts the average nearest the pointer. Every frame re-bins the stretched values and redraws the pile with clean strokes
    (hand-hatched by arithmetic, so nothing boils while it moves). The axis keeps its ticks in minutes, placed
    where the stretch puts them, so the reader sees 10, 20, 50 squeeze together.
    Under the hood the stretch is the Box-Cox power: lambda = 1 - strength, (y^lambda - 1) / lambda, log at 0.
@@ -77,6 +78,32 @@
 
       var pile = k.root.layer(), focus = k.root.layer();
 
+      /* where the average lands, across the plot, for each stretch the slider can take (it only moves right) */
+      var GRID = [], gi;
+      for (gi = 0; gi <= Math.round(SMAX / 0.05); gi++) {
+        var gs = Math.round(gi * 5) / 100, gv = WAITS.map(function (y) { return stretch(y, gs); }), gst = stats(gv);
+        GRID.push({ s: gs, x: X0 + (gst.mean - gst.lo) / (gst.hi - gst.lo) * (X1 - X0) });
+      }
+      /* the average's handle: drawn once, moved with a transform */
+      var avgG = k.root.group({ d: 600 });
+      avgG.circle(0, TOP - 20, 5.5, { accent: true, w: 1.4, op: 0.95 });
+      var avgHit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      avgHit.setAttribute('x', -11); avgHit.setAttribute('y', TOP - 30);
+      avgHit.setAttribute('width', 22); avgHit.setAttribute('height', BASE - TOP + 30);
+      avgHit.setAttribute('class', 'ik-hit');
+      avgG.node.appendChild(avgHit);
+      var avgDrag = k.draggable(avgG.node, {
+        x: GRID[0].x, y: TOP, label: 'The average. Drag it left or right to choose the stretch; arrow keys move it.',
+        bounds: { x0: GRID[0].x, y0: TOP, x1: GRID[GRID.length - 1].x, y1: TOP },
+        onMove: function (x) {
+          if (busy) return;
+          var best = GRID[0];
+          GRID.forEach(function (g) { if (Math.abs(g.x - x) < Math.abs(best.x - x)) best = g; });
+          if (best.s === strength) return;
+          strength = best.s; slider.set(strength, true); redraw();
+        }
+      });
+
       var side = k.root.group({ d: 300 });
       side.text(SIDE, 60, 'stretch', { kind: 'label' });
       var vName = side.text(SIDE + COLW, 60, '', { kind: 'val', anchor: 'end' });
@@ -125,8 +152,10 @@
 
         // the average: the one accent
         var ax = hx(st.mean);
-        focus.path('M' + ax.toFixed(1) + ' ' + (BASE - 2) + ' L' + ax.toFixed(1) + ' ' + (TOP - 14), { w: 1.6, op: 0.95, accent: true });
-        focus.text(ax + 5, TOP - 8, 'average', { kind: 'axis' });
+        focus.path('M' + ax.toFixed(1) + ' ' + (BASE - 2) + ' L' + ax.toFixed(1) + ' ' + (TOP - 14.5), { w: 1.6, op: 0.95, accent: true });
+        focus.text(ax + 9, TOP - 8, 'average', { kind: 'axis' });
+        avgG.node.setAttribute('transform', 'translate(' + ax.toFixed(1) + ' 0)');
+        avgDrag.set(ax, TOP);
 
         vName.set(nameOf(strength));
         vBelow.set(st.below + ' of ' + N);

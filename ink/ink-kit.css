@@ -215,6 +215,11 @@
 .ink-kit .ik-drag .ik-hit {
   pointer-events: auto;
 }
+/* a hidden group catches nothing, whatever kind of control is inside it (this must come after the rules above) */
+.ink-kit .is-off .ik-hit.ik-hit,
+.ink-kit .is-off.ik-drag .ik-hit.ik-hit {
+  pointer-events: none;
+}
 
 /* ---------- reduced motion: the finished drawing, instantly ---------- */
 .ink-kit.is-reduced *,

@@ -15,11 +15,11 @@ Two people fitted a curve to the same ten days. One drew a gentle curve. The oth
 ::: {.ink-figure data-figure="unseen-fits" data-step="0" data-caption="Fig. 1 · ten days at a lemonade stand, and two curves fitted to them · made-up data"}
 :::
 
-Press *measure the gentle one*. A thread grows from each dot to the curve. Each thread is one miss: the jugs you really sold, minus the jugs the curve guessed.
+Press *measure the gentle one*, or click the gentle curve. A thread grows from each dot to the curve. Each thread is one miss: the jugs you really sold, minus the jugs the curve guessed.
 
 To score a curve, square each miss and take the average. Squaring makes every miss count as positive, and makes big misses count more. Try two misses by hand, 1 and 3: 1 × 1 = 1, 3 × 3 = 9, and (1 + 9) ÷ 2 = **5**. Call this the **average squared miss**. Smaller is better.
 
-Now press *measure the wiggly one*. It touches every dot, so every thread has length zero. Its score is 0.00, the best a score can be.
+Now press *measure the wiggly one*, or click the wiggly curve. It touches every dot, so every thread has length zero. Its score is 0.00, the best a score can be.
 
 ::: {.ask data-veil="true"}
 Tomorrow brings a new day. Which curve would you trust to guess its sales?
@@ -333,7 +333,7 @@ Every day is hidden exactly once. Every day is learned from four times.
 ::: {.ink-figure data-figure="cv-figure" data-step="1" data-caption="Fig. 4 · taking turns: each part of the strip is hidden once · made-up data"}
 :::
 
-Press *next part* and watch the hatching move along the strip. The line moves too, because each turn it is fitted on different days. The small chart in the column collects each part's miss, and the tall tick marks their average. Press *run all* to finish the round.
+Press *next part*, or drag the hatching along the strip, and watch it move. The line moves too, because each turn it is fitted on different days. The small chart in the column collects each part's miss, and the tall tick marks their average. Press *run all* to finish the round.
 
 The parts disagree with each other, just like the random splits did. But now you are not trusting any one of them. You are averaging all of them, and every day took part.
 
@@ -420,7 +420,7 @@ Five candidates take turns. The lowest score wins. Is the winner's score a fair 
 
 The last five cells are locked before anything else happens. Inside the first fifteen, five candidates take turns, three parts of five days each: the flat model, the line, and curves that can bend more and more. "Curve 2" can bend once, like the gentle curve in Fig. 1. The lowest score wins.
 
-Then the winner is fitted once more, on all fifteen days, and *open the final part* scores it on the five locked days. That is the only time those days are used.
+Then the winner is fitted once more, on all fifteen days, and *open the final part* (or a click on the locked cells) scores it on the five locked days. That is the only time those days are used.
 
 Beside it, the same recipe runs on 300 more made-up stands. On average the winner's score from taking turns is 0.78, and its final check is 0.96. The score you chose by looks better than the model really is. The final check is the honest number.
 

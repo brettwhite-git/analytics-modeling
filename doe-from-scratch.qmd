@@ -12,7 +12,7 @@ There is no data to look at, because nobody has seen either button yet. So you h
 
 Each button has a hidden chance of being clicked. You cannot see it. All you can do is show the buttons to visitors and count.
 
-Press *show A to one more* and *show B to one more* a few times, or *10 more of each*. A circle is a visitor who clicked. A small dot is a visitor who did not. The side column keeps the tally: clicks, out of visitors, and the share that clicked.
+Click a version's sheet to show it to one more visitor, or press *show A to one more* and *show B to one more*. Do that a few times, or press *10 more of each*. A circle is a visitor who clicked. A small dot is a visitor who did not. The side column keeps the tally: clicks, out of visitors, and the share that clicked.
 
 ::: {.ink-figure data-figure="experiment-ab" data-step="0" data-steps="0:one visitor at a time|1:the whole test, again and again" data-caption="Fig. 1 · two versions of a button, shown to made-up visitors"}
 :::
@@ -335,7 +335,7 @@ picture = {"bars": [(1, 100 * got_a / seen_a), (2, 100 * got_b / seen_b)],
 
 Now you are making a banner ad, not a button. You can choose the font (Arial or Roboto), the background (white or gold) and the headline (short or long). Two choices for each of three things: 2 × 2 × 2 = **8** different ads.
 
-Fig. 3 draws them as the corners of a box. Moving left to right changes the font, moving up changes the background, moving back changes the headline. Each corner is one ad.
+Fig. 3 draws them as the corners of a box. Moving left to right changes the font, moving up changes the background, moving back changes the headline. Each corner is one ad: click one to read it.
 
 ::: {.ink-figure data-figure="factorial-figure" data-step="0" data-steps="0:every ad|1:your four|2:a balanced four" data-caption="Fig. 3 · three choices about one banner ad make eight ads · illustration"}
 :::
@@ -344,7 +344,7 @@ Testing all eight is the thorough way. Then you can split the result into how mu
 
 Suppose you can afford four. Switch Fig. 3 to view (b) and click four corners. The side column counts two things: how often each choice was tried (Arial, gold, long, ...), and how often each pair of choices was tried together (Roboto on gold, short on white, ...). It says *balanced* when every choice was tried equally often, and every pair was too.
 
-Try the four corners of the front face. Every one has a short headline, so you have learned nothing about long ones. Most sets of four fail like that, in a smaller way. But some sets of four are balanced: every choice appears twice, and every pair once. View (c) shows one, and the four corners left over make the other.
+Try the four corners of the front face. Every one has a short headline, so you have learned nothing about long ones. Most sets of four fail like that, in a smaller way. But some sets of four are balanced: every choice appears twice, and every pair once. View (c) shows one, and the four corners left over make the other: click a pale corner to swap.
 
 Balance is what lets four runs speak for all eight. Each choice is compared with its partner across the same mix of everything else, just as the coin gave morning and night to both buttons. In practice, software builds balanced sets like this for you.
 
@@ -449,7 +449,7 @@ After the first batch, one button is ahead. Why not send every visitor after tha
 ::: {.ink-figure data-figure="bandit-figure" data-step="0" data-steps="0:you decide|1:the leader rule" data-caption="Fig. 4 · the same two buttons, 500 made-up visitors in batches of 50"}
 :::
 
-Slide how many of the next 50 go to B, then *send the batch*. Do it ten times. The side column compares your clicks with two plans on the same visitors: *half each*, and a simple **leader rule**: the first batch is split evenly, and after that, 45 of every 50 go to whichever button is ahead so far, and 5 go to the other.
+Slide how many of the next 50 go to B, then *send the batch*, or click a button's column to send all 50 to it. Do it ten times. The side column compares your clicks with two plans on the same visitors: *half each*, and a simple **leader rule**: the first batch is split evenly, and after that, 45 of every 50 go to whichever button is ahead so far, and 5 go to the other.
 
 On this day the first batch is unlucky: A gets 7 clicks from 25 and B gets 5. The leader rule follows A for three batches, but the 5 it keeps sending to B pull B ahead, and from then on B gets the 45. It ends with 138 clicks against 125 for half each.
 

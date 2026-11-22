@@ -134,7 +134,7 @@ print("After 40 flips the firm belief says", round(firm[40][1], 2))
 
 `loose[-1]` is the last thing in the list, and `loose[3]` is the belief after the third flip.
 
-Both go wrong, in opposite directions. The loose belief (the accent line) is thrown about by the first three flips: one head and then two tails drag it from 0.67 down to 0.4, and a third tail takes it to 0.33, for a coin that favours heads. The firm one barely moves: after 40 flips, 26 of them heads, it still says about 0.53. Hold a belief too firmly and you ignore the evidence. Hold it too loosely and three flips throw you about. You can see both in Fig. 1 too: slide the imagined flips all the way down, or all the way up, and flip again.
+Both go wrong, in opposite directions. The loose belief (the accent line) is thrown about by the first three flips: one head and then two tails drag it from 0.67 down to 0.4, and a third tail takes it to 0.33, for a coin that favours heads. The firm one barely moves: after 40 flips, 26 of them heads, it still says about 0.53. Hold a belief too firmly and you ignore the evidence. Hold it too loosely and three flips throw you about. You can see both in Fig. 1 too: drag the top of the starting curve all the way down, or all the way up (or use the slider), and flip again.
 
 The honest choice is to start as sure as you really are. The pull back toward what you believed before is what makes this worth doing: it helps most when you have lots of general knowledge (most coins are fair) and only a little specific data (ten flips of this one).
 
@@ -371,7 +371,7 @@ print("After 150 it is", round(fresh_line[-1][1], 2))
 
 `range(0, 151, 5)` counts 0, 5, 10 and so on up to 150.
 
-The miss on the points used keeps falling: the line bends to reach every one of them, noise and all. The miss on fresh points falls, bottoms out, and then climbs back up. Past that turn, every new correction is fitting noise. Fig. 2 shows the same turn in its small chart, if you keep pressing *add 10*.
+The miss on the points used keeps falling: the line bends to reach every one of them, noise and all. The miss on fresh points falls, bottoms out, and then climbs back up. Past that turn, every new correction is fitting noise. Fig. 2 shows the same turn in its small chart, if you keep pressing *add 10* or drag along that chart.
 
 The cure is to keep fresh points aside, watch their miss, and stop where it is lowest. Stop too early and the line is too rough to follow the shape. Go on too long and it follows the noise instead. Methods like this one are a favourite for prediction from tables of data, where the inputs work together in complicated ways.
 

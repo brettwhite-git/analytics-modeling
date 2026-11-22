@@ -3,7 +3,7 @@
    SVG and draws it again with the site's pen: wobbled strokes with fixed seeds, hatching instead of
    solid fills, stitched thread for dashed lines, marks whose SHAPE tells series apart, labels in mono,
    colours from the site tokens (so both themes work), drawn in when the plot scrolls into view.
-   The numbers stay R's; only the hand changes. Markup comes from ink/plots.lua:
+   The numbers stay R's; only the hand changes. Point at a mark or a line and its value is read off R's axis labels. Markup comes from ink/plots.lua:
      <figure class="ink-plot"><div class="ink-plot__stage" data-ink-plot><svg>...</svg></div>...</figure> */
 (function () {
   'use strict';
@@ -140,6 +140,8 @@
         var size = num(s['font-size']) || 10, bold = /bold|[6-9]00/.test(s['font-weight'] || '');
         var t = el('text', { x: node.getAttribute('x'), y: node.getAttribute('y'), 'text-anchor': node.getAttribute('text-anchor'), transform: node.getAttribute('transform') });
         t.textContent = node.textContent;
+        var asNumber = /^[\u2212-]?[\d,]*\.?\d+$/.test(node.textContent.trim()) ? parseFloat(node.textContent.trim().replace(/,/g, '').replace('\u2212', '-')) : NaN;
+        if (isFinite(asNumber) && !node.getAttribute('transform')) ticks.push({ x: num(node.getAttribute('x')), y: num(node.getAttribute('y')) - size * 0.35, v: asNumber });
         t.style.fontSize = r1(Math.max(7.5, size * 0.8)) + 'px';
         var tc = role(s.fill || '#000000');
         return place(t, parent, 'ik-t ip-text' + (bold ? ' ip-text--strong' : ''), tc && tc.charAt(0) === 's' ? tc : null);
@@ -148,6 +150,7 @@
 
       if (tag === 'circle') {
         var cx = num(node.getAttribute('cx')), cy = num(node.getAttribute('cy')), r = num(node.getAttribute('r'));
+        if (r <= 8) hits.push([cx, cy]);
         if (r > 8) return ink(rc.circle(cx, cy, r * 2, ro(w, 0.5)), parent, w, stroke || fill, fill ? fo : so);
         if (fill && fill !== 'paper') return mark(cx, cy, r, shapeFor(fill), parent, fill, fo < 0.999 ? Math.max(0.45, fo) : null);
         return mark(cx, cy, r, 'o', parent, stroke || 'ink', so);
@@ -202,6 +205,7 @@
         if (dashed) {                                                         // a dashed line becomes stitched thread
           return place(el('path', { d: toD(pts), fill: 'none', stroke: 'currentColor', 'stroke-width': Math.min(w, 1.2), 'stroke-linecap': 'round', 'stroke-dasharray': '5.5 4.5' }), parent, 'ik-fade ip-thread', stroke, so);
         }
+        if (pts.length >= 3 && pts.length <= 400) pts.forEach(function (q) { hits.push(q); });
         if (pts.length === 2) return ink(rc.line(pts[0][0], pts[0][1], pts[1][0], pts[1][1], ro(w, 0.5)), parent, w, stroke, so);
         if (pts.length <= 24) return ink(rc.linearPath(pts, ro(w, 0.4)), parent, w, stroke, so);
         return ink(el('path', { d: toD(pts), 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }), parent, w, stroke, so);
@@ -235,6 +239,7 @@
       }
     }
     var defs = el('defs', null, out), regions = {}, regionList = [];
+    var hits = [], ticks = [];
     walk(src, out);
     regionList.forEach(function (reg, i) {
       var box = [[reg.x0, reg.y0], [reg.x1, reg.y0], [reg.x1, reg.y1], [reg.x0, reg.y1]];
@@ -247,6 +252,7 @@
       reg.holder.appendChild(node);
     });
 
+    addHover(out, defs, hits, ticks, W, H);
     src.parentNode.replaceChild(out, src);
     stage.style.aspectRatio = W + ' / ' + H;
 
@@ -260,6 +266,67 @@
         io.observe(stage);
       }
     }
+  }
+
+  /* ---------- hover: point at a mark or a line and read its value off R's own axis labels ---------- */
+  function axisMap(labels, along) {
+    // labels: [{ pos, v }] along one axis. A straight-line scale only: anything else (log, categories) is left unread.
+    var seen = {}, list = [];
+    labels.forEach(function (l) { var key = l.pos.toFixed(1); if (!seen[key]) { seen[key] = 1; list.push(l); } });
+    list.sort(function (a, b) { return a.pos - b.pos; });
+    if (list.length < 2) return null;
+    var a = list[0], b = list[list.length - 1];
+    if (a.v === b.v || Math.abs(b.pos - a.pos) < 20) return null;
+    var slope = (b.v - a.v) / (b.pos - a.pos), ok = true;
+    list.forEach(function (l) { if (Math.abs(a.v + (l.pos - a.pos) * slope - l.v) > Math.abs(b.v - a.v) * 0.03) ok = false; });
+    if (!ok) return null;
+    var step = Math.abs(list[1].v - list[0].v) || 1, digits = Math.max(0, Math.min(4, 1 - Math.floor(Math.log(step) / Math.LN10)));
+    return function (pos) { return String(parseFloat((a.v + (pos - a.pos) * slope).toFixed(digits))); };
+  }
+  function addHover(out, defs, hits, ticks, W, H) {
+    if (!hits.length || ticks.length < 2) return;
+    var panels = [];
+    Array.prototype.forEach.call(defs.querySelectorAll('clipPath rect'), function (r) {
+      var p = { x: num(r.getAttribute('x')), y: num(r.getAttribute('y')), w: num(r.getAttribute('width')), h: num(r.getAttribute('height')) };
+      if (p.w > 30 && p.h > 30 && (p.w < W - 2 || p.h < H - 2)) panels.push(p);
+    });
+    if (!panels.length) return;
+    panels.forEach(function (p) {
+      var below = ticks.filter(function (t) { return t.x >= p.x - 6 && t.x <= p.x + p.w + 6 && t.y > p.y + p.h; });
+      var rowY = Math.min.apply(null, below.map(function (t) { return t.y; }));
+      p.fx = axisMap(below.filter(function (t) { return t.y - rowY < 4; }).map(function (t) { return { pos: t.x, v: t.v }; }));
+      var left = ticks.filter(function (t) { return t.y >= p.y - 6 && t.y <= p.y + p.h + 6 && t.x < p.x; });
+      var colX = Math.max.apply(null, left.map(function (t) { return t.x; }));
+      p.fy = axisMap(left.filter(function (t) { return colX - t.x < 4; }).map(function (t) { return { pos: t.y, v: t.v }; }));
+    });
+    if (!panels.some(function (p) { return p.fx || p.fy; })) return;
+
+    var layer = el('g', { 'class': 'ip-hover', 'pointer-events': 'none' }, out), shown = '';
+    function clear() { shown = ''; while (layer.firstChild) layer.removeChild(layer.firstChild); }
+    function move(evt) {
+      var ctm = out.getScreenCTM();
+      if (!ctm) return;
+      var pt = out.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
+      var at = pt.matrixTransform(ctm.inverse()), best = null, bestD = 14 * 14;
+      for (var i = 0; i < hits.length; i++) {
+        var dx = hits[i][0] - at.x, dy = hits[i][1] - at.y, d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = hits[i]; }
+      }
+      var panel = null;
+      if (best) panels.forEach(function (p) { if (best[0] >= p.x - 1 && best[0] <= p.x + p.w + 1 && best[1] >= p.y - 1 && best[1] <= p.y + p.h + 1) panel = p; });
+      if (!best || !panel || (!panel.fx && !panel.fy)) { if (shown) clear(); return; }
+      var key = best[0].toFixed(1) + ',' + best[1].toFixed(1);
+      if (key === shown) return;
+      clear(); shown = key;
+      el('circle', { cx: r1(best[0]), cy: r1(best[1]), r: 5.5, 'class': 'ip-hover__ring' }, layer);
+      var text = panel.fx && panel.fy ? '(' + panel.fx(best[0]) + ', ' + panel.fy(best[1]) + ')' : panel.fy ? panel.fy(best[1]) : panel.fx(best[0]);
+      var right = best[0] > panel.x + panel.w - 70, low = best[1] < panel.y + 18;
+      var t = el('text', { x: r1(best[0] + (right ? -9 : 9)), y: r1(best[1] + (low ? 15 : -8)), 'text-anchor': right ? 'end' : 'start', 'class': 'ip-hover__text' }, layer);
+      t.textContent = text;
+    }
+    out.addEventListener('pointermove', move);
+    out.addEventListener('pointerdown', move);
+    out.addEventListener('pointerleave', clear);
   }
 
   function start() {

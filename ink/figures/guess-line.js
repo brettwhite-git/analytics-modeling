@@ -1,6 +1,6 @@
 /* Guess-line — the same game with two numbers to choose: a line's height and its tilt.
    The same seven days of made-up sales as guess-miss. The line's height is where it stands at day 0, and
-   its tilt is how much it rises for each day. The reader slides both and watches the hatched squares
+   its tilt is how much it rises for each day. The reader drags the line's two handles (or slides both) and watches the hatched squares
    (side = the miss) and the total; or lets the nudges do it: nudge the height by the average miss, then
    the tilt by the average of (miss x day), each scaled down, again and again.
    One step. Tilt 0 is the one-number guess of the earlier figures.
@@ -77,6 +77,7 @@
           m += 'M' + px.toFixed(1) + ' ' + py.toFixed(1) + ' V' + gy.toFixed(1) + ' ';
         });
         hatch.setAttribute('d', h); boxes.setAttribute('d', bx); misses.setAttribute('d', m);
+        placeHandles();
         var t = totalMiss(height, tilt);
         if (t < best) best = t;
         vTotal.set(f2(t)); vBest.set(f2(best));
@@ -94,6 +95,48 @@
         format: function (v) { return v.toFixed(2); },
         onChange: function (v) { if (busy) return; tilt = v; history = []; paint(); }
       });
+
+      /* ---- two handles on the line itself: the one at day 0 is the height (drag it up and down, the tilt
+              stays), the one further along is the tilt (drag it and the line turns about day 0). They set
+              the sliders, so the two routes always agree and snap to the same steps. ---- */
+      function handle(label, bounds, onMove) {
+        var g = k.root.group({ d: 400 });
+        g.circle(0, 0, 6.5, { w: 1.4, op: 0.95 });
+        g.dot(0, 0, 2, {});
+        var hit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        hit.setAttribute('r', 16); hit.setAttribute('class', 'ik-hit');
+        g.node.appendChild(hit);
+        var dr = k.draggable(g.node, { label: label, bounds: bounds, onMove: onMove, onEnd: function () { tiltDay = null; } });
+        return { g: g, drag: dr };
+      }
+      function dataY(y) { return Y0 + (PLOT.y + PLOT.h - y) / PLOT.h * (Y1 - Y0); }
+      var tiltDay = null;                                // the day the tilt handle stood on when the drag began
+      var hH = handle('The height of the line, at day 0. Up and down arrow keys move it.',
+        { x0: sx(0), y0: sy(20), x1: sx(0), y1: sy(0) },
+        function (x, y) { if (!busy) sH.set(dataY(y)); });
+      var hT = handle('The tilt of the line: it turns about day 0. Up and down arrow keys move it.',
+        { x0: PLOT.x, y0: PLOT.y, x1: PLOT.x + PLOT.w, y1: PLOT.y + PLOT.h },
+        function (x, y) {
+          if (busy) return;
+          if (tiltDay == null) tiltDay = tiltHandleDay();
+          sT.set((dataY(y) - height) / tiltDay);
+        });
+      /* the tilt handle sits at day 7.6, past the last dot, or where the line leaves the plot if that comes first */
+      function tiltHandleDay() {
+        var d = 7.6, edge = tilt > 0 ? Y1 - 0.6 : Y0 + 0.6;
+        if (Math.abs(tilt) > 1e-9 && (lineAt(d) > Y1 - 0.6 || lineAt(d) < Y0 + 0.6)) d = (edge - height) / tilt;
+        return Math.max(1, d);
+      }
+      function placeHandles() {
+        var xh = sx(0), yh = sy(height);
+        hH.g.node.setAttribute('transform', 'translate(' + xh.toFixed(1) + ' ' + yh.toFixed(1) + ')');
+        hH.drag.set(xh, yh);
+        var d = tiltDay != null ? tiltDay : tiltHandleDay();
+        var xt = sx(d), yt = Math.max(PLOT.y, Math.min(PLOT.y + PLOT.h, sy(lineAt(d))));
+        hT.g.node.setAttribute('transform', 'translate(' + xt.toFixed(1) + ' ' + yt.toFixed(1) + ')');
+        hT.drag.set(xt, yt);
+      }
+
       var side = k.root.group({ d: 250 });
       side.text(SIDE, 148, 'total miss', { kind: 'label' });
       var vTotal = side.text(SIDE + 158, 148, '', { kind: 'val', anchor: 'end' });

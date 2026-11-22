@@ -357,7 +357,7 @@ The same idea is often written as a **budget** instead of a price: make the miss
 
 With only two weights you can draw the budget. Every possible pair of weights is a point on the page. Paying by sizes, the pairs you can afford fill a **diamond**, with corners on the axes. Paying by squares, they fill a **circle**. The rings are pairs with the same miss, centred on the best unpriced fit. The answer is the first spot where a ring touches the region. On a diamond, that is usually a corner, where one weight is exactly zero. A circle has no corners.
 
-::: {.ink-figure data-figure="lasso-figure" data-step="2" data-caption="Fig. 3b · two weights, a diamond or a circle; slide the budget T · made-up data with two measurements"}
+::: {.ink-figure data-figure="lasso-figure" data-step="2" data-caption="Fig. 3b · two weights, a diamond or a circle; drag its top corner or slide the budget T · made-up data with two measurements"}
 :::
 :::
 
@@ -406,7 +406,7 @@ There is no formula for the right price. Too low, and the model keeps the chance
 ::: {.ink-figure data-figure="lasso-figure" data-step="1" data-caption="Fig. 4 · every column on the same ruler; each price scored on the fresh plants · made-up data"}
 :::
 
-Slide the price, or press *try every price*. The fresh miss falls steeply as the chance measurements are pushed out, then climbs slowly as the price starts to squeeze the sun. The bottom of that curve is the price to keep.
+Drag the ring along the bottom of the small chart, or slide the price, or press *try every price*. The fresh miss falls steeply as the chance measurements are pushed out, then climbs slowly as the price starts to squeeze the sun. The bottom of that curve is the price to keep.
 
 In code, it is the ruler first, then a loop over prices. `import math` brings in `math.sqrt`, the square root. `range(0, 41, 2)` counts 0, 2, 4 and so on up to 40. Fill in what each measurement is divided by.
 

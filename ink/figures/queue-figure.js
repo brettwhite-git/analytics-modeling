@@ -88,11 +88,65 @@
       var vLong = side.text(SIDE + COL, 138, '', { kind: 'val', anchor: 'end' });
       var foot = side.text(SIDE, 158, '', { kind: 'axis' });
 
-      k.slider({
+      var fromDrag = false, curveDrag = null;
+      var slider = k.slider({
         x: SIDE, y: 214, w: COL, min: LAM_MIN, max: LAM_MAX, step: 0.05, value: LAM_START,
         label: 'how busy', format: function (v) { return pct(v); },
-        onChange: function (v) { lam = v; redraw(); }
+        onChange: function (v) {
+          lam = v;
+          if (!fromDrag && curveDrag) curveDrag.set(cx(Math.min(v, 1)), PLOT.y + PLOT.h / 2);
+          redraw();
+        }
       });
+
+      /* ---- on the chart itself ---- */
+      var NS = 'http://www.w3.org/2000/svg';
+      function cover(steps, label, cursor) {
+        var g = k.root.group({ steps: steps });
+        var r = document.createElementNS(NS, 'rect');
+        r.setAttribute('x', PLOT.x); r.setAttribute('y', PLOT.y); r.setAttribute('width', PLOT.w); r.setAttribute('height', PLOT.h);
+        r.setAttribute('class', 'ik-hit');
+        g.node.appendChild(r);
+        g.node.setAttribute('aria-label', label);
+        g.node.style.cursor = cursor;
+        return g;
+      }
+      // step 0: hold the day and slide along it to read the line at that minute
+      var probeAt = null;
+      var probe = k.root.layer({ steps: [0] });
+      var dayG = cover([0], 'Read the line at a minute of the day. Arrow keys move along it.', 'crosshair');
+      k.draggable(dayG.node, {
+        x: PLOT.x, y: PLOT.y + PLOT.h / 2,
+        bounds: { x0: PLOT.x, y0: PLOT.y, x1: PLOT.x + PLOT.w - 0.01, y1: PLOT.y + PLOT.h },
+        label: 'Read the line at a minute of the day. Arrow keys move along it.',
+        onMove: function (x) { probeAt = Math.floor((x - PLOT.x) / PLOT.w * DAY); drawProbe(); }
+      });
+      dayG.node.style.cursor = 'crosshair';
+      // step 1: take hold of the curve and move the ring along it; the slider follows
+      var curveG = cover([1], 'Choose how busy the till is. Arrow keys move along the curve.', '');
+      curveDrag = k.draggable(curveG.node, {
+        x: cx(LAM_START), y: PLOT.y + PLOT.h / 2,
+        bounds: { x0: cx(LAM_MIN), y0: PLOT.y, x1: cx(1), y1: PLOT.y + PLOT.h },
+        label: 'Choose how busy the till is. Arrow keys move along the curve.',
+        onMove: function (x) {
+          fromDrag = true;
+          slider.set((x - PLOT.x) / PLOT.w);
+          fromDrag = false;
+        }
+      });
+      curveG.node.style.cursor = '';
+
+      function drawProbe() {
+        probe.clear();
+        if (probeAt == null || !sy) return;
+        var s = sim(lam), w = s.day[probeAt], x = sx(probeAt + 0.5);
+        var h = Math.floor(probeAt / 60), m = probeAt % 60;
+        var label = h + 'h ' + (m < 10 ? '0' : '') + m + ' · ' + w + ' waiting';
+        probe.path('M' + x.toFixed(1) + ' ' + (PLOT.y + PLOT.h) + ' L' + x.toFixed(1) + ' ' + (PLOT.y + 18), { w: 0.8, op: 0.6 });
+        var right = x < PLOT.x + PLOT.w - 130, tx = right ? x + 6 : x - 6, tw = label.length * 6.6 + 8;
+        probe.paper(right ? tx - 3 : tx - tw + 3, PLOT.y + 2, tw, 18);
+        probe.text(tx, PLOT.y + 15, label, { kind: 'val', anchor: right ? 'start' : 'end' });
+      }
 
       var c0 = k.root.group({ steps: [0], d: 600 });
       c0.callout('a', 'nearly full: it explodes', SIDE, 262);
@@ -145,6 +199,7 @@
         } else if (stable) {
           ring.text(cx(lam), PLOT.y + 40, '↑ ' + s.avg.toFixed(1), { kind: 'val', anchor: 'middle', accent: true });
         }
+        drawProbe();
       }
 
       k.onStep(function () { redraw(); });
